@@ -30,7 +30,7 @@ class AuthorListStore:
 	def _write_empty(self) -> None:
 		payload = {"updated_at": _utc_now_iso(), "authors": {}}
 		self.path.write_text(
-			json.dumps(payload, ensure_ascii=False, indent=2),
+			json.dumps(payload, ensure_ascii=False, indent=4),
 			encoding="utf-8",
 		)
 	
@@ -106,7 +106,7 @@ class AuthorListStore:
 			},
 		}
 		self.path.write_text(
-			json.dumps(payload, ensure_ascii=False, indent=2),
+			json.dumps(payload, ensure_ascii=False, indent=4),
 			encoding="utf-8",
 		)
 		self._mtime = self.path.stat().st_mtime
