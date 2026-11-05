@@ -24,12 +24,34 @@ def import_linpx_authors() -> None:
 	
 	li = []
 	mgr = ListManager()
-	for i in range(0, len(data)):
-		author_id = data[i]["id"]
-		name = data[i]["name"]
+	for item in data:
+		author_id = item["id"]
+		name = item["name"]
 		if not mgr.is_furryauthor(author_id):
 			li.append(author_id)
 			print(f"{author_id}: {name}")
 			mgr.add_furrylist(author_id=author_id, name=name, note="Linpx")
 	print(f"共新增 {len(li)} 个推荐作者")
 
+
+def import_linpx_authors_online() -> None:
+	response = requests.get("https://api.linpx.ink/fav/user/cache", timeout=15)
+	response.raise_for_status()
+	data = response.json()
+	print(f"共获取 {len(data)} 个推荐作者")
+	
+	li = []
+	mgr = ListManager()
+	for item in data:
+		author_id = item["id"]
+		name = item["name"]
+		if not mgr.is_furryauthor(author_id):
+			li.append(author_id)
+			print(f"{author_id}: {name}")
+			mgr.add_furrylist(author_id=author_id, name=name, note="Linpx")
+	print(f"共新增 {len(li)} 个推荐作者")
+
+
+if __name__ == "__main__":
+	download_json("https://api.linpx.ink/fav/user/cache", "linpx.json")
+	import_linpx_authors()
