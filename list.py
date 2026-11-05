@@ -119,8 +119,8 @@ class ListManager:
 	后期：白名单、黑名单（授权转载）
 	"""
 	
-	def __init__(self, data_dir: Path) -> None:
-		data_dir = Path(data_dir)
+	def __init__(self) -> None:
+		data_dir = Path(__file__).resolve().parent / "data"
 		data_dir.mkdir(parents=True, exist_ok=True)
 		self.whitelist = AuthorListStore(
 			data_dir / "white.json",
