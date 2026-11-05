@@ -22,7 +22,7 @@ load_dotenv()  # 读取 .env 里的 BOT_TOKEN
 
 logging.basicConfig(
 	format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-	level=logging.WARNING,
+	level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,13 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		await update.message.reply_text(f"你说了：{update.message.text}")
 
 
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	await update.message.reply_text(
+		f"chat_id: <code>{update.message.chat.id}</code>\n"
+		f"language: <code>{update.message.from_user.language_code}</code>",
+		parse_mode="HTML")
+
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 	"""全局错误日志"""
 	logger.exception("更新处理出错: %s", context.error)
@@ -72,6 +79,7 @@ def main() -> None:
 	# 注册命令
 	app.add_handler(CommandHandler("start", start))
 	app.add_handler(CommandHandler("help", help_cmd))
+	app.add_handler(CommandHandler("ping", ping))
 	
 	# 注册「非命令的私聊文字」
 	app.add_handler(
@@ -81,9 +89,9 @@ def main() -> None:
 	# 错误处理
 	app.add_error_handler(error_handler)
 	
-	logger.info("Bot 启动中（long polling）…")
-	# drop_pending_updates=True：启动时丢掉离线期间积压的更新
-	app.run_polling(drop_pending_updates=True)
+	logger.info("Bot 启动中……")
+	print("Bot 启动中……")
+	app.run_polling(drop_pending_updates=False)
 
 
 if __name__ == "__main__":
