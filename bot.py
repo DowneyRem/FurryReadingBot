@@ -18,6 +18,9 @@ from telegram.ext import (
 	filters,
 )
 
+from utils.links import get_id, get_url
+
+
 load_dotenv()  # 读取 .env 里的 BOT_TOKEN
 
 logging.basicConfig(
@@ -45,10 +48,11 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	"""收到普通文字就原样回复（学习用）"""
-	if update.message:
-		print(update.message)
-	if update.message and update.message.text:
-		await update.message.reply_text(f"你说了：{update.message.text}")
+	link = get_url(update.message.text)
+	if isinstance(link, str):
+		await update.message.reply_text(link)
+	elif isinstance(link, list):
+		await update.message.reply_text("\n".join(link))
 
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
