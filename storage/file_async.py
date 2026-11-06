@@ -6,8 +6,14 @@ from os import PathLike
 from pathlib import Path
 from typing import Any
 
+import asyncio
 import aiofiles
 import aiohttp
+
+
+async def remove_file(paths) -> None:
+	from storage.file import remove_file as remove_file_sync
+	await asyncio.to_thread(remove_file_sync, paths)
 
 
 async def get_json(url: str, headers) -> dict:
