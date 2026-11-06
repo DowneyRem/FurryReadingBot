@@ -51,7 +51,7 @@ class LinpxSource(NovelSource):
 	async def save_novel(self, text: str) -> Path:
 		"""拉取单篇并保存为 txt，返回文件路径。"""
 		novel = await self.fetch_novel(text)
-		out_dir = Path(__file__).resolve().parents[2] / "down" / "novels"
+		out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
 		out_dir.mkdir(parents=True, exist_ok=True)
 		filename = f"{_safe_filename(novel.title)}_{novel.id}.txt"
 		path = out_dir / filename
