@@ -1,22 +1,15 @@
-"""
-python-telegram-bot v21 最小空壳
-运行前：设置环境变量 BOT_TOKEN，或同目录放 .env
-"""
-
 from __future__ import annotations
 
 import logging
-from telegram import Update
 from telegram.ext import (
 	Application,
 	CommandHandler,
-	ContextTypes,
 	MessageHandler,
 	CallbackQueryHandler,
 	filters,
 )
 
-from core import down
+from handlers import *
 from config import *
 
 logging.basicConfig(
@@ -26,7 +19,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ---------- 组装 Application ----------
+async def error_handler(update: object, context) -> None:
+	logger.exception("更新处理出错: %s", context.error)
+	
+	
 def main() -> None:
 	if not BOT_TOKEN:
 		raise SystemExit("请设置环境变量 BOT_TOKEN，或在 .env 中写入 BOT_TOKEN=...")
@@ -44,9 +40,8 @@ def main() -> None:
 	app.add_handler(
 		MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, down)
 	)
-	app.add_handler(CallbackQueryHandler(button_callback))
 	
-	# 错误处理
+	app.add_handler(CallbackQueryHandler(button_callback))
 	app.add_error_handler(error_handler)
 	
 	logger.info("Bot 启动中……")

@@ -18,7 +18,3 @@ async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"language: <code>{update.message.from_user.language_code}</code>",
         parse_mode="HTML",
     )
-    
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-	"""全局错误日志"""
-	logger.exception("更新处理出错: %s", context.error)
