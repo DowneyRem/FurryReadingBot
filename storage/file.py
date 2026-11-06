@@ -2,10 +2,25 @@
 # -*- coding: UTF-8 -*-
 import json
 import logging
-from pathlib import Path
-
 from os import PathLike
+from pathlib import Path
 from typing import Any
+
+import requests
+
+
+def get_json(url: str, headers) -> Any:
+	response = requests.get(url, timeout=15)
+	response.raise_for_status()
+	return response.json()
+
+
+def download_json(url: str, file_name: str, *, headers) -> Any:
+	"""下载 JSON 并可选保存到本地"""
+	data = get_json(url, headers)
+	save_path = Path(__file__).parent.resolve() / file_name
+	save_json(data, save_path)
+	return data
 
 
 def read_txt(path: PathLike) -> str:

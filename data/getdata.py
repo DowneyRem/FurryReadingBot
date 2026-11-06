@@ -1,20 +1,7 @@
 from pathlib import Path
-from typing import Any
 
-import requests
-from storage.file import read_json, save_json
-# from storage.file_async import read_json, save_json
+from storage.file import download_json, read_json, save_json, get_json
 from storage.list import ListManager
-
-
-def download_json(url: str, file_name: str) -> Any:
-	"""下载 JSON 并可选保存到本地"""
-	response = requests.get(url, timeout=15)
-	response.raise_for_status()
-	data = response.json()
-	save_path = Path(__file__).parent.resolve() / file_name
-	save_json(data, save_path)
-	return data
 
 
 def import_linpx_authors() -> None:
@@ -35,9 +22,6 @@ def import_linpx_authors() -> None:
 
 
 def import_linpx_authors_online() -> None:
-	response = requests.get("https://api.linpx.ink/fav/user/cache", timeout=15)
-	response.raise_for_status()
-	data = response.json()
 	print(f"共获取 {len(data)} 个推荐作者")
 	
 	li = []
@@ -53,7 +37,7 @@ def import_linpx_authors_online() -> None:
 
 
 if __name__ == "__main__":
-	# download_json("https://api.linpx.ink/fav/user/cache", "linpx.json")
+	# download_json(url_fav_user_data(), "linpx.json", headers = HEADERS)
 	# import_linpx_authors()
 	# 或者直接在线导入：
 	import_linpx_authors_online()
