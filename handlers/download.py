@@ -1,10 +1,11 @@
+from pathlib import Path
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CallbackContext
 
 from utils.links import get_id, get_url
 from storage.list import ListManager
 from keyboards import apply_furry_keyboard
-from sources import fetch_novel
+from sources import fetch_novel, save_novel
 from config import FURRY_READING, FURRY_NOVELS
 
 
@@ -41,4 +42,24 @@ async def down(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 			author_name = mgr.furrylist.get_name(author_id)
 		await update.message.reply_text(f"{author_name}")
 		
+		try:
+			path = await save_novel(link)
+			with open(path, "rb") as file_object:
+				message = await update.message.reply_document(
+					document=file_object,
+					filename=Path(path).name,
+					caption="这是为您准备的文件！",
+					# reply_to_message_id=update.message.message_id
+				)
+				
+			file_id = message.document.file_id
+			await message.reply_text(file_id)
+			# todo：存储file id 避免重复上传
+		
+		except FileNotFoundError:
+			# 容错处理：如果文件不存在，通知用户
+			await update.message.reply_text("抱歉，未找到指定的文件。")
+		except Exception as e:
+			# 捕获其他潜在异常（如网络问题或权限问题）
+			await update.message.reply_text(f"文件发送失败，错误信息: {e}")
 		
