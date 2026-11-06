@@ -38,18 +38,27 @@ def safe_filename(name: str, max_len: int = 80) -> str:
 	return name[:max_len]
 
 
-def get_json(url: str, headers) -> Any:
-	response = requests.get(url, timeout=15)
-	response.raise_for_status()
-	return response.json()
+def get_json(url: str, headers: dict | None = None) -> Any:
+	"""发送请求并获取 JSON 数据，自带超时与请求头传递"""
+	try:
+		response = requests.get(url, headers=headers, timeout=15)
+		response.raise_for_status()
+		return response.json()
+	except Exception as e:
+		logging.error(f"请求失败：{url}，原因：{e}")
+		return None
 
 
-def download_json(url: str, file_name: str, *, headers) -> Any:
-	"""下载 JSON 并可选保存到本地"""
+def download_json(url: str, file_name: str | Path, *, headers: dict | None = None) -> Any:
+	"""下载 JSON 并保存到本地"""
 	data = get_json(url, headers)
-	save_path = Path(__file__).parent.resolve() / file_name
-	save_json(data, save_path)
-	return data
+	if data is None:
+		return None
+	
+	save_path = Path(file_name)
+	if not save_path.is_absolute():
+		save_path = Path(__file__).parent.resolve() / save_path
+	return save_json(save_path, data)
 
 
 def read_text(path: str | Path) -> str:
