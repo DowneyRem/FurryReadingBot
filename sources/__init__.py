@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from sources.base import Novel, NovelSource
 from sources.linpx import LinpxSource
 
@@ -19,4 +21,11 @@ async def fetch_novel(text: str) -> Novel:
 	src = resolve_source(text)
 	if src is None:
 		raise ValueError("无法识别的链接或平台")
-	return await src.fetch(text)
+	return await src.fetch_novel(text)
+
+
+async def save_novel(text: str) -> Path:
+	src = resolve_source(text)
+	if src is None:
+		raise ValueError("无法识别的链接或平台")
+	return await src.save_novel(text)

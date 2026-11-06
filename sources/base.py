@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from os import PathLike
+from pathlib import Path
 from typing import Any
 
 
@@ -32,20 +32,20 @@ class NovelSource(ABC):
 		"""文本/链接是否属于本源。"""
 
 	@abstractmethod
-	async def fetch(self, text: str) -> Novel:
+	async def fetch_novel(self, text: str) -> Novel:
 		"""拉取并解析为一篇 Novel（单篇）。"""
-		pass
-	
+
+	@abstractmethod
+	async def save_novel(self, text: str) -> Path:
+		"""拉取单篇并保存为本地文件，返回文件路径。"""
+
 	async def fetch_series(self, text: str) -> list[Novel]:
 		raise NotImplementedError(f"{self.name} 暂不支持系列")
 
 	async def fetch_author_novels(self, text: str) -> list[Novel]:
 		raise NotImplementedError(f"{self.name} 暂不支持作者全部")
 	
-	# @abstractmethod
-	# async def save_single(self, text: str) -> PathLike:
-	# 	pass
-	#
+	
 	# @abstractmethod
 	# async def save_series(self, text: str) -> PathLike:
 	# 	pass
