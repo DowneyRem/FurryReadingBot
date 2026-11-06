@@ -156,7 +156,7 @@ class ListManager:
 		self.blacklist.add(author_id, name=name, note=note)
 	
 	
-	def remove_furrylist(self, author_id: str | int, name: str = "", note: str = "") -> None:
+	def remove_furrylist(self, author_id: str | int) -> bool:
 		return self.furrylist.remove(author_id)
 	
 	def remove_whitelist(self, author_id: str | int) -> bool:
