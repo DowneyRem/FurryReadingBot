@@ -5,9 +5,28 @@ import json
 import logging
 from os import PathLike
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import requests
+
+
+def remove_file(paths: str | Path | Iterable[str | Path]):
+	"""删除多个文件或文件夹"""
+	if isinstance(paths, (str, Path)):
+		paths = [paths]
+	
+	for p in paths:
+		path = Path(p)
+		try:
+			if path.is_dir():
+				import shutil
+				shutil.rmtree(path)
+			elif path.is_file() or path.is_symlink():
+				path.unlink()
+		except Exception as e:
+			logging.error(f"删除失败：{path}，原因：{e}")
+		else:
+			logging.info(f"已经删除：{path}")
 
 
 def safe_filename(name: str, max_len: int = 80) -> str:
