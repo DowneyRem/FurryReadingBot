@@ -52,24 +52,18 @@ def download_json(url: str, file_name: str, *, headers) -> Any:
 	return data
 
 
-def read_txt(path: PathLike) -> str:
-	text = ""
-	try:
-		with open(path, "r", encoding="UTF8") as f:
-			text = f.read()
-	except UnicodeError:
+def read_text(path: str | Path) -> str:
+	"""使用 pathlib 拍平嵌套的多编码文本读取函数"""
+	p = Path(path)
+	encodings = ["utf-8", "gb18030", "big5", "latin1"]
+	
+	for encoding in encodings:
 		try:
-			with open(path, "r", encoding="GB18030") as f:
-				text = f.read()
-		except UnicodeError:
-			try:
-				with open(path, "r", encoding="BIG5") as f:
-					text = f.read()
-			except UnicodeError:
-				with open(path, "r", encoding="Latin1") as f:
-					text = f.read()
-	finally:
-		return text
+			return p.read_text(encoding=encoding)
+		except UnicodeDecodeError:
+			continue  # 编码错误则尝试下一个
+	logging.error(f"无法以已知编码读取文件：{p}")
+	return ""
 
 
 def read_json(path: PathLike) -> Any:
@@ -81,16 +75,17 @@ def read_json(path: PathLike) -> Any:
 	else:
 		return data
 
-
-def save_text(path: PathLike, text: str="") -> PathLike:
+def save_text(path: str | Path | PathLike, text: str = "") -> Path:
+	"""使用 pathlib 改造的文本保存函数，自带父目录自动创建功能"""
+	p = Path(path)
 	try:
-		with open(path, "w", encoding="UTF8") as f:
-			f.write(text)
-	except IOError:
-		logging.error(f"保存失败：{path}")
+		p.parent.mkdir(parents=True, exist_ok=True)
+		p.write_text(text, encoding="utf-8")
+	except Exception as e:
+		logging.error(f"保存失败：{p}，原因：{e}")
 	else:
-		logging.debug(f"已保存为：{path}")
-	return path
+		logging.debug(f"已保存为：{p}")
+	return p
 
 
 def save_json(path: PathLike, data: Any) -> PathLike:
