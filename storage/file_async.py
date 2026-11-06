@@ -11,11 +11,18 @@ import aiohttp
 
 
 async def get_json(url: str, headers) -> dict:
-	async with aiohttp.ClientSession(headers) as session:
+	async with aiohttp.ClientSession(headers=headers) as session:
 		async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
 			resp.raise_for_status()
 			data = await resp.json()
 			return data
+
+
+async def download_json(url: str, file_name: str, *, headers) -> Any:
+    data = await get_json(url, headers)
+    save_path = Path(__file__).parent.resolve() / file_name
+    await save_json(save_path, data)          # 注意：保持和你原来一样的参数顺序
+    return data
 
 
 async def read_txt(path: PathLike) -> str:

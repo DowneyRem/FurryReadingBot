@@ -2,21 +2,8 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-import aiohttp
-from storage.file_async import read_json, save_json   # 异步版本
+from storage.file_async import get_json, download_json, read_json
 from storage.list import ListManager
-
-
-async def download_json(url: str, file_name: str) -> Any:
-    """异步下载 JSON 并保存到本地"""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=15) as response:
-            response.raise_for_status()
-            data = await response.json()
-
-    save_path = Path(__file__).parent.resolve() / file_name
-    await save_json(save_path, data)          # 注意：保持和你原来一样的参数顺序
-    return data
 
 
 async def import_linpx_authors() -> None:
@@ -37,11 +24,8 @@ async def import_linpx_authors() -> None:
 
 
 async def import_linpx_authors_online() -> None:
-    async with aiohttp.ClientSession() as session:
-        async with session.get("https://api.linpx.ink/fav/user/cache", timeout=15) as response:
-            response.raise_for_status()
-            data = await response.json()
-    print(f"共获取 {len(data)} 个推荐作者")
+	data = await get_json(url=url_fav_user_data(), headers=HEADERS)
+	print(f"共获取 {len(data)} 个推荐作者")
 
     li = []
     mgr = ListManager()
