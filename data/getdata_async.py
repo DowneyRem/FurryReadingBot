@@ -4,6 +4,8 @@ from typing import Any
 
 from storage.file_async import get_json, download_json, read_json
 from storage.list import ListManager
+from sources.linpx.urls import url_fav_user_data
+from sources.linpx.config import HEADERS
 
 
 async def import_linpx_authors() -> None:
@@ -44,6 +46,8 @@ async def main():
     # await import_linpx_authors()
     # 或者直接在线导入：
     await import_linpx_authors_online()
+	# await download_json(url_fav_user_data(), "linpx.json", headers = HEADERS)
+	# await import_linpx_authors()
 
 
 if __name__ == "__main__":

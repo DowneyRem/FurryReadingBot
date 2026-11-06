@@ -20,3 +20,7 @@ def url_series_data(series_id: str | int) -> str:
 
 def url_user_data(user_id: str | int) -> str:
 	return f"{API_BASE}/pixiv/user/{user_id}/cache"
+
+
+def url_fav_user_data() -> str:
+	return f"https://api.linpx.ink/fav/user/cache"
