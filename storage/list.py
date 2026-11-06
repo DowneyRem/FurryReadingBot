@@ -6,7 +6,8 @@ import json
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+
+from utils.json import JsonDict
 
 
 def _utc_now_iso() -> str:
@@ -21,19 +22,19 @@ class AuthorListStore:
 		self.label = label
 		self._lock = threading.RLock()
 		self._mtime: float = 0.0
-		self._authors: dict[str, dict[str, str]] = {}
+		self._authors: JsonDict = JsonDict()
 		self.path.parent.mkdir(parents=True, exist_ok=True)
 		if not self.path.exists():
 			self._write_empty()
 		self.reload(force=True)
-	
+
 	def _write_empty(self) -> None:
-		payload = {"updated_at": _utc_now_iso(), "authors": {}}
+		payload = JsonDict(updated_at=_utc_now_iso(), authors=JsonDict())
 		self.path.write_text(
 			json.dumps(payload, ensure_ascii=False, indent=4),
 			encoding="utf-8",
 		)
-	
+
 	def reload(self, force: bool = False) -> bool:
 		"""文件有变更时重新加载。返回是否真的读了磁盘。"""
 		with self._lock:
@@ -43,61 +44,59 @@ class AuthorListStore:
 			mtime = self.path.stat().st_mtime
 			if not force and mtime == self._mtime:
 				return False
-			data = json.loads(self.path.read_text(encoding="utf-8"))
-			raw = data.get("authors") or {}
-			authors: dict[str, dict[str, str]] = {}
+			data = JsonDict.from_obj(json.loads(self.path.read_text(encoding="utf-8")))
+			raw = data.authors or JsonDict()
+			authors = JsonDict()
 			for aid, info in raw.items():
 				aid = str(aid)
 				if isinstance(info, dict):
-					authors[aid] = {
-						"name": str(info.get("name") or ""),
-						"note": str(info.get("note") or ""),
-					}
+					authors[aid] = JsonDict(
+						name=str(info.get("name") or ""),
+						note=str(info.get("note") or ""),
+					)
 				else:
-					authors[aid] = {"name": str(info), "note": ""}
+					authors[aid] = JsonDict(name=str(info), note="")
 			self._authors = authors
 			self._mtime = mtime
 			return True
-	
+
 	def _maybe_reload(self) -> None:
 		if self.path.exists() and self.path.stat().st_mtime != self._mtime:
 			self.reload(force=True)
-	
+
 	def contains(self, author_id: str | int) -> bool:
 		self._maybe_reload()
 		with self._lock:
 			return str(author_id) in self._authors
-	
-	def get(self, author_id: str | int) -> dict[str, str]:
+
+	def get(self, author_id: str | int) -> JsonDict:
 		self._maybe_reload()
 		with self._lock:
-			if self.contains(author_id):
-				return self._authors.get(str(author_id))
-			else:
-				return {}
-	
+			key = str(author_id)
+			if key in self._authors:
+				return self._authors[key]
+			return JsonDict()
+
 	def get_name(self, author_id: str | int) -> str:
 		self._maybe_reload()
 		with self._lock:
-			if self.contains(author_id):
-				return self._authors.get(str(author_id)).get("name")
-			else:
-				return ""
-		
+			info = self._authors.get(str(author_id))
+			return info.name if info else ""
+
 	def all_ids(self) -> set[str]:
 		self._maybe_reload()
 		with self._lock:
 			return set(self._authors.keys())
-	
+
 	def add(self, author_id: str | int, name: str = "", note: str = "") -> None:
 		with self._lock:
 			self._maybe_reload()
-			self._authors[str(author_id)] = {
-				"name": name or "",
-				"note": note or "",
-			}
+			self._authors[str(author_id)] = JsonDict(
+				name=name or "",
+				note=note or "",
+			)
 			self._persist()
-	
+
 	def remove(self, author_id: str | int) -> bool:
 		with self._lock:
 			self._maybe_reload()
@@ -107,15 +106,14 @@ class AuthorListStore:
 			del self._authors[key]
 			self._persist()
 			return True
-	
+
 	def _persist(self) -> None:
-		payload: dict[str, Any] = {
-			"updated_at": _utc_now_iso(),
-			"authors": {
-				aid: self._authors[aid]
-				for aid in sorted(self._authors.keys())
-			},
-		}
+		payload = JsonDict(
+			updated_at=_utc_now_iso(),
+			authors=JsonDict(
+				{aid: self._authors[aid] for aid in sorted(self._authors.keys())}
+			),
+		)
 		self.path.write_text(
 			json.dumps(payload, ensure_ascii=False, indent=4),
 			encoding="utf-8",
@@ -144,7 +142,8 @@ class ListManager:
 		self.furrylist = AuthorListStore(
 			data_dir / "furry.json",
 		)
-	
+
+
 	def is_furryauthor(self, author_id: str | int) -> bool:
 		return self.furrylist.contains(author_id)
 	
