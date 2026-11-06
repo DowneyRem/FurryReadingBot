@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-from utils.afile import read_json, save_json   # 异步版本
+from utils.file_async import read_json, save_json   # 异步版本
 from list import ListManager
 
 
@@ -15,7 +15,7 @@ async def download_json(url: str, file_name: str) -> Any:
             data = await response.json()
 
     save_path = Path(__file__).parent.resolve() / file_name
-    await save_json(data, save_path)          # 注意：保持和你原来一样的参数顺序
+    await save_json(save_path, data)          # 注意：保持和你原来一样的参数顺序
     return data
 
 
@@ -41,7 +41,6 @@ async def import_linpx_authors_online() -> None:
         async with session.get("https://api.linpx.ink/fav/user/cache", timeout=15) as response:
             response.raise_for_status()
             data = await response.json()
-
     print(f"共获取 {len(data)} 个推荐作者")
 
     li = []
@@ -57,10 +56,10 @@ async def import_linpx_authors_online() -> None:
 
 
 async def main():
-    await download_json("https://api.linpx.ink/fav/user/cache", "linpx.json")
-    await import_linpx_authors()
+    # await download_json("https://api.linpx.ink/fav/user/cache", "linpx.json")
+    # await import_linpx_authors()
     # 或者直接在线导入：
-    # await import_linpx_authors_online()
+    await import_linpx_authors_online()
 
 
 if __name__ == "__main__":

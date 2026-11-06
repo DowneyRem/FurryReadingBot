@@ -53,5 +53,7 @@ def import_linpx_authors_online() -> None:
 
 
 if __name__ == "__main__":
-	download_json("https://api.linpx.ink/fav/user/cache", "linpx.json")
-	import_linpx_authors()
+	# download_json("https://api.linpx.ink/fav/user/cache", "linpx.json")
+	# import_linpx_authors()
+	# 或者直接在线导入：
+	import_linpx_authors_online()
