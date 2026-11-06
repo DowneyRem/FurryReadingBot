@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
+import re
 import json
 import logging
 from os import PathLike
@@ -7,6 +8,15 @@ from pathlib import Path
 from typing import Any
 
 import requests
+
+
+def safe_filename(name: str, max_len: int = 80) -> str:
+	name = (name or "untitled").strip()
+	name = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", name)
+	name = re.sub(r"\s+", " ", name).strip(" ._")
+	if not name:
+		name = "untitled"
+	return name[:max_len]
 
 
 def get_json(url: str, headers) -> Any:

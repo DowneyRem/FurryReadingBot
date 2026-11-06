@@ -1,20 +1,10 @@
 from __future__ import annotations
-
-import re
 from pathlib import Path
 
 from sources.base import Novel, NovelSource
 from sources.linpx import client, parse
+from storage.file import safe_filename
 from storage.file_async import save_text
-
-
-def _safe_filename(name: str, max_len: int = 80) -> str:
-	name = (name or "untitled").strip()
-	name = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", name)
-	name = re.sub(r"\s+", " ", name).strip(" ._")
-	if not name:
-		name = "untitled"
-	return name[:max_len]
 
 
 def _format_novel_text(novel: Novel) -> str:
@@ -53,7 +43,7 @@ class LinpxSource(NovelSource):
 		novel = await self.fetch_novel(text)
 		out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
 		out_dir.mkdir(parents=True, exist_ok=True)
-		filename = f"{_safe_filename(novel.title)}_{novel.id}.txt"
+		filename = f"{safe_filename(novel.title)}_{novel.id}.txt"
 		path = out_dir / filename
 		await save_text(path, _format_novel_text(novel))
 		return Path(path)
