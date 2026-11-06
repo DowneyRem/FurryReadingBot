@@ -3,11 +3,12 @@ from telegram.ext import ContextTypes
 
 from utils.links import get_id, get_url
 from storage.list import ListManager
+from keyboards import apply_furry_keyboard
 from config import FURRY_READING, FURRY_NOVELS
 
 
 async def down(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	link = get_url(update.message.text)
+	link = get_url(update.message.text)[0]
 	author_id = get_id(update.message.text)
 	mgr = ListManager()
 	if mgr.is_blacklisted(author_id):
@@ -18,16 +19,7 @@ async def down(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		author_name = "12345"
 		await update.message.reply_text(
 			text=f"不好意思，本 Bot 仅可下载小说并分享兽人小说。{author_name} 不在本 Bot 的兽人作者名单内",
-			reply_markup=InlineKeyboardMarkup(
-				[[
-					InlineKeyboardButton(
-						text="申请加入兽人作者名单",
-						callback_data=f"apply_furry_author:{author_id}"),
-					InlineKeyboardButton(
-						text="忽略",
-						callback_data="ignore"),
-				]])
-		)
+			reply_markup=apply_furry_keyboard(link))
 		
 	elif mgr.is_furryauthor(author_id):
 		author_name = mgr.furrylist.get_name(author_id)
