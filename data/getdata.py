@@ -4,6 +4,7 @@ from storage.file import download_json, read_json, save_json, get_json
 from storage.list import ListManager
 from sources.linpx.urls import url_fav_user_data
 from sources.linpx.config import HEADERS
+from utils.timer import timer
 
 
 def import_linpx_authors() -> None:
@@ -39,8 +40,13 @@ def import_linpx_authors_online() -> None:
 	print(f"共新增 {len(li)} 个推荐作者")
 
 
-if __name__ == "__main__":
+@timer
+def main():
 	# download_json(url_fav_user_data(), "linpx.json", headers = HEADERS)
 	# import_linpx_authors()
 	# 或者直接在线导入：
 	import_linpx_authors_online()
+
+
+if __name__ == "__main__":
+	main()
