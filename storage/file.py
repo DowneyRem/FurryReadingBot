@@ -66,14 +66,14 @@ def read_text(path: str | Path) -> str:
 	return ""
 
 
-def read_json(path: PathLike) -> Any:
+def read_json(path: str | Path | PathLike) -> Any:
+	p = Path(path)
 	try:
-		with open(path, "rb") as f:
-			data = json.load(f)
-	except IOError as e:
-		logging.error(e)
-	else:
-		return data
+		return json.loads(p.read_bytes())
+	except Exception as e:
+		logging.error(f"读取 JSON 失败：{p}，原因：{e}")
+		return None
+
 
 def save_text(path: str | Path | PathLike, text: str = "") -> Path:
 	"""使用 pathlib 改造的文本保存函数，自带父目录自动创建功能"""
@@ -88,12 +88,17 @@ def save_text(path: str | Path | PathLike, text: str = "") -> Path:
 	return p
 
 
-def save_json(path: PathLike, data: Any) -> PathLike:
+def save_json(path: str | Path | PathLike, data: Any) -> Path:
+	"""使用 pathlib 现代写法保存 JSON，自带父目录自动创建"""
+	p = Path(path)
 	try:
-		with open(path, 'w', encoding="UTF8") as f:
-			json.dump(data, f, ensure_ascii=False, indent=4)
-	except IOError:
-		logging.error(f"保存失败：{path}")
+		p.parent.mkdir(parents=True, exist_ok=True)
+		p.write_text(
+			json.dumps(data, ensure_ascii=False, indent=4),
+			encoding="utf-8"
+		)
+	except Exception as e:
+		logging.error(f"保存 JSON 失败：{p}，原因：{e}")
 	else:
-		logging.debug(f"已保存为：{path}")
-	return Path(path)
+		logging.debug(f"JSON 已保存为：{p}")
+	return p
