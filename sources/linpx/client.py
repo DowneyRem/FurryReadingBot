@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import aiohttp
+from sources.linpx.urls import url_novel_data, url_series_data, url_user_data
 from sources.linpx.config import *
 
 
@@ -13,15 +14,10 @@ async def get_json(url: str) -> dict:
 
 
 async def get_novel(novel_id: str | int) -> dict:
-    url = f"{API_BASE}/pixiv/novel/{novel_id}/cache"
-    return await get_json(url)
-
+	return await get_json(url_novel_data(novel_id))
 
 async def get_series(series_id: str | int) -> dict:
-    url = f"{API_BASE}/pixiv/series/{series_id}/cache"
-    return await get_json(url)
-
+	return await get_json(url_series_data(series_id))
 
 async def get_user(user_id: str | int) -> dict:
-    url = f"{API_BASE}/pixiv/user/{user_id}/cache"
-    return await get_json(url)
+	return await get_json(url_user_data(user_id))
