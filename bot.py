@@ -6,9 +6,6 @@ python-telegram-bot v21 最小空壳
 from __future__ import annotations
 
 import logging
-import os
-
-from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
 	Application,
@@ -20,9 +17,7 @@ from telegram.ext import (
 )
 
 from core import down
-
-
-load_dotenv()  # 读取 .env 里的 BOT_TOKEN
+from config import *
 
 logging.basicConfig(
 	format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -75,12 +70,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------- 组装 Application ----------
 def main() -> None:
-	token = os.environ.get("BOT_TOKEN", "").strip()
-	if not token:
+	if not BOT_TOKEN:
 		raise SystemExit("请设置环境变量 BOT_TOKEN，或在 .env 中写入 BOT_TOKEN=...")
 	
 	# 构建应用（v20+ 的核心对象）
-	app = (Application.builder().token(token).build())
+	app = (Application.builder().token(BOT_TOKEN).build())
 	
 	# 注册命令
 	app.add_handler(CommandHandler("start", start))

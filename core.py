@@ -1,15 +1,9 @@
-import os
-from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from utils.links import get_id, get_url
-from list import ListManager
-
-
-load_dotenv()  # 读取 .env
-FURRY_READING = os.environ.get("FURRY_READING")
-FURRY_NOVELS = os.environ.get("FURRY_NOVELS")
+from storage.list import ListManager
+from config import FURRY_READING, FURRY_NOVELS
 
 
 async def down(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
