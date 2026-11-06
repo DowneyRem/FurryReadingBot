@@ -68,11 +68,22 @@ class AuthorListStore:
 		with self._lock:
 			return str(author_id) in self._authors
 	
-	def get(self, author_id: str | int) -> dict[str, str] | None:
+	def get(self, author_id: str | int) -> dict[str, str]:
 		self._maybe_reload()
 		with self._lock:
-			return self._authors.get(str(author_id))
+			if self.contains(author_id):
+				return self._authors.get(str(author_id))
+			else:
+				return {}
 	
+	def get_name(self, author_id: str | int) -> str:
+		self._maybe_reload()
+		with self._lock:
+			if self.contains(author_id):
+				return self._authors.get(str(author_id)).get("name")
+			else:
+				return ""
+		
 	def all_ids(self) -> set[str]:
 		self._maybe_reload()
 		with self._lock:
