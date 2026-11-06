@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import aiohttp
-
-
-API_BASE = "https://api.linpx.ink"
-HEADERS = {"Referer": "https://linpx.ink/"}
+from sources.linpx.config import *
 
 
 async def get_json(url: str) -> dict:
