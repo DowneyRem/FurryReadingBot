@@ -1,23 +1,15 @@
 from __future__ import annotations
 
-import aiohttp
+from storage.file_async import get_json
 from sources.linpx.urls import url_novel_data, url_series_data, url_user_data
-from sources.linpx.config import *
-
-
-async def get_json(url: str) -> dict:
-    async with aiohttp.ClientSession(headers=HEADERS) as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-            return data
+from sources.linpx.config import HEADERS
 
 
 async def get_novel(novel_id: str | int) -> dict:
-	return await get_json(url_novel_data(novel_id))
+	return await get_json(url_novel_data(novel_id), headers=HEADERS)
 
 async def get_series(series_id: str | int) -> dict:
-	return await get_json(url_series_data(series_id))
+	return await get_json(url_series_data(series_id), headers=HEADERS)
 
 async def get_user(user_id: str | int) -> dict:
-	return await get_json(url_user_data(user_id))
+	return await get_json(url_user_data(user_id), headers=HEADERS)

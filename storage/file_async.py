@@ -2,12 +2,20 @@
 # -*- coding: UTF-8 -*-
 import json
 import logging
-from pathlib import Path
-
 from os import PathLike
+from pathlib import Path
 from typing import Any
 
 import aiofiles
+import aiohttp
+
+
+async def get_json(url: str, headers) -> dict:
+	async with aiohttp.ClientSession(headers) as session:
+		async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+			resp.raise_for_status()
+			data = await resp.json()
+			return data
 
 
 async def read_txt(path: PathLike) -> str:
