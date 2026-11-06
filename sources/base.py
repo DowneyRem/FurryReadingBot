@@ -2,40 +2,54 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from os import PathLike
 from typing import Any
 
 
 @dataclass
 class Novel:
-    """全平台统一小说模型。"""
-    id: str
-    title: str
-    author_id: str
-    author_name: str
-    content: str
-    tags: list[str] = field(default_factory=list)
-    description: str = ""
-    series_id: str | None = None
-    series_title: str | None = None
-    source: str = ""
-    url: str = ""
-    create_date: str = ""
-    raw: dict[str, Any] = field(default_factory=dict)
+	"""全平台统一小说模型。"""
+	id: str
+	title: str
+	author_id: str
+	author_name: str
+	content: str
+	tags: list[str] = field(default_factory=list)
+	description: str = ""
+	series_id: str | None = None
+	series_title: str | None = None
+	source: str = ""
+	url: str = ""
+	create_date: str = ""
+	raw: dict[str, Any] = field(default_factory=dict)
 
 
 class NovelSource(ABC):
-    name: str
+	name: str
 
-    @abstractmethod
-    def can_handle(self, text: str) -> bool:
-        """文本/链接是否属于本源。"""
+	@abstractmethod
+	def can_handle(self, text: str) -> bool:
+		"""文本/链接是否属于本源。"""
 
-    @abstractmethod
-    async def fetch(self, text: str) -> Novel:
-        """拉取并解析为一篇 Novel（单篇）。"""
+	@abstractmethod
+	async def fetch(self, text: str) -> Novel:
+		"""拉取并解析为一篇 Novel（单篇）。"""
+		pass
+	
+	async def fetch_series(self, text: str) -> list[Novel]:
+		raise NotImplementedError(f"{self.name} 暂不支持系列")
 
-    async def fetch_series(self, text: str) -> list[Novel]:
-        raise NotImplementedError(f"{self.name} 暂不支持系列")
-
-    async def fetch_author_novels(self, text: str) -> list[Novel]:
-        raise NotImplementedError(f"{self.name} 暂不支持作者全部")
+	async def fetch_author_novels(self, text: str) -> list[Novel]:
+		raise NotImplementedError(f"{self.name} 暂不支持作者全部")
+	
+	# @abstractmethod
+	# async def save_single(self, text: str) -> PathLike:
+	# 	pass
+	#
+	# @abstractmethod
+	# async def save_series(self, text: str) -> PathLike:
+	# 	pass
+	#
+	# @abstractmethod
+	# async def save_author_novels(self, text: str) -> PathLike:
+	# 	pass
