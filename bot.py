@@ -15,10 +15,11 @@ from telegram.ext import (
 	CommandHandler,
 	ContextTypes,
 	MessageHandler,
+	CallbackQueryHandler,
 	filters,
 )
 
-from core import *
+from core import down
 
 
 load_dotenv()  # 读取 .env 里的 BOT_TOKEN
@@ -58,6 +59,20 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 	logger.exception("更新处理出错: %s", context.error)
 
 
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+	query = update.callback_query
+	await query.answer()
+	if query.data != "":
+		await query.edit_message_reply_markup(reply_markup=None)
+	
+	if query.data == "ignore":
+		await query.delete_message()
+	
+	elif query.data.startswith("apply_furry_author:"):
+		author_id = query.data.split(":", 1)[1]
+		await query.message.reply_text(f"作者ID {author_id}")
+
+
 # ---------- 组装 Application ----------
 def main() -> None:
 	token = os.environ.get("BOT_TOKEN", "").strip()
@@ -65,11 +80,7 @@ def main() -> None:
 		raise SystemExit("请设置环境变量 BOT_TOKEN，或在 .env 中写入 BOT_TOKEN=...")
 	
 	# 构建应用（v20+ 的核心对象）
-	app = (
-		Application.builder()
-		.token(token)
-		.build()
-	)
+	app = (Application.builder().token(token).build())
 	
 	# 注册命令
 	app.add_handler(CommandHandler("start", start))
@@ -81,6 +92,7 @@ def main() -> None:
 	app.add_handler(
 		MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, down)
 	)
+	app.add_handler(CallbackQueryHandler(button_callback))
 	
 	# 错误处理
 	app.add_error_handler(error_handler)
