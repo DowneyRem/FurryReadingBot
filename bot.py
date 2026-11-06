@@ -18,7 +18,7 @@ from telegram.ext import (
 	filters,
 )
 
-from utils.links import get_id, get_url
+from core import *
 
 
 load_dotenv()  # 读取 .env 里的 BOT_TOKEN
@@ -44,15 +44,6 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	"""处理 /help"""
 	if update.message:
 		await update.message.reply_text("可用命令：/start /help")
-
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	"""收到普通文字就原样回复（学习用）"""
-	link = get_url(update.message.text)
-	if isinstance(link, str):
-		await update.message.reply_text(link)
-	elif isinstance(link, list):
-		await update.message.reply_text("\n".join(link))
 
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -84,10 +75,11 @@ def main() -> None:
 	app.add_handler(CommandHandler("start", start))
 	app.add_handler(CommandHandler("help", help_cmd))
 	app.add_handler(CommandHandler("ping", ping))
+	app.add_handler(CommandHandler("down", down))
 	
 	# 注册「非命令的私聊文字」
 	app.add_handler(
-		MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, echo)
+		MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, down)
 	)
 	
 	# 错误处理
