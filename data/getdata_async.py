@@ -3,8 +3,8 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-from utils.file_async import read_json, save_json   # 异步版本
-from list import ListManager
+from storage.file_async import read_json, save_json   # 异步版本
+from storage.list import ListManager
 
 
 async def download_json(url: str, file_name: str) -> Any:

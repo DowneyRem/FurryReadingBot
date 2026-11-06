@@ -1,4 +1,4 @@
-from list import ListManager
+from storage.list import ListManager
 
 
 def test_add_and_contains() -> None:

@@ -131,7 +131,7 @@ class ListManager:
 	"""
 	
 	def __init__(self) -> None:
-		data_dir = Path(__file__).resolve().parent / "data"
+		data_dir = Path(__file__).parent.parent.resolve() / "data"
 		data_dir.mkdir(parents=True, exist_ok=True)
 		self.whitelist = AuthorListStore(
 			data_dir / "white.json",
