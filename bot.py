@@ -26,20 +26,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-	query = update.callback_query
-	await query.answer()
-	if query.data != "":
-		await query.edit_message_reply_markup(reply_markup=None)
-	
-	if query.data == "ignore":
-		await query.delete_message()
-	
-	elif query.data.startswith("apply_furry_author:"):
-		author_id = query.data.split(":", 1)[1]
-		await query.message.reply_text(f"作者ID {author_id}")
-
-
 # ---------- 组装 Application ----------
 def main() -> None:
 	if not BOT_TOKEN:
