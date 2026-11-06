@@ -2,6 +2,8 @@ from pathlib import Path
 
 from storage.file import download_json, read_json, save_json, get_json
 from storage.list import ListManager
+from sources.linpx.urls import url_fav_user_data
+from sources.linpx.config import HEADERS
 
 
 def import_linpx_authors() -> None:
@@ -22,6 +24,7 @@ def import_linpx_authors() -> None:
 
 
 def import_linpx_authors_online() -> None:
+	data = get_json(url_fav_user_data(), headers=HEADERS)
 	print(f"共获取 {len(data)} 个推荐作者")
 	
 	li = []
