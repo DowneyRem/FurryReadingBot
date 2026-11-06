@@ -2,27 +2,18 @@ from __future__ import annotations
 
 import re
 from sources.base import Novel
-
-# 覆盖 linpx.ink / furrynovel.ink  等
-_ID_PATTERNS = [
-    re.compile(
-        r"(?:https?://)?(?:api\.|www\.)?(?:linpx\.ink|furrynovel\.(?:ink|xyz))"
-        r"/(?:pn|pixiv/novel)/(\d+)",
-        re.I,
-    )
-]
+from sources.linpx.urls import url_novel
+from sources.linpx.config import PATTERN
 
 
 def extract_novel_id(text: str) -> str | None:
-    text = (text or "").strip()
-    for pat in _ID_PATTERNS:
-        m = pat.search(text)
-        if m:
-            return m.group(1)
-    # 纯数字也尝试当作 id
-    if text.isdigit():
-        return text
-    return None
+	text = (text or "").strip()
+	if text.isdigit():
+		return text
+	m = re.compile(PATTERN, re.I).search(text)
+	if m:
+		return m.group(1)
+	return None
 
 
 def is_linpx_link(text: str) -> bool:
@@ -54,8 +45,8 @@ def json_to_novel(data: dict) -> Novel:
     if isinstance(series, dict) and series.get("id"):
         series_id = str(series["id"])
         series_title = (series.get("title") or "").strip() or None
-
-    url = f"https://linpx.ink/pixiv/novel/{novel_id}"
+	    
+    url = url_novel(novel_id)
 
     return Novel(
         id=novel_id,
