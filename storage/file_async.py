@@ -48,60 +48,60 @@ async def download_json(url: str, file_name: str | Path, *, headers: dict | None
 	return data
 
 
-async def read_txt(path: PathLike) -> str:
-	text = ""
-	try:
-		async with aiofiles.open(path, "r", encoding="UTF8") as f:
-			text = await f.read()
-	except UnicodeError:
+async def read_txt(path: str | Path | PathLike) -> str:
+	"""利用循环拍平‘金字塔嵌套’的异步多编码文本读取"""
+	p = Path(path)
+	encodings = ["utf-8", "gb18030", "big5", "latin1"]
+	
+	for encoding in encodings:
 		try:
-			async with aiofiles.open(path, "r", encoding="GB18030") as f:
-				text = await f.read()
-		except UnicodeError:
-			try:
-				async with aiofiles.open(path, "r", encoding="BIG5") as f:
-					text = await f.read()
-			except UnicodeError:
-				async with aiofiles.open(path, "r", encoding="Latin1") as f:
-					text = await f.read()
-	finally:
-		return text
+			async with aiofiles.open(p, "r", encoding=encoding) as f:
+				return await f.read()
+		except UnicodeDecodeError:
+			continue
+		except FileNotFoundError as e:
+			logging.error(f"文件不存在：{p}")
+			break
+	return ""
 
 
-async def read_json(path: PathLike) -> Any:
+async def read_json(path: str | Path | PathLike) -> Any:
+	"""修复原代码局部变量 data 未定义的异步 JSON 读取"""
+	p = Path(path)
 	try:
-		async with aiofiles.open(path, "rb") as f:
+		async with aiofiles.open(p, "rb") as f:
 			content = await f.read()
-			data = json.loads(content)
-	except IOError as e:
-		logging.error(e)
-	else:
-		return data
+			return json.loads(content)
+	except Exception as e:
+		logging.error(f"异步读取 JSON 失败：{p}，原因：{e}")
+		return None
 
 
-async def save_text(path: PathLike, text: str = "") -> PathLike:
+async def save_text(path: str | Path | PathLike, text: str = "") -> Path:
+	"""自动创建父级目录的异步文本保存"""
+	p = Path(path)
 	try:
-		async with aiofiles.open(path, "w", encoding="UTF8") as f:
+		p.parent.mkdir(parents=True, exist_ok=True)
+		async with aiofiles.open(p, "w", encoding="utf-8") as f:
 			await f.write(text)
-	except IOError:
-		logging.error(f"保存失败：{path}")
+	except Exception as e:
+		logging.error(f"异步保存文本失败：{p}，原因：{e}")
 	else:
-		logging.debug(f"已保存为：{path}")
-	return path
+		logging.debug(f"已保存为：{p}")
+	return p
 
 
-async def save_json(path: PathLike, data: Any) -> PathLike:
+async def save_json(path: str | Path | PathLike, data: Any) -> Path:
+	"""自动创建父级目录的异步 JSON 保存"""
+	p = Path(path)
 	try:
-		async with aiofiles.open(path, "w", encoding="UTF8") as f:
-			await f.write(json.dumps(data, ensure_ascii=False, indent=4))
-	except IOError:
-		logging.error(f"保存失败：{path}")
+		p.parent.mkdir(parents=True, exist_ok=True)
+		async with aiofiles.open(p, "w", encoding="utf-8") as f:
+			# 提前在内存中算好 json 字符串（同步），再整体塞给异步文件流
+			serialized_data = json.dumps(data, ensure_ascii=False, indent=4)
+			await f.write(serialized_data)
+	except Exception as e:
+		logging.error(f"异步保存 JSON 失败：{p}，原因：{e}")
 	else:
-		logging.debug(f"已保存为：{path}")
-	return Path(path)
-
-# 调用时需要使用 await，例如：
-# content = await read_txt("example.txt")
-# data = await read_json("data.json")
-# await save_text("out.txt", "hello")
-# await save_json("out.json", {"a": 1})
+		logging.debug(f"已保存为：{p}")
+	return p
