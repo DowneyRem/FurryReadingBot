@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import re
 from sources.base import Novel
-from sources.linpx.urls import url_novel
-from sources.linpx.config import NOVEL_PATTERN
+from sources.linpx.urls import url_novel, url_series
 from sources.linpx.errors import LinpxNotFoundError
 from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 from utils.json import JsonDict
@@ -85,3 +84,45 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		source="linpx",
 		raw=data,
 	)
+
+
+def json_to_series(data: dict | JsonDict) -> dict:
+	"""解析系列 API 返回的元信息（不含正文）。"""
+	data = JsonDict.from_obj(data)
+	if not data or data.error:
+		raise LinpxNotFoundError("Linpx 上不存在该系列数据", raw=data)
+
+	novel_id = data.novels[0].id
+	novel_title = data.novels[0].title
+
+	series_id = data.novels[0].seriesId
+	series_title = data.novels[0].seriesTitle
+	
+	author_id = data.userId
+	author_name = data.userName
+	
+	caption = (data.caption or data.desc or "").strip()
+	tags = list(data.tags or [])
+	total = int(data.total or 0)
+	novels = list(data.novels or [])
+	
+	for novel in novels:
+		tags.extend(novel.tags)
+	tags = list(set(tags))
+	novel_ids = [novel.id for novel in novels]
+	
+	return {
+		"novel_id": novel_id,
+		"novel_title": novel_title,
+		"series_id": series_id,
+		"series_title": series_title,
+		"author_id": author_id,
+		"author_name": author_name,
+		"caption": caption,
+		"tags": tags,
+		"total": total,
+		"novels": novels,
+		"novel_ids": novel_ids,
+		"url": url_series(series_id),
+	}
+
