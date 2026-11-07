@@ -38,7 +38,7 @@ class LinpxSource(NovelSource):
 	async def fetch_novel(self, link: str) -> Novel:
 		novel_id = parse.get_novel_id(link)
 		if not novel_id:
-			raise LinpxParseError("无法从文本中解析 Linpx/Pixiv 小说 ID", raw=link)
+			raise LinpxParseError("无法从文本中解析 Linpx 小说 ID", raw=link)
 		
 		data = await client.get_novel(novel_id)
 		return parse.json_to_novel(data)
@@ -50,3 +50,12 @@ class LinpxSource(NovelSource):
 		path = out_dir / f"{safe_filename(novel.title)}.txt"
 		await save_text(path, _format_novel_text(novel))
 		return Path(path)
+
+
+	async def fetch_series(self, link: str) -> Series:
+		series_id = parse.get_series_id(link)
+		if not series_id:
+			raise LinpxParseError("无法从文本中解析 Linpx 系列 ID", raw=link)
+		
+		data = await client.get_series(series_id)
+		return parse.json_to_series(data)

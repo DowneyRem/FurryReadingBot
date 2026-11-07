@@ -16,7 +16,7 @@ class Novel:
 	author_id: str
 	author_name: str
 	
-	captions: str
+	caption: str
 	content: str
 	like_count: int
 	read_count: int
@@ -44,6 +44,52 @@ class Novel:
 	@title.setter
 	def title(self, value: str) -> None:
 		self.novel_title = value
+	
+	def __str__(self):
+		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
+	def __repr__(self):
+		return f"{self.source}Source({self.url})"
+
+
+@dataclass
+class Series:
+	novel_id: str
+	novel_title: str
+	series_id: str | None
+	series_title: str | None
+	author_id: str
+	author_name: str
+	
+	caption: str = ""
+	tags: list[str] = field(default_factory=list)
+	total: int = 0
+	novel_ids: list[str] = field(default_factory=list)
+
+	source: str = ""
+	url: str = ""
+	novel_url: str = ""
+	
+	@property
+	def id(self) -> str:
+		return self.novel_id
+	raw: dict[str, Any] = field(default_factory=dict)
+	
+	# ----- 别名：兼容旧代码里的 .id / .title -----
+	@property
+	def id(self) -> str:
+		return self.series_id
+	
+	@property
+	def title(self) -> str:
+		return self.series_title
+	
+	@id.setter
+	def id(self, value: str) -> None:
+		self.series_id = value
+	
+	@title.setter
+	def title(self, value: str) -> None:
+		self.series_title = value
 	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"

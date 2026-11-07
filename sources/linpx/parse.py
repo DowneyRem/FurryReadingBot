@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from sources.base import Novel
+from sources.base import Novel, Series
 from sources.linpx.urls import url_novel, url_series
 from sources.linpx.errors import LinpxNotFoundError
 from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
@@ -59,7 +59,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	author_id = data.userId
 	author_name = data.userName
 	
-	captions = data.desc
+	caption = data.desc
 	content = data.content
 	like_count = data.pixivLikeCount
 	read_count = data.pixivReadCount
@@ -76,7 +76,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		author_id=author_id,
 		author_name = author_name,
 		
-		captions=captions,
+		caption=caption,
 		content=content,
 		like_count=like_count,
 		read_count=read_count,
@@ -90,7 +90,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	)
 
 
-def json_to_series(data: dict | JsonDict) -> dict:
+def json_to_series(data: dict | JsonDict) -> Series:
 	"""解析系列 API 返回的元信息（不含正文）。"""
 	data = JsonDict.from_obj(data)
 	if not data or data.error:
@@ -98,10 +98,8 @@ def json_to_series(data: dict | JsonDict) -> dict:
 
 	novel_id = data.novels[0].id
 	novel_title = data.novels[0].title
-
 	series_id = data.novels[0].seriesId
 	series_title = data.novels[0].seriesTitle
-	
 	author_id = data.userId
 	author_name = data.userName
 	
@@ -115,20 +113,24 @@ def json_to_series(data: dict | JsonDict) -> dict:
 	tags = list(set(tags))
 	novel_ids = [novel.id for novel in novels]
 	
-	return {
-		"novel_id": novel_id,
-		"novel_title": novel_title,
-		"series_id": series_id,
-		"series_title": series_title,
-		"author_id": author_id,
-		"author_name": author_name,
-		"caption": caption,
-		"tags": tags,
-		"total": total,
-		"novels": novels,
-		"novel_ids": novel_ids,
-		"url": url_series(series_id),
-	}
+	return Series(
+		novel_id=novel_id,
+		novel_title=novel_title,
+		series_id=series_id,
+		series_title=series_title,
+		author_id=author_id,
+		author_name=author_name,
+		
+		caption=caption,
+		tags=tags,
+		total=total,
+		novel_ids=novel_ids,
+		
+		source="Linpx",
+		url=url_series(series_id),
+		novel_url=url_novel(novel_id),
+		raw=data
+	)
 
 
 def format_chapter_title(chapter_title: str, series_title: str, index: int) -> str:
