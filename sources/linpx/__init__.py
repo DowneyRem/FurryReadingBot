@@ -36,10 +36,13 @@ class LinpxSource(NovelSource):
 		return parse.is_linpx_link(link)
 
 	async def fetch_novel(self, link: str) -> Novel:
-		novel_id = parse.get_novel_id(link)
-		if not novel_id:
-			raise LinpxParseError("无法从文本中解析 Linpx 小说 ID", raw=link)
-		
+		if link.isdigit():
+			novel_id = link
+		else:
+			novel_id = parse.get_novel_id(link)
+			if not novel_id:
+				raise LinpxParseError("无法从文本中解析 Linpx 小说 ID", raw=link)
+			
 		data = await client.get_novel(novel_id)
 		return parse.json_to_novel(data)
 
@@ -53,9 +56,12 @@ class LinpxSource(NovelSource):
 
 
 	async def fetch_series(self, link: str) -> Series:
-		series_id = parse.get_series_id(link)
-		if not series_id:
-			raise LinpxParseError("无法从文本中解析 Linpx 系列 ID", raw=link)
+		if link.isdigit():
+			series_id = link
+		else:
+			series_id = parse.get_series_id(link)
+			if not series_id:
+				raise LinpxParseError("无法从文本中解析 Linpx 系列 ID", raw=link)
 		
 		data = await client.get_series(series_id)
 		return parse.json_to_series(data)
