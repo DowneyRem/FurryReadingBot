@@ -4,6 +4,7 @@ import re
 from sources.base import Novel
 from sources.linpx.urls import url_novel
 from sources.linpx.config import NOVEL_PATTERN
+from sources.linpx.errors import LinpxNotFoundError
 from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 from utils.json import JsonDict
 
@@ -49,11 +50,10 @@ def s(v) -> str:
 def json_to_novel(data: dict | JsonDict) -> Novel:
 	data = JsonDict.from_obj(data)
 	if not data or data.error:
-		err = data.error if data else None
-		if err is True:
-			err = "内容不可用或已被删除"
-		raise ValueError(err or "Linpx 返回错误或空数据")
-
+		raise LinpxNotFoundError("Linpx 上不存在该小说数据", raw=data)
+	
+	novel_id = data.id
+	novel_title = data.title
 	if data.series:
 		series_id = s(data.series.id) or None
 		series_title = s(data.series.title) or None
