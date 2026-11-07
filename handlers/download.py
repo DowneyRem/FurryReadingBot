@@ -35,7 +35,7 @@ async def check_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 	elif not mgr.is_blacklisted(author_id) and not mgr.is_furryauthor(author_id):
 		await update.message.reply_text(
 			text=f"不好意思，本 Bot 仅可下载小说并分享兽人小说。{author_name} 不在本 Bot 的兽人作者名单内",
-			reply_markup=apply_furry_keyboard(link)
+			reply_markup=apply_furry_keyboard(link, author_id)
 		)
 		
 	elif mgr.is_furryauthor(author_id):
