@@ -21,7 +21,7 @@ def check_furry_keyboard(link: str) -> InlineKeyboardMarkup:
 				callback_data=f"is_furry;{link}"),
 			InlineKeyboardButton(
 				text="🗑 确认非兽人小说",
-				callback_data=f"not_furry;{link}"),
+				callback_data=f"not_furry"),
 		]]
 	)
 
