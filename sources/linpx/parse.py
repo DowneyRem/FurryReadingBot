@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from sources.base import Novel
 from sources.linpx.urls import url_novel
-from sources.linpx.config import PATTERN
+from sources.linpx.config import NOVEL_PATTERN
 from utils.json import JsonDict
 
 
@@ -11,7 +11,7 @@ def extract_novel_id(text: str) -> str | None:
 	text = (text or "").strip()
 	if text.isdigit():
 		return text
-	m = re.compile(PATTERN, re.I).search(text)
+	m = re.compile(NOVEL_PATTERN, re.I).search(text)
 	if m:
 		return m.group(1)
 	return None
