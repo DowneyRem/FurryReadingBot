@@ -43,9 +43,6 @@ def is_linpx_link(text: str) -> bool:
 	return is_novel_link(text) or is_series_link(text) or is_author_link(text)
 
 
-def s(v) -> str:
-	return str(v or "").strip()
-
 def json_to_novel(data: dict | JsonDict) -> Novel:
 	data = JsonDict.from_obj(data)
 	if not data or data.error:
@@ -54,34 +51,41 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	novel_id = data.id
 	novel_title = data.title
 	if data.series:
-		series_id = s(data.series.id) or None
-		series_title = s(data.series.title) or None
+		series_id = data.series.id
+		series_title = data.series.title
 	else:
 		series_id = None
 		series_title = None
 	author_id = data.userId
 	author_name = data.userName
-
+	
+	captions = data.desc
 	content = data.content
+	like_count = data.pixivLikeCount
+	read_count = data.pixivReadCount
 	tags = list(data.tags or [])
-	desc = data.desc
+	images = dict(data.images or {})
+	
 	create_date = data.createDate
 
 	return Novel(
-		id=novel_id,
-		title=novel_title,
+		novel_id=novel_id,
+		novel_title=novel_title,
 		series_id=series_id,
 		series_title=series_title,
 		author_id=author_id,
 		author_name = author_name,
 		
+		captions=captions,
 		content=content,
-		tags=tags,
-		description=desc,
-		url=url_novel(novel_id),
+		like_count=like_count,
+		read_count=read_count,
 		create_date=create_date,
+		tags=tags,
+		images=images,
 		
-		source="linpx",
+		source="Linpx",
+		url=url_novel(novel_id),
 		raw=data,
 	)
 

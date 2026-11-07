@@ -9,19 +9,46 @@ from typing import Any
 @dataclass
 class Novel:
 	"""全平台统一小说模型。"""
-	id: str
-	title: str
+	novel_id: str
+	novel_title: str
+	series_id: str | None
+	series_title: str | None
 	author_id: str
 	author_name: str
+	
+	captions: str
 	content: str
+	like_count: int
+	read_count: int
+	create_date: str
 	tags: list[str] = field(default_factory=list)
-	description: str = ""
-	series_id: str | None = None
-	series_title: str | None = None
+	images: dict[str, Any] = field(default_factory=dict)
+
 	source: str = ""
 	url: str = ""
-	create_date: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
+	
+	# ----- 别名：兼容旧代码里的 .id / .title -----
+	@property
+	def id(self) -> str:
+		return self.novel_id
+	
+	@property
+	def title(self) -> str:
+		return self.novel_title
+	
+	@id.setter
+	def id(self, value: str) -> None:
+		self.novel_id = value
+	
+	@title.setter
+	def title(self, value: str) -> None:
+		self.novel_title = value
+	
+	def __str__(self):
+		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
+	def __repr__(self):
+		return f"{self.source}Source({self.url})"
 
 
 class NovelSource(ABC):

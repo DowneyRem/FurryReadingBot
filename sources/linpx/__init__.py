@@ -21,8 +21,8 @@ def _format_novel_text(novel: Novel) -> str:
 	]
 	if tags:
 		head_lines.append(f"标签：{tags}")
-	if novel.description:
-		head_lines.append(f"简介：{novel.description}")
+	if novel.captions:
+		head_lines.append(f"简介：{novel.captions}")
 	# if novel.series_title:
 	# 	head_lines.append(f"系列：{novel.series_title}")
 	head = "\n".join(head_lines)
