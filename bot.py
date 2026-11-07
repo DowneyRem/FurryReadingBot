@@ -34,11 +34,11 @@ def main() -> None:
 	app.add_handler(CommandHandler("start", start))
 	app.add_handler(CommandHandler("help", help_cmd))
 	app.add_handler(CommandHandler("ping", ping))
-	app.add_handler(CommandHandler("down", down))
+	app.add_handler(CommandHandler("down", check_download))
 	
 	# 注册「非命令的私聊文字」
 	app.add_handler(
-		MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, down)
+		MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, check_download)
 	)
 	
 	app.add_handler(CallbackQueryHandler(button_callback))

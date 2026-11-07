@@ -7,7 +7,7 @@ def get_id(string: str) -> str:
 		return ""
 
 
-def get_url(string: str) -> list:
+def get_url(string: str) -> str:
 	pattern = "(?:https?|ftp|file)://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]"
 	urls = re.findall(pattern, string)
 	if len(urls) == 1:
