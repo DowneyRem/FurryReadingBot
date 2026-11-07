@@ -3,8 +3,12 @@ from pathlib import Path
 
 from sources.base import Novel, NovelSource
 from sources.linpx import client, parse
+from sources.linpx.errors import LinpxParseError
 from storage.file import safe_filename
 from storage.file_async import save_text
+
+
+out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
 
 
 def _format_novel_text(novel: Novel) -> str:
@@ -19,8 +23,8 @@ def _format_novel_text(novel: Novel) -> str:
 		head_lines.append(f"标签：{tags}")
 	if novel.description:
 		head_lines.append(f"简介：{novel.description}")
-	if novel.series_title:
-		head_lines.append(f"系列：{novel.series_title}")
+	# if novel.series_title:
+	# 	head_lines.append(f"系列：{novel.series_title}")
 	head = "\n".join(head_lines)
 	return f"{head}\n\n{novel.content}"
 
@@ -28,22 +32,21 @@ def _format_novel_text(novel: Novel) -> str:
 class LinpxSource(NovelSource):
 	name = "linpx"
 
-	def can_handle(self, text: str) -> bool:
-		return parse.is_linpx_link(text)
+	def can_handle(self, link: str) -> bool:
+		return parse.is_linpx_link(link)
 
-	async def fetch_novel(self, text: str) -> Novel:
-		novel_id = parse.extract_novel_id(text)
+	async def fetch_novel(self, link: str) -> Novel:
+		novel_id = parse.get_novel_id(link)
 		if not novel_id:
-			raise ValueError("无法从文本中解析 Linpx/Pixiv 小说 ID")
+			raise LinpxParseError("无法从文本中解析 Linpx/Pixiv 小说 ID", raw=link)
+		
 		data = await client.get_novel(novel_id)
 		return parse.json_to_novel(data)
 
-	async def save_novel(self, text: str) -> Path:
+
+	async def save_novel(self, link: str) -> Path:
 		"""拉取单篇并保存为 txt，返回文件路径。"""
-		novel = await self.fetch_novel(text)
-		out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
-		out_dir.mkdir(parents=True, exist_ok=True)
-		filename = f"{safe_filename(novel.title)}_{novel.id}.txt"
-		path = out_dir / filename
+		novel = await self.fetch_novel(link)
+		path = out_dir / f"{safe_filename(novel.title)}.txt"
 		await save_text(path, _format_novel_text(novel))
 		return Path(path)
