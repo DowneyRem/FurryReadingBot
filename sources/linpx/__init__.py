@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 
-from sources.base import Novel, NovelSource
+from sources.base import Novel, Series, NovelSource
 from sources.linpx import client, parse
 from sources.linpx.errors import LinpxParseError
 from storage.file import safe_filename
@@ -65,3 +65,37 @@ class LinpxSource(NovelSource):
 		
 		data = await client.get_series(series_id)
 		return parse.json_to_series(data)
+	
+	
+	async def save_series(self, link: str) -> Path:
+		"""下载系列并合并保存为单个 txt，返回文件路径。"""
+		content = []
+		series = await self.fetch_series(link)
+		
+		for novel_id in series.novel_ids:
+			novel = await self.fetch_novel(novel_id)
+			content.append(novel.title)
+			content.append(novel.caption)
+			content.append(novel.content)
+			content.extend(["", ""])
+		
+		head_lines = [
+			series.title,
+			f"作者：{series.author_name}",
+			# f"链接：{series.url}",
+			f"链接：{series.novel_url}",
+		]
+		if series.tags:
+			tags = " ".join(f"#{t}" for t in series.tags) if series.tags else ""
+			head_lines.append(f"标签：{tags}")
+		if series.caption:
+			head_lines.append(f"简介：{series.caption}")
+		
+		head = "\n".join(head_lines)
+		contents = "\n".join(content)
+		data = f"{head}\n\n{contents}"
+		
+		path = out_dir / f"{safe_filename(series.title)}.txt"
+		await save_text(path, data)
+		return Path(path)
+
