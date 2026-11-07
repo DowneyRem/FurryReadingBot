@@ -1,4 +1,4 @@
-from sources.linpx.config import *
+from sources.linpx.config import BASE, API_BASE
 
 
 def url_novel(novel_id: str | int) -> str:
@@ -23,4 +23,4 @@ def url_user_data(user_id: str | int) -> str:
 
 
 def url_fav_user_data() -> str:
-	return f"https://api.linpx.ink/fav/user/cache"
+	return f"{API_BASE}/fav/user/cache"
