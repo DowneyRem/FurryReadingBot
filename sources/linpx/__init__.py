@@ -11,7 +11,7 @@ from storage.file_async import save_text
 out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
 
 
-def _format_novel_text(novel: Novel) -> str:
+def format_novel_text(novel: Novel) -> str:
 	"""生成写入文件的完整文本（头部信息 + 正文）。"""
 	head_lines = [
 		novel.title,
@@ -27,6 +27,35 @@ def _format_novel_text(novel: Novel) -> str:
 	# 	head_lines.append(f"系列：{novel.series_title}")
 	head = "\n".join(head_lines)
 	return f"{head}\n\n{novel.content}"
+
+
+def format_series_text(series, novels: list[Novel]) -> str:
+	"""系列元信息 + 各章正文 → 完整 txt 字符串。"""
+	head_lines = [
+		series.title,
+		f"作者：{series.author_name}",
+		# f"链接：{series.url}",
+		f"链接：{series.novel_url}",
+	]
+	if series.tags:
+		tags = " ".join(f"#{t}" for t in series.tags) if series.tags else ""
+		head_lines.append(f"标签：{tags}")
+	if series.caption:
+		head_lines.append(f"简介：{series.caption}")
+
+	content = []
+	for i, novel in enumerate(novels, start=1):
+		title = novel.title
+		# 可选：统一章节名
+		# title = format_chapter_title(novel.title, series.title, i)
+		content.append(title)
+		content.append(novel.caption)
+		content.extend(["", ""])
+		content.append(novel.content)
+		content.extend(["", "", ""])
+	head = "\n".join(head_lines)
+	contents = "\n".join(content)
+	return f"{head}\n\n{contents}"
 
 
 class LinpxSource(NovelSource):
@@ -50,8 +79,9 @@ class LinpxSource(NovelSource):
 	async def save_novel(self, link: str) -> Path:
 		"""拉取单篇并保存为 txt，返回文件路径。"""
 		novel = await self.fetch_novel(link)
+		text = format_novel_text(novel)
 		path = out_dir / f"{safe_filename(novel.title)}.txt"
-		await save_text(path, _format_novel_text(novel))
+		await save_text(path, text)
 		return Path(path)
 
 
@@ -68,34 +98,14 @@ class LinpxSource(NovelSource):
 	
 	
 	async def save_series(self, link: str) -> Path:
-		"""下载系列并合并保存为单个 txt，返回文件路径。"""
-		content = []
+		novels = []
 		series = await self.fetch_series(link)
-		
 		for novel_id in series.novel_ids:
-			novel = await self.fetch_novel(novel_id)
-			content.append(novel.title)
-			content.append(novel.caption)
-			content.append(novel.content)
-			content.extend(["", ""])
+			novels.append(await self.fetch_novel(novel_id))
 		
-		head_lines = [
-			series.title,
-			f"作者：{series.author_name}",
-			# f"链接：{series.url}",
-			f"链接：{series.novel_url}",
-		]
-		if series.tags:
-			tags = " ".join(f"#{t}" for t in series.tags) if series.tags else ""
-			head_lines.append(f"标签：{tags}")
-		if series.caption:
-			head_lines.append(f"简介：{series.caption}")
-		
-		head = "\n".join(head_lines)
-		contents = "\n".join(content)
-		data = f"{head}\n\n{contents}"
-		
+		text = format_series_text(series, novels)
 		path = out_dir / f"{safe_filename(series.title)}.txt"
-		await save_text(path, data)
-		return Path(path)
+		await save_text(path, text)
+		return path
+
 
