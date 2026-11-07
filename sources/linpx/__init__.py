@@ -13,16 +13,16 @@ out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
 
 def _format_novel_text(novel: Novel) -> str:
 	"""生成写入文件的完整文本（头部信息 + 正文）。"""
-	tags = " ".join(f"#{t}" for t in novel.tags) if novel.tags else ""
 	head_lines = [
 		novel.title,
 		f"作者：{novel.author_name}",
 		f"链接：{novel.url}",
 	]
-	if tags:
+	if novel.tags:
+		tags = " ".join(f"#{t}" for t in novel.tags) if novel.tags else ""
 		head_lines.append(f"标签：{tags}")
-	if novel.captions:
-		head_lines.append(f"简介：{novel.captions}")
+	if novel.caption:
+		head_lines.append(f"简介：{novel.caption}")
 	# if novel.series_title:
 	# 	head_lines.append(f"系列：{novel.series_title}")
 	head = "\n".join(head_lines)
