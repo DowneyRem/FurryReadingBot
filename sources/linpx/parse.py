@@ -4,27 +4,43 @@ import re
 from sources.base import Novel
 from sources.linpx.urls import url_novel
 from sources.linpx.config import NOVEL_PATTERN
+from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 from utils.json import JsonDict
 
 
-def extract_novel_id(text: str) -> str | None:
-	text = (text or "").strip()
-	if text.isdigit():
-		return text
+def get_novel_id(text: str) -> str | None:
 	m = re.compile(NOVEL_PATTERN, re.I).search(text)
 	if m:
 		return m.group(1)
 	return None
 
+def get_series_id(text: str) -> str | None:
+	"""从文本中解析系列 ID"""
+	m = re.compile(SERIES_PATTERN, re.I).search(text)
+	if m:
+		return m.group(1)
+	return None
+
+def get_author_id(text: str) -> str | None:
+	"""从文本中解析系列 ID"""
+	m = re.compile(AUTHOR_PATTERN, re.I).search(text)
+	if m:
+		return m.group(1)
+	return None
+
+
+def is_novel_link(text: str) -> bool:
+	return get_novel_id(text) is not None
+
+def is_series_link(text: str) -> bool:
+	return get_series_id(text) is not None
+
+def is_author_link(text: str) -> bool:
+	return get_author_id(text) is not None
 
 def is_linpx_link(text: str) -> bool:
-	t = (text or "").lower()
-	if extract_novel_id(text):
-		if any(x in t for x in ("linpx", "furrynovel.ink")):
-			return True
-		if text.strip().isdigit():
-			return True
-	return False
+	"""是否为可处理的单篇或系列链接。"""
+	return is_novel_link(text) or is_series_link(text) or is_author_link(text)
 
 
 def json_to_novel(data: dict | JsonDict) -> Novel:

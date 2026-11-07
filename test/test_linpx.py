@@ -31,24 +31,24 @@ SAMPLE_PIXIV = f"https://www.pixiv.net/novel/show.php?id={SAMPLE_ID}"
 
 class TestParse:
 	def test_extract_linpx_url(self):
-		assert parse.extract_novel_id(SAMPLE_LINPX) == SAMPLE_ID
+		assert parse.get_novel_id(SAMPLE_LINPX) == SAMPLE_ID
 
 	def test_extract_pn_url(self):
-		assert parse.extract_novel_id(SAMPLE_PN) == SAMPLE_ID
+		assert parse.get_novel_id(SAMPLE_PN) == SAMPLE_ID
 
 	def test_extract_pixiv_url(self):
-		assert parse.extract_novel_id(SAMPLE_PIXIV) == SAMPLE_ID
+		assert parse.get_novel_id(SAMPLE_PIXIV) == SAMPLE_ID
 
 	def test_extract_plain_id(self):
-		assert parse.extract_novel_id(SAMPLE_ID) == SAMPLE_ID
+		assert parse.get_novel_id(SAMPLE_ID) == SAMPLE_ID
 
 	def test_extract_in_sentence(self):
 		text = f"请下载这篇 {SAMPLE_LINPX} 谢谢"
-		assert parse.extract_novel_id(text) == SAMPLE_ID
+		assert parse.get_novel_id(text) == SAMPLE_ID
 
 	def test_extract_invalid(self):
-		assert parse.extract_novel_id("hello world") is None
-		assert parse.extract_novel_id("") is None
+		assert parse.get_novel_id("hello world") is None
+		assert parse.get_novel_id("") is None
 
 	def test_can_handle(self):
 		src = LinpxSource()
@@ -131,7 +131,7 @@ def _run_manual():
 	async def main():
 		print("=== parse ===")
 		for s in [SAMPLE_LINPX, SAMPLE_PN, SAMPLE_PIXIV, SAMPLE_ID]:
-			print(f"  {s!r} -> {parse.extract_novel_id(s)}")
+			print(f"  {s!r} -> {parse.get_novel_id(s)}")
 
 		print("=== live fetch ===")
 		novel = await fetch_novel(SAMPLE_LINPX)
