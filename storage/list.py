@@ -132,15 +132,16 @@ class ListManager:
 		data_dir = Path(__file__).parent.parent.resolve() / "data"
 		data_dir.mkdir(parents=True, exist_ok=True)
 		self.whitelist = AuthorListStore(
-			data_dir / "white.json",
+			data_dir / "white_authors.json",
 			label="whitelist",
 		)
 		self.blacklist = AuthorListStore(
-			data_dir / "black.json",
+			data_dir / "black_authors.json",
 			label="blacklist",
 		)
 		self.furrylist = AuthorListStore(
-			data_dir / "furry.json",
+			data_dir / "furry_authors.json",
+			label="furrylist",
 		)
 
 
