@@ -172,17 +172,3 @@ def json_to_author(data: dict | JsonDict) -> Author:
 		novel_url=url_novel(novel_id),
 		raw=data
 	)
-
-
-def format_chapter_title(chapter_title: str, series_title: str, index: int) -> str:
-	"""生成章节标题：去掉与系列名重复的部分，并补上「第N章」。"""
-	title = (chapter_title or "").strip()
-	series = (series_title or "").strip()
-	if series:
-		replaced = title.replace(series, "").replace("-", "").strip()
-		if len(replaced) >= 2:
-			title = replaced
-	if "第" not in title and "章" not in title:
-		title = f"第{index}章 {title}"
-	return title
-
