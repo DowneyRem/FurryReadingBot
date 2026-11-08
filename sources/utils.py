@@ -2,6 +2,13 @@ import re
 from sources.base import Series
 
 
+def get_id(link: str, pattern: str) -> str | None:
+	m = re.compile(pattern, re.I).search(link)
+	if m:
+		return m.group(1)
+	return None
+
+
 def is_real_series(series: Series) -> bool:
 	count = 0
 	arabic_pattern = re.compile(r'\d+')

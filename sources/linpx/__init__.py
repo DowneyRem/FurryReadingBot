@@ -6,11 +6,10 @@ from sources.base import Novel, Series, Author, NovelSource
 from sources.utils import is_real_series
 from sources.format import format_novel_text, format_series_text
 
+from sources.utils import get_id
 from sources.linpx import client
 from sources.linpx.errors import LinpxParseError
 from sources.linpx.parse import json_to_novel, json_to_series, json_to_author
-from sources.linpx.urls import get_id
-from sources.linpx.urls import is_novel_link, is_series_link, is_author_link, is_linpx_link
 from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 
 from storage.file import safe_filename
@@ -24,9 +23,18 @@ out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
 
 class LinpxSource(NovelSource):
 	name = "linpx"
+	
+	def is_novel_link(self, link: str) -> bool:
+		return get_id(link, NOVEL_PATTERN) is not None
+	
+	def is_series_link(self, link: str) -> bool:
+		return get_id(link, SERIES_PATTERN) is not None
+	
+	def is_author_link(self, link: str) -> bool:
+		return get_id(link, AUTHOR_PATTERN) is not None
 
 	def can_handle(self, link: str) -> bool:
-		return is_linpx_link(link)
+		return self.is_novel_link(link) or self.is_series_link(link) or self.is_author_link(link)
 
 
 	async def fetch_novel(self, link: str) -> Novel:
