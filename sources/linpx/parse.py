@@ -64,7 +64,7 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	novel_id = data.novels[0].id if data.novels else ""
 	novel_title = data.novels[0].title if data.novels else ""
 	series_id = data.novels[0].seriesId if data.novels else ""
-	series_title = data.novels[0].seriesTitle if data.series else ""
+	series_title = data.novels[0].seriesTitle if data.novels else ""
 	author_id = data.userId
 	author_name = data.userName
 	
