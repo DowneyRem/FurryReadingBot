@@ -10,9 +10,6 @@ import asyncio
 import aiofiles
 import aiohttp
 
-# 调整日志格式，方便异步调试
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
 
 async def remove_file(paths: str | Path | Iterable[str | Path]) -> None:
 	"""异步删除文件/文件夹，不阻塞主线程"""
