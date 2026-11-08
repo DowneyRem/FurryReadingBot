@@ -61,14 +61,14 @@ def down_series_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
-				text="📒 下载 txt",
-				callback_data=f"dst;{link}"),
-			InlineKeyboardButton(
-				text="📚 下载 zip",
-				callback_data=f"dsz;{link}"),
-			InlineKeyboardButton(
 				text="🤖 自动选择",
 				callback_data=f"ds;{link}"),
+			InlineKeyboardButton(
+				text="📒 下载系列 txt",
+				callback_data=f"dst;{link}"),
+			InlineKeyboardButton(
+				text="📚 下载系列 zip",
+				callback_data=f"dsz;{link}"),
 		]]
 	)
 
