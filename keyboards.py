@@ -5,7 +5,7 @@ def apply_furry_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarku
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
-				text="✅ 申请加入兽人作者名单",
+				text="✅ 申请兽人作者",
 				callback_data=f"apply_fa;{link};{author_id}"),
 			InlineKeyboardButton(
 				text="🗑 忽略",
@@ -30,11 +30,11 @@ def down_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
-				text="📄 下载本章为txt文件",
-				callback_data=f"down_novel;{link}"),
+				text="📄 下载本章 txt",
+				callback_data=f"dn;{link}"),
 			InlineKeyboardButton(
-				text="👤 下载作者全部小说",
-				callback_data=f"down_author;{link}"),
+				text="👤 下载作者 zip",
+				callback_data=f"da;{link}"),
 		]]
 	)
 
@@ -42,18 +42,18 @@ def down_novel_series_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
-				text="📄 下载本章为txt文件",
-				callback_data=f"down_novel;{link}"),
+				text="📄 下载本章 txt",
+				callback_data=f"dn;{link}"),
 			InlineKeyboardButton(
-				text="👤 下载作者全部小说",
-				callback_data=f"down_author;{link}"),
+				text="👤 下载作者 zip",
+				callback_data=f"da;{link}"),
 		], [
 			InlineKeyboardButton(
-				text="📚 下载系列为txt合集",
-				callback_data=f"down_series_txt;{link}"),
+				text="📒 下载系列 txt",
+				callback_data=f"dst;{link}"),
 			InlineKeyboardButton(
-				text="📚 下载系列为zip合集",
-				callback_data=f"down_series_zip;{link}"),
+				text="📚 下载系列 zip",
+				callback_data=f"dsz;{link}"),
 		]]
 	)
 
@@ -61,14 +61,14 @@ def down_series_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
-				text="📚 下载系列为txt合集",
-				callback_data=f"down_series_txt;{link}"),
+				text="📒 下载 txt",
+				callback_data=f"dst;{link}"),
 			InlineKeyboardButton(
-				text="📚 下载系列为zip合集",
-				callback_data=f"down_series_zip;{link}"),
+				text="📚 下载 zip",
+				callback_data=f"dsz;{link}"),
 			InlineKeyboardButton(
-				text="▶️ 自动选择",
-				callback_data=f"down_series;{link}"),
+				text="🤖 自动选择",
+				callback_data=f"ds;{link}"),
 		]]
 	)
 
@@ -78,10 +78,10 @@ def down_author_keyboard(link: str) -> InlineKeyboardMarkup:
 		[[
 			InlineKeyboardButton(
 				text="👤 全部下载",
-				callback_data=f"down_author_novels;{link}"),
+				callback_data=f"dan;{link}"),
 			InlineKeyboardButton(
-				text="✅ 选择下载",
-				callback_data=f"down_author_some;{link}"),
+				text="✅ 选择下载(未完成)",
+				callback_data=f"das;{link}"),
 		]]
 	)
 
