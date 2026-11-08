@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
-from sources.base import Novel, Series
-from sources.linpx.urls import url_novel, url_series
+from sources.base import Novel, Series, Author
+from sources.linpx.urls import url_novel, url_series, url_author
 from sources.linpx.errors import LinpxNotFoundError
 from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 from utils.json import JsonDict
@@ -130,6 +130,45 @@ def json_to_series(data: dict | JsonDict) -> Series:
 		
 		source="Linpx",
 		url=url_series(series_id),
+		novel_url=url_novel(novel_id),
+		raw=data
+	)
+
+
+def json_to_author(data: dict | JsonDict) -> Author:
+	data = JsonDict.from_obj(data)
+	if not data or data.error:
+		raise LinpxNotFoundError("Linpx 上不存在该系列数据", raw=data)
+	
+	novel_id = data.novels[0]
+	novel_title = ""
+	series_id = data.series[0].id
+	series_title = data.series[0].title
+	author_id = data.id
+	author_name = data.name
+	
+	tags = [tag.tag for tag in data.tags]
+	comment = data.comment
+	image_url = data.imageUrl
+	novel_ids = data.novels
+	series_ids = [series.id for series in data.series]
+	
+	return Author(
+		novel_id=novel_id,
+		novel_title=novel_title,
+		series_id=series_id,
+		series_title=series_title,
+		author_id=author_id,
+		author_name=author_name,
+		
+		tags=tags,
+		comment=comment,
+		image_url=image_url,
+		novel_ids=novel_ids,
+		series_ids=series_ids,
+		
+		source="Linpx",
+		url=url_author(author_id),
 		novel_url=url_novel(novel_id),
 		raw=data
 	)

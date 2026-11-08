@@ -8,7 +8,7 @@ def url_series(series_id: str | int) -> str:
 	# return f"{API_BASE}/pixiv/series/{series_id}/cache"
 	return f"https://www.pixiv.net/novel/series/{series_id}"
 
-def url_user(user_id: str | int) -> str:
+def url_author(user_id: str | int) -> str:
 	return f"{BASE}/pixiv/user/{user_id}"
 
 
@@ -18,7 +18,7 @@ def url_novel_data(novel_id: str | int) -> str:
 def url_series_data(series_id: str | int) -> str:
 	return f"{API_BASE}/pixiv/series/{series_id}/cache"
 
-def url_user_data(user_id: str | int) -> str:
+def url_author_data(user_id: str | int) -> str:
 	return f"{API_BASE}/pixiv/user/{user_id}/cache"
 
 
