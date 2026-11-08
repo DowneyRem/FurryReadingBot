@@ -68,10 +68,6 @@ class Series:
 	source: str = ""
 	url: str = ""
 	novel_url: str = ""
-	
-	@property
-	def id(self) -> str:
-		return self.novel_id
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	# ----- 别名：兼容旧代码里的 .id / .title -----
@@ -93,6 +89,32 @@ class Series:
 	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
+	def __repr__(self):
+		return f"{self.source}Source({self.url})"
+
+
+@dataclass
+class Author:
+	novel_id: str
+	novel_title: str
+	series_id: str | None
+	series_title: str | None
+	author_id: str
+	author_name: str
+	
+	comment: str = ""
+	image_url: str = ""
+	tags: list[str] = field(default_factory=list)
+	novel_ids: list[str] = field(default_factory=list)
+	series_ids: list[str] = field(default_factory=list)
+	
+	source: str = ""
+	url: str = ""
+	novel_url: str = ""
+	raw: dict[str, Any] = field(default_factory=dict)
+	
+	def __str__(self):
+		return f"作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
 	def __repr__(self):
 		return f"{self.source}Source({self.url})"
 
