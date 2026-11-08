@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from os import PathLike
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -135,16 +136,16 @@ class NovelSource(ABC):
 		"""拉取单篇并保存为本地文件，返回文件路径。"""
 
 	async def fetch_series(self, text: str) -> list[Novel]:
-		raise NotImplementedError(f"{self.name} 暂不支持系列")
+		pass
+	
+	# @abstractmethod
+	async def save_series(self, text: str) -> PathLike:
+		pass
 
-	async def fetch_author_novels(self, text: str) -> list[Novel]:
-		raise NotImplementedError(f"{self.name} 暂不支持作者全部")
-	
+	# @abstractmethod
+	async def fetch_author(self, text: str) -> list[Novel]:
+		pass
 	
 	# @abstractmethod
-	# async def save_series(self, text: str) -> PathLike:
-	# 	pass
-	#
-	# @abstractmethod
-	# async def save_author_novels(self, text: str) -> PathLike:
-	# 	pass
+	async def save_author(self, text: str) -> PathLike:
+		pass
