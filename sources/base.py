@@ -8,7 +8,6 @@ from typing import Any
 
 @dataclass
 class Novel:
-	"""全平台统一小说模型。"""
 	novel_id: str
 	novel_title: str
 	series_id: str | None
@@ -64,6 +63,7 @@ class Series:
 	tags: list[str] = field(default_factory=list)
 	total: int = 0
 	novel_ids: list[str] = field(default_factory=list)
+	novel_titles: list[str] = field(default_factory=list)
 
 	source: str = ""
 	url: str = ""

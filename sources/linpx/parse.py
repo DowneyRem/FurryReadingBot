@@ -112,6 +112,7 @@ def json_to_series(data: dict | JsonDict) -> Series:
 		tags.extend(novel.tags)
 	tags = list(set(tags))
 	novel_ids = [novel.id for novel in novels]
+	novel_titles = [novel.title for novel in novels]
 	
 	return Series(
 		novel_id=novel_id,
@@ -125,6 +126,7 @@ def json_to_series(data: dict | JsonDict) -> Series:
 		tags=tags,
 		total=total,
 		novel_ids=novel_ids,
+		novel_titles=novel_titles,
 		
 		source="Linpx",
 		url=url_series(series_id),
