@@ -27,7 +27,7 @@ def format_novel_text(novel: Novel) -> str:
 	# if novel.series_title:
 	# 	head_lines.append(f"系列：{novel.series_title}")
 	head = "\n".join(head_lines)
-	return f"{head}\n\n{novel.content}"
+	return f"{head}\n\n\n{novel.content}"
 
 
 def format_series_text(series, novels: list[Novel]) -> str:
@@ -56,7 +56,7 @@ def format_series_text(series, novels: list[Novel]) -> str:
 		content.extend(["", "", ""])
 	head = "\n".join(head_lines)
 	contents = "\n".join(content)
-	return f"{head}\n\n{contents}"
+	return f"{head}\n\n\n{contents}"
 
 
 class LinpxSource(NovelSource):
