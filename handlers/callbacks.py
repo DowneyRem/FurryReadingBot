@@ -1,23 +1,24 @@
-from os import PathLike
+from __future__ import annotations
+
+import asyncio
 from pathlib import Path
+from typing import Iterable
 
-from telegram import Update
-from telegram.ext import ContextTypes, CallbackContext
+from telegram import InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes
 
-from keyboards import check_furry_keyboard
-from sources import save_novel
+from sources import fetch, save
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	query = update.callback_query
-	await query.answer()
-
-	if not query.data:
+	if query is None:
 		return
-
+	# await query.answer()
 	await query.edit_message_reply_markup(reply_markup=None)
-
-	if query.data == "ignore" or query.data == "not_furry":
+	
+	action, separator, link = query.data.partition(";")
+	if action in {"ignore", "not_furry"}:
 		await query.delete_message()
 		return
 
@@ -26,27 +27,46 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		author_id = query.data.split(";")[2]
 		# path = await down_novels(link, update)
 		# await update.message.get_bot().send_document()
-		
-		
-	if query.data.startswith("down_novel"):
-		link = query.data.split(";")[1]
-		# await down_novels(query, link, )
-		# await upload_file()(
-
-
-async def down_novels(link: str, update: Update) -> PathLike:
-	path = ""
-	try:
-		path = await save_novel(link)
-	except FileNotFoundError:
-		# 容错处理：如果文件不存在，通知用户
-		await update.message.reply_text("抱歉，未找到指定的文件。")
-	except Exception as e:
-		# 捕获其他潜在异常（如网络问题或权限问题）
-		await update.message.reply_text(f"文件发送失败，错误信息: {e}")
-	else:
-		return Path(path)
 	
+	jobs = {
+		"dn": lambda: save(link),
+		"ds": lambda: save(link),
+		"dst": lambda: save(link, "txt"),
+		"dsz": lambda: save(link, "zip"),
+		"dz": lambda: save(link),
+		"dzn": lambda: save(link),
+	}
+	# if action == "dsn":
+	# 	await query.edit_message_text("作者作品的勾选下载尚未实现，请使用「全部下载」。")
+	# 	return
+	
+	job = jobs.get(action)
+	if job is None:
+		await query.edit_message_text("暂不支持该下载操作。")
+		return
+	
+	try:
+		await query.edit_message_text("正在获取文件，请稍候……")
+		path = await job()
+		await upload_file(path, update, context)
+		await query.edit_message_text("还请去源网站，给作者一个收藏/评论，以表支持")
+		await asyncio.sleep(10)
+		await query.delete_message()
+	except FileNotFoundError:
+		await _reply(update, context, "抱歉，未找到生成的文件")
+	except NotImplementedError as e:
+		await _reply(update, context, str(e))
+	except Exception as e:
+		await _reply(update, context, str(e))
+
+
+
+async def _reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
+	message = update.effective_message
+	if message is not None:
+		await message.reply_text(text)
+	elif update.effective_chat is not None:
+		await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
 
 
 async def upload_file(
