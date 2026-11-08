@@ -6,6 +6,7 @@ from sources.linpx import client, parse
 from sources.linpx.errors import LinpxParseError
 from storage.file import safe_filename
 from storage.file_async import save_text
+from storage.zip_async import zip_path
 
 
 out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
@@ -76,13 +77,13 @@ class LinpxSource(NovelSource):
 		return parse.json_to_novel(data)
 
 
-	async def save_novel(self, link: str) -> Path:
+	async def save_novel(self, link: str, folder: str="") -> Path:
 		"""拉取单篇并保存为 txt，返回文件路径。"""
 		novel = await self.fetch_novel(link)
 		text = format_novel_text(novel)
-		path = out_dir / f"{safe_filename(novel.title)}.txt"
-		await save_text(path, text)
-		return Path(path)
+		path = out_dir / folder / f"{safe_filename(novel.title)}.txt"
+		path = await save_text(path, text)
+		return path
 
 
 	async def fetch_series(self, link: str) -> Series:
@@ -98,14 +99,27 @@ class LinpxSource(NovelSource):
 	
 	
 	async def save_series(self, link: str) -> Path:
-		novels = []
+		pass
+	
+	
+	async def save_series_txt(self, link: str) -> Path:
 		series = await self.fetch_series(link)
+		novels = []
 		for novel_id in series.novel_ids:
 			novels.append(await self.fetch_novel(novel_id))
 		
 		text = format_series_text(series, novels)
 		path = out_dir / f"{safe_filename(series.title)}.txt"
-		await save_text(path, text)
+		path = await save_text(path, text)
 		return path
 
 
+	async def save_series_zip(self, link: str) -> Path:
+		series = await self.fetch_series(link)
+		for novel_id in series.novel_ids:
+			await self.save_novel(novel_id, series.series_title)
+		
+		folder = Path(out_dir) / series.series_title
+		path = await zip_path(folder)
+		return path
+		
