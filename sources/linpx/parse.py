@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from sources.base import Novel, Series, Author
+from sources.format import format_caption
 from sources.linpx.urls import url_novel, url_series, url_author
 from sources.linpx.errors import LinpxNotFoundError
 from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
@@ -59,7 +60,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	author_id = data.userId
 	author_name = data.userName
 	
-	caption = data.desc
+	caption = format_caption(data.desc)
 	content = data.content
 	like_count = data.pixivLikeCount
 	read_count = data.pixivReadCount
@@ -103,7 +104,7 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	author_id = data.userId
 	author_name = data.userName
 	
-	caption = (data.caption or data.desc or "").strip()
+	caption = format_caption(data.caption)
 	tags = list(data.tags or [])
 	total = int(data.total or 0)
 	novels = list(data.novels or [])
