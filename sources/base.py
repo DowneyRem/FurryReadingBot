@@ -130,28 +130,36 @@ class NovelSource(ABC):
 	name: str
 
 	@abstractmethod
-	def can_handle(self, text: str) -> bool:
+	def can_handle(self, link: str) -> bool:
 		"""文本/链接是否属于本源。"""
 
 	@abstractmethod
-	async def fetch_novel(self, text: str) -> Novel:
+	async def fetch_novel(self, link: str) -> Novel:
 		"""拉取并解析为一篇 Novel（单篇）。"""
 
 	@abstractmethod
-	async def save_novel(self, text: str) -> Path:
+	async def save_novel(self, link: str) -> Path:
 		"""拉取单篇并保存为本地文件，返回文件路径。"""
 
-	async def fetch_series(self, text: str) -> list[Novel]:
+	async def fetch_series(self, link: str) -> Series:
 		pass
 	
 	# @abstractmethod
-	async def save_series(self, text: str) -> PathLike:
+	async def save_series(self, link: str) -> PathLike:
+		pass
+	
+	# @abstractmethod
+	async def save_series_txt(self, link: str) -> PathLike:
+		pass
+	
+	# @abstractmethod
+	async def save_series_zip(self, link: str) -> PathLike:
 		pass
 
 	# @abstractmethod
-	async def fetch_author(self, text: str) -> list[Novel]:
+	async def fetch_author(self, link: str) -> Author:
 		pass
 	
 	# @abstractmethod
-	async def save_author(self, text: str) -> PathLike:
+	async def save_author(self, link: str) -> PathLike:
 		pass
