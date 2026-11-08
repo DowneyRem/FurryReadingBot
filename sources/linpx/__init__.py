@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from sources.base import Novel, Series, Author, NovelSource
+from sources.utils import is_real_series
 from sources.format import format_novel_text, format_series_text
 from sources.linpx import client, parse
 from sources.linpx.errors import LinpxParseError
