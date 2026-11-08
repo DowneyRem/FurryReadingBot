@@ -138,7 +138,7 @@ def json_to_series(data: dict | JsonDict) -> Series:
 def json_to_author(data: dict | JsonDict) -> Author:
 	data = JsonDict.from_obj(data)
 	if not data or data.error:
-		raise LinpxNotFoundError("Linpx 上不存在该系列数据", raw=data)
+		raise LinpxNotFoundError("Linpx 上不存在该作者数据", raw=data)
 	
 	novel_id = data.novels[0]
 	novel_title = ""
