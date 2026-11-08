@@ -1,47 +1,10 @@
 from __future__ import annotations
 
-import re
 from sources.base import Novel, Series, Author
 from sources.format import format_caption
 from sources.linpx.urls import url_novel, url_series, url_author
 from sources.linpx.errors import LinpxNotFoundError
-from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 from utils.json import JsonDict
-
-
-def get_novel_id(text: str) -> str | None:
-	m = re.compile(NOVEL_PATTERN, re.I).search(text)
-	if m:
-		return m.group(1)
-	return None
-
-def get_series_id(text: str) -> str | None:
-	"""从文本中解析系列 ID"""
-	m = re.compile(SERIES_PATTERN, re.I).search(text)
-	if m:
-		return m.group(1)
-	return None
-
-def get_author_id(text: str) -> str | None:
-	"""从文本中解析系列 ID"""
-	m = re.compile(AUTHOR_PATTERN, re.I).search(text)
-	if m:
-		return m.group(1)
-	return None
-
-
-def is_novel_link(text: str) -> bool:
-	return get_novel_id(text) is not None
-
-def is_series_link(text: str) -> bool:
-	return get_series_id(text) is not None
-
-def is_author_link(text: str) -> bool:
-	return get_author_id(text) is not None
-
-def is_linpx_link(text: str) -> bool:
-	"""是否为可处理的单篇或系列链接。"""
-	return is_novel_link(text) or is_series_link(text) or is_author_link(text)
 
 
 def json_to_novel(data: dict | JsonDict) -> Novel:

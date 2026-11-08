@@ -5,8 +5,12 @@ from pathlib import Path
 from sources.base import Novel, Series, Author, NovelSource
 from sources.utils import is_real_series
 from sources.format import format_novel_text, format_series_text
-from sources.linpx import client, parse
+
+from sources.linpx import client
 from sources.linpx.errors import LinpxParseError
+from sources.linpx.parse import json_to_novel, json_to_series, json_to_author
+from sources.linpx.urls import get_novel_id, get_series_id, get_author_id
+from sources.linpx.urls import is_novel_link, is_series_link, is_author_link, is_linpx_link
 
 from storage.file import safe_filename
 from storage.file_async import save_text
@@ -21,19 +25,19 @@ class LinpxSource(NovelSource):
 	name = "linpx"
 
 	def can_handle(self, link: str) -> bool:
-		return parse.is_linpx_link(link)
+		return is_linpx_link(link)
 
 
 	async def fetch_novel(self, link: str) -> Novel:
 		if link.isdigit():
 			novel_id = link
 		else:
-			novel_id = parse.get_novel_id(link)
+			novel_id = get_novel_id(link)
 			if not novel_id:
 				raise LinpxParseError("无法从文本中解析 Linpx 小说 ID", raw=link)
 			
 		data = await client.get_novel(novel_id)
-		return parse.json_to_novel(data)
+		return json_to_novel(data)
 	
 	
 	async def save_novel(self, link: str, author: str="", series: str="") -> Path:
@@ -49,12 +53,12 @@ class LinpxSource(NovelSource):
 		if link.isdigit():
 			series_id = link
 		else:
-			series_id = parse.get_series_id(link)
+			series_id = get_series_id(link)
 			if not series_id:
 				raise LinpxParseError("无法从文本中解析 Linpx 系列 ID", raw=link)
 		
 		data = await client.get_series(series_id)
-		return parse.json_to_series(data)
+		return json_to_series(data)
 	
 	
 	async def save_series(self, link: str, author: str="") -> Path:
@@ -93,12 +97,12 @@ class LinpxSource(NovelSource):
 		if link.isdigit():
 			author_id = link
 		else:
-			author_id = parse.get_author_id(link)
+			author_id = get_author_id(link)
 			if not author_id:
 				raise LinpxParseError("无法从文本中解析 Linpx 作者 ID", raw=link)
 		
 		data = await client.get_author(author_id)
-		return parse.json_to_author(data)
+		return json_to_author(data)
 	
 	
 	async def save_author(self, link: str) -> Path:
