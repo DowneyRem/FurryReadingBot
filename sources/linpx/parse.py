@@ -97,10 +97,10 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	if not data or data.error:
 		raise LinpxNotFoundError("Linpx 上不存在该系列数据", raw=data)
 
-	novel_id = data.novels[0].id
-	novel_title = data.novels[0].title
-	series_id = data.novels[0].seriesId
-	series_title = data.novels[0].seriesTitle
+	novel_id = data.novels[0].id if data.novels else ""
+	novel_title = data.novels[0].title if data.novels else ""
+	series_id = data.novels[0].seriesId if data.novels else ""
+	series_title = data.novels[0].seriesTitle if data.series else ""
 	author_id = data.userId
 	author_name = data.userName
 	
@@ -141,10 +141,10 @@ def json_to_author(data: dict | JsonDict) -> Author:
 	if not data or data.error:
 		raise LinpxNotFoundError("Linpx 上不存在该作者数据", raw=data)
 	
-	novel_id = data.novels[0]
+	novel_id = data.novels[0] if data.novels else ""
 	novel_title = ""
-	series_id = data.series[0].id
-	series_title = data.series[0].title
+	series_id = data.series[0].id if data.series else ""
+	series_title = data.series[0].title if data.series else ""
 	author_id = data.id
 	author_name = data.name
 	
