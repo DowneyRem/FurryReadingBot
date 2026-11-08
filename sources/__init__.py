@@ -17,7 +17,7 @@ def resolve_source(link: str) -> NovelSource | None:
 	return None
 
 
-async def fetch(link: str):
+async def fetch(link: str) -> Novel | Series | Author:
 	source = resolve_source(link)
 	if source.is_novel_link(link):
 		return await source.fetch_novel(link)

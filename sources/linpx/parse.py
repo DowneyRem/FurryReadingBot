@@ -31,6 +31,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	images = dict(data.images or {})
 	
 	create_date = data.createDate
+	novel_url = url_novel(novel_id)
 
 	return Novel(
 		novel_id=novel_id,
@@ -49,7 +50,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		images=images,
 		
 		source="Linpx",
-		url=url_novel(novel_id),
+		novel_url=novel_url,
 		raw=data,
 	)
 
@@ -78,6 +79,9 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	novel_ids = [novel.id for novel in novels]
 	novel_titles = [novel.title for novel in novels]
 	
+	novel_url = url_novel(novel_id) if novel_id else ""
+	series_url = url_series(series_id) if series_id else ""
+	
 	return Series(
 		novel_id=novel_id,
 		novel_title=novel_title,
@@ -93,8 +97,8 @@ def json_to_series(data: dict | JsonDict) -> Series:
 		novel_titles=novel_titles,
 		
 		source="Linpx",
-		url=url_series(series_id),
-		novel_url=url_novel(novel_id),
+		novel_url=novel_url,
+		series_url=series_url,
 		raw=data
 	)
 
@@ -117,6 +121,10 @@ def json_to_author(data: dict | JsonDict) -> Author:
 	novel_ids = data.novels
 	series_ids = [item.id for item in data.series]
 	
+	novel_url = url_novel(novel_id) if novel_id else ""
+	series_url = url_series(series_id) if series_id else ""
+	author_url = url_author(author_id)
+	
 	return Author(
 		novel_id=novel_id,
 		novel_title=novel_title,
@@ -132,7 +140,8 @@ def json_to_author(data: dict | JsonDict) -> Author:
 		series_ids=series_ids,
 		
 		source="Linpx",
-		url=url_author(author_id),
-		novel_url=url_novel(novel_id),
+		novel_url=novel_url,
+		series_url=series_url,
+		author_url=author_url,
 		raw=data
 	)

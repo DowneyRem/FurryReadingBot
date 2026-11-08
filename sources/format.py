@@ -43,7 +43,7 @@ def format_novel_text(novel: Novel) -> str:
 	head_lines = [
 		novel.title,
 		f"作者：{novel.author_name}",
-		f"链接：{novel.url}",
+		f"链接：{novel.novel_url}",
 	]
 	if novel.tags:
 		tags = " ".join(f"#{t}" for t in novel.tags) if novel.tags else ""
@@ -74,7 +74,7 @@ def format_series_text(series, novels: list[Novel]) -> str:
 	head_lines = [
 		series.title,
 		f"作者：{series.author_name}",
-		# f"链接：{series.url}",
+		# f"链接：{series.series_url}",
 		f"链接：{series.novel_url}",
 	]
 	if series.tags:

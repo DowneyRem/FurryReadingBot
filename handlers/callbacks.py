@@ -8,6 +8,7 @@ from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from sources import fetch, save
+from keyboards import import_to_legado_keyboard
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -48,7 +49,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	try:
 		await query.edit_message_text("正在获取文件，请稍候……")
 		path = await job()
-		await upload_file(path, update, context)
+		item = await fetch(link)
+		await upload_file(
+			path, update, context,
+			reply_markup=import_to_legado_keyboard(item.novel_url),
+			caption=f"{str(item)}\n{item.novel_url}",
+		)
 		await query.edit_message_text("还请去源网站，给作者一个收藏/评论，以表支持")
 		await asyncio.sleep(10)
 		await query.delete_message()

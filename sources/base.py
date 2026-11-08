@@ -24,7 +24,7 @@ class Novel:
 	images: dict[str, Any] = field(default_factory=dict)
 
 	source: str = ""
-	url: str = ""
+	novel_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	# ----- 别名：兼容旧代码里的 .id / .title -----
@@ -36,19 +36,11 @@ class Novel:
 	def title(self) -> str:
 		return self.novel_title
 	
-	@id.setter
-	def id(self, value: str) -> None:
-		self.novel_id = value
-	
-	@title.setter
-	def title(self, value: str) -> None:
-		self.novel_title = value
-	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
 	
 	def __repr__(self):
-		return f"{self.source}Source({self.url})"
+		return f"{self.source}Source({self.novel_url})"
 
 
 @dataclass
@@ -67,8 +59,8 @@ class Series:
 	novel_titles: list[str] = field(default_factory=list)
 
 	source: str = ""
-	url: str = ""
 	novel_url: str = ""
+	series_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	# ----- 别名：兼容旧代码里的 .id / .title -----
@@ -80,19 +72,11 @@ class Series:
 	def title(self) -> str:
 		return self.series_title
 	
-	@id.setter
-	def id(self, value: str) -> None:
-		self.series_id = value
-	
-	@title.setter
-	def title(self, value: str) -> None:
-		self.series_title = value
-	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
 	
 	def __repr__(self):
-		return f"{self.source}Source({self.url})"
+		return f"{self.source}Source({self.series_url})"
 
 
 @dataclass
@@ -111,8 +95,9 @@ class Author:
 	series_ids: list[str] = field(default_factory=list)
 	
 	source: str = ""
-	url: str = ""
 	novel_url: str = ""
+	series_url: str = ""
+	author_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	def __str__(self):
@@ -124,7 +109,7 @@ class Author:
 		return "\n".join(text)
 	
 	def __repr__(self):
-		return f"{self.source}Source({self.url})"
+		return f"{self.source}Source({self.author_url})"
 
 
 class NovelSource(ABC):
