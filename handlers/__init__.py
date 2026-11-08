@@ -1,5 +1,5 @@
 from handlers.start import start, help_cmd, ping
-from handlers.download import check_download
+from handlers.check_download import check_download
 from handlers.callbacks import button_callback
 
 __all__ = [
