@@ -9,8 +9,9 @@ from sources.format import format_novel_text, format_series_text
 from sources.linpx import client
 from sources.linpx.errors import LinpxParseError
 from sources.linpx.parse import json_to_novel, json_to_series, json_to_author
-from sources.linpx.urls import get_novel_id, get_series_id, get_author_id
+from sources.linpx.urls import get_id
 from sources.linpx.urls import is_novel_link, is_series_link, is_author_link, is_linpx_link
+from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 
 from storage.file import safe_filename
 from storage.file_async import save_text
@@ -32,7 +33,7 @@ class LinpxSource(NovelSource):
 		if link.isdigit():
 			novel_id = link
 		else:
-			novel_id = get_novel_id(link)
+			novel_id = get_id(link, NOVEL_PATTERN)
 			if not novel_id:
 				raise LinpxParseError("无法从文本中解析 Linpx 小说 ID", raw=link)
 			
@@ -53,7 +54,7 @@ class LinpxSource(NovelSource):
 		if link.isdigit():
 			series_id = link
 		else:
-			series_id = get_series_id(link)
+			series_id = get_id(link, SERIES_PATTERN)
 			if not series_id:
 				raise LinpxParseError("无法从文本中解析 Linpx 系列 ID", raw=link)
 		
@@ -97,7 +98,7 @@ class LinpxSource(NovelSource):
 		if link.isdigit():
 			author_id = link
 		else:
-			author_id = get_author_id(link)
+			author_id = get_id(link, AUTHOR_PATTERN)
 			if not author_id:
 				raise LinpxParseError("无法从文本中解析 Linpx 作者 ID", raw=link)
 		

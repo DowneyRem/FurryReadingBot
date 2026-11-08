@@ -28,34 +28,20 @@ def url_fav_user_data() -> str:
 	return f"{API_BASE}/fav/user/cache"
 
 
-def get_novel_id(link: str) -> str | None:
-	m = re.compile(NOVEL_PATTERN, re.I).search(link)
-	if m:
-		return m.group(1)
-	return None
-
-def get_series_id(link: str) -> str | None:
-	"""从文本中解析系列 ID"""
-	m = re.compile(SERIES_PATTERN, re.I).search(link)
-	if m:
-		return m.group(1)
-	return None
-
-def get_author_id(link: str) -> str | None:
-	"""从文本中解析系列 ID"""
-	m = re.compile(AUTHOR_PATTERN, re.I).search(link)
+def get_id(link: str, pattern: str) -> str | None:
+	m = re.compile(pattern, re.I).search(link)
 	if m:
 		return m.group(1)
 	return None
 
 def is_novel_link(link: str) -> bool:
-	return get_novel_id(link) is not None
+	return get_id(link, NOVEL_PATTERN) is not None
 
 def is_series_link(link: str) -> bool:
-	return get_series_id(link) is not None
+	return get_id(link, SERIES_PATTERN) is not None
 
 def is_author_link(link: str) -> bool:
-	return get_author_id(link) is not None
+	return get_id(link, AUTHOR_PATTERN) is not None
 
 def is_linpx_link(link: str) -> bool:
 	"""是否为可处理的单篇或系列链接。"""
