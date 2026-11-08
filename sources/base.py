@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from os import PathLike
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +46,7 @@ class Novel:
 	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
+	
 	def __repr__(self):
 		return f"{self.source}Source({self.url})"
 
@@ -90,6 +90,7 @@ class Series:
 	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
+	
 	def __repr__(self):
 		return f"{self.source}Source({self.url})"
 
@@ -128,38 +129,51 @@ class Author:
 
 class NovelSource(ABC):
 	name: str
-
+	
+	@abstractmethod
+	def is_novel_link(self, link: str) -> bool:
+		"""链接是否为 novel """
+	
+	@abstractmethod
+	def is_series_link(self, link: str) -> bool:
+		"""链接是否为 series """
+	
+	@abstractmethod
+	def is_author_link(self, link: str) -> bool:
+		"""链接是否为 author """
+	
 	@abstractmethod
 	def can_handle(self, link: str) -> bool:
-		"""文本/链接是否属于本源。"""
-
+		"""链接是否属于本源"""
+		
 	@abstractmethod
 	async def fetch_novel(self, link: str) -> Novel:
-		"""拉取并解析为一篇 Novel（单篇）。"""
+		"""拉取并解析为 Novel """
 
 	@abstractmethod
 	async def save_novel(self, link: str) -> Path:
-		"""拉取单篇并保存为本地文件，返回文件路径。"""
+		"""拉取单篇并保存为本地文件，返回文件路径"""
 
+	# @abstractmethod
 	async def fetch_series(self, link: str) -> Series:
-		pass
+		"""拉取系列并解析为 Series """
 	
 	# @abstractmethod
-	async def save_series(self, link: str) -> PathLike:
-		pass
+	async def save_series(self, link: str) -> Path:
+		"""拉取系列并保存为本地文件，返回文件路径"""
 	
 	# @abstractmethod
-	async def save_series_txt(self, link: str) -> PathLike:
-		pass
+	async def save_series_txt(self, link: str) -> Path:
+		"""拉取系列并保存为 txt 文件，返回文件路径"""
 	
 	# @abstractmethod
-	async def save_series_zip(self, link: str) -> PathLike:
-		pass
+	async def save_series_zip(self, link: str) -> Path:
+		"""拉取系列并保存为 zip 文件，返回文件路径"""
 
 	# @abstractmethod
 	async def fetch_author(self, link: str) -> Author:
-		pass
+		"""拉取作者并解析为 Author """
 	
 	# @abstractmethod
-	async def save_author(self, link: str) -> PathLike:
-		pass
+	async def save_author(self, link: str) -> Path:
+		"""拉取作者并保存为 zip 文件，返回文件路径"""
