@@ -9,7 +9,7 @@ from keyboards import (
 	down_novel_series_keyboard,
 	down_series_keyboard,
 )
-from sources import fetch_novel, fetch_series, fetch_author
+from sources import fetch
 from sources.linpx.errors import LinpxError
 from storage.list import ListManager
 from utils.json import JsonDict
@@ -28,7 +28,7 @@ async def check_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 	
 	try:
 		if "novel" in link or "/pn/" in link:
-			item = await fetch_novel(link)
+			item = await fetch(link)
 			if item.series_id:
 				markup = down_novel_series_keyboard(link)
 			else:
@@ -36,12 +36,12 @@ async def check_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 			description = str(item)
 			
 		elif "series" in link:
-			item = await fetch_series(link)
+			item = await fetch(link)
 			markup = down_series_keyboard(link)
 			description = str(item)
 			
 		elif "user" in link:
-			item = await fetch_author(link)
+			item = await fetch(link)
 			markup = down_author_keyboard(link)
 			description = str(item)
 			
@@ -58,7 +58,7 @@ async def check_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 		return
 	
 	else:
-		print(description)
+		# print(description)
 		author_id, author_name = item.author_id, item.author_name
 		manager = ListManager()
 		if manager.is_blacklisted(author_id):
