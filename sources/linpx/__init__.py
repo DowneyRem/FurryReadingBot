@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from sources.base import Novel, Series, NovelSource
+from sources.base import Novel, Series, Author, NovelSource
 from sources.linpx import client, parse
 from sources.linpx.errors import LinpxParseError
 from storage.file import safe_filename
@@ -140,4 +140,19 @@ class LinpxSource(NovelSource):
 		folder = Path(out_dir) / series.series_title
 		path = await zip_path(folder)
 		return path
+	
+	
+	# @staticmethod
+	async def fetch_author(self, link: str) -> Author:
+		if link.isdigit():
+			author_id = link
+		else:
+			author_id = parse.get_author_id(link)
+			if not author_id:
+				raise LinpxParseError("无法从文本中解析 Linpx 作者 ID", raw=link)
 		
+		data = await client.get_author(author_id)
+		return parse.json_to_author(data)
+	
+	async def save_author(self, text: str) -> Path:
+		pass
