@@ -9,6 +9,7 @@ from sources.linpx.errors import LinpxParseError
 from storage.file import safe_filename
 from storage.file_async import save_text
 from storage.zip_async import zip_path
+from utils.timer import timer
 
 
 out_dir = Path(__file__).resolve().parents[2] / "files" / "novels"
@@ -83,7 +84,7 @@ def is_real_series(series: Series) -> bool:
 		arabic_matches = arabic_pattern.findall(title)
 		chinese_matches = chinese_pattern.findall(title)
 		count += len(arabic_matches) + len(chinese_matches)
-	return count >= series.total * 0.5
+	return count >= series.total * 0.75
 
 
 class LinpxSource(NovelSource):
@@ -102,13 +103,13 @@ class LinpxSource(NovelSource):
 			
 		data = await client.get_novel(novel_id)
 		return parse.json_to_novel(data)
-
-
-	async def save_novel(self, link: str, folder: str="") -> Path:
+	
+	
+	async def save_novel(self, link: str, author: str="", series: str="") -> Path:
 		"""拉取单篇并保存为 txt，返回文件路径。"""
 		novel = await self.fetch_novel(link)
 		text = format_novel_text(novel)
-		path = out_dir / folder / f"{safe_filename(novel.title)}.txt"
+		path = out_dir / author / series /f"{safe_filename(novel.title)}.txt"
 		path = await save_text(path, text)
 		return path
 
@@ -125,33 +126,34 @@ class LinpxSource(NovelSource):
 		return parse.json_to_series(data)
 	
 	
-	async def save_series(self, link: str) -> Path:
+	async def save_series(self, link: str, author: str="") -> Path:
 		series = await self.fetch_series(link)
 		if is_real_series(series):
-			return await self.save_series_txt(link)
+			return await self.save_series_txt(link, author)
 		else:
-			return await self.save_series_zip(link)
+			return await self.save_series_zip(link, author)
 	
 	
-	async def save_series_txt(self, link: str) -> Path:
+	async def save_series_txt(self, link: str, author: str="") -> Path:
 		series = await self.fetch_series(link)
 		novels = []
 		for novel_id in series.novel_ids:
 			novels.append(await self.fetch_novel(novel_id))
 		
 		text = format_series_text(series, novels)
-		path = out_dir / f"{safe_filename(series.title)}.txt"
+		path = out_dir / author / f"{safe_filename(series.title)}.txt"
 		path = await save_text(path, text)
 		return path
-
-
-	async def save_series_zip(self, link: str) -> Path:
+	
+	
+	async def save_series_zip(self, link: str, author: str="") -> Path:
 		series = await self.fetch_series(link)
 		for novel_id in series.novel_ids:
-			await self.save_novel(novel_id, series.series_title)
-		
-		folder = Path(out_dir) / series.series_title
-		path = await zip_path(folder)
+			await self.save_novel(novel_id, author, series.series_title)
+			
+		path = Path(out_dir) / author / series.series_title
+		if not author:
+			path = await zip_path(path, delete=True)
 		return path
 	
 	
@@ -167,5 +169,20 @@ class LinpxSource(NovelSource):
 		data = await client.get_author(author_id)
 		return parse.json_to_author(data)
 	
-	async def save_author(self, text: str) -> Path:
-		pass
+	
+	async def save_author(self, link: str) -> Path:
+		author = await self.fetch_author(link)
+		in_series_novel_ids = []
+		for series_id in author.series_ids:
+			series = await self.fetch_series(series_id)
+			in_series_novel_ids.extend(series.novel_ids)
+			await self.save_series(series_id, author.author_name)
+		
+		single_ids = list(set(author.novel_ids).difference(set(in_series_novel_ids)))
+		for novel_id in single_ids:
+			await self.save_novel(novel_id, author.author_name, "单篇")
+
+		path = Path(out_dir) / author.author_name
+		path = await zip_path(path)
+		return path
+	

@@ -11,7 +11,7 @@ import aiofiles
 import aiohttp
 
 # 调整日志格式，方便异步调试
-# logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 async def remove_file(paths: str | Path | Iterable[str | Path]) -> None:
@@ -43,7 +43,6 @@ async def download_json(url: str, file_name: str | Path, *, headers: dict | None
 	save_path = Path(file_name)
 	if not save_path.is_absolute():
 		save_path = Path(__file__).parent.resolve() / save_path
-	
 	await save_json(save_path, data)
 	return data
 
@@ -87,7 +86,7 @@ async def save_text(path: str | Path | PathLike, text: str = "") -> Path:
 	except Exception as e:
 		logging.error(f"异步保存文本失败：{p}，原因：{e}")
 	else:
-		logging.debug(f"已保存为：{p}")
+		logging.info(f"已保存为：{p}")
 	return p
 
 
@@ -103,5 +102,5 @@ async def save_json(path: str | Path | PathLike, data: Any) -> Path:
 	except Exception as e:
 		logging.error(f"异步保存 JSON 失败：{p}，原因：{e}")
 	else:
-		logging.debug(f"已保存为：{p}")
+		logging.info(f"已保存为：{p}")
 	return p
