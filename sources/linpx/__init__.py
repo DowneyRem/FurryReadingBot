@@ -93,6 +93,7 @@ class LinpxSource(NovelSource):
 	def can_handle(self, link: str) -> bool:
 		return parse.is_linpx_link(link)
 
+
 	async def fetch_novel(self, link: str) -> Novel:
 		if link.isdigit():
 			novel_id = link

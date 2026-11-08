@@ -115,7 +115,13 @@ class Author:
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	def __str__(self):
-		return f"作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
+		text = [
+			f"作者：{self.author_name} ({self.author_id})",
+			f"小说：共{len(self.novel_ids)}篇，系列：共{len(self.series_ids)}篇",
+			f"标签：#{" #".join(self.tags).strip()}",
+		]
+		return "\n".join(text)
+	
 	def __repr__(self):
 		return f"{self.source}Source({self.url})"
 

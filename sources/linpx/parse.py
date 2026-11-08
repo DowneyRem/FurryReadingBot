@@ -147,11 +147,11 @@ def json_to_author(data: dict | JsonDict) -> Author:
 	author_id = data.id
 	author_name = data.name
 	
-	tags = [tag.tag for tag in data.tags]
+	tags = [item.tag for item in data.tags if item.time >= 3]
 	comment = data.comment
 	image_url = data.imageUrl
 	novel_ids = data.novels
-	series_ids = [series.id for series in data.series]
+	series_ids = [item.id for item in data.series]
 	
 	return Author(
 		novel_id=novel_id,
