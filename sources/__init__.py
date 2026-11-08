@@ -17,27 +17,27 @@ def resolve_source(link: str) -> NovelSource | None:
 	return None
 
 
-async def fetch_novel(link: str) -> Novel:
-	return await resolve_source(link).fetch_novel(link)
+async def fetch(link: str):
+	source = resolve_source(link)
+	if source.is_novel_link(link):
+		return await source.fetch_novel(link)
+	elif source.is_series_link(link):
+		return await source.fetch_series(link)
+	else:
+		return await source.fetch_author(link)
 
-async def fetch_series(link: str) -> Series:
-	return await resolve_source(link).fetch_series(link)
 
-async def fetch_author(link: str) -> Author:
-	return await resolve_source(link).fetch_author(link)
+async def save(link: str, ext: str="") -> Path:
+	source = resolve_source(link)
+	if source.is_novel_link(link):
+		return await source.save_novel(link)
+	elif source.is_series_link(link):
+		if ext == "txt":
+			return await source.save_series_txt(link)
+		elif ext == "zip":
+			return await source.save_series_zip(link)
+		else:
+			return await source.save_series(link)
+	else:
+		return await source.save_author(link)
 
-
-async def save_novel(link: str) -> Path:
-	return Path(await resolve_source(link).save_novel(link))
-
-async def save_series(link: str) -> Path:
-	return Path(await resolve_source(link).save_series(link))
-
-async def save_series_txt(link: str) -> Path:
-	return Path(await resolve_source(link).save_series_txt(link))
-
-async def save_series_zip(link: str) -> Path:
-	return Path(await resolve_source(link).save_series_zip(link))
-
-async def save_author(link: str) -> Path:
-	return Path(await resolve_source(link).save_author(link))
