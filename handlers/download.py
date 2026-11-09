@@ -16,7 +16,7 @@ from utils.json import JsonDict
 from utils.links import get_url
 
 
-async def check_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	message = update.effective_message
 	if message is None or not message.text:
 		return
