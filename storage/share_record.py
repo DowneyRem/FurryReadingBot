@@ -6,27 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
+from storage.utils import parse_iso, utc_now, utc_now_iso
 from utils.json import JsonDict
-
-
-def _utc_now() -> datetime:
-	return datetime.now(timezone.utc)
-
-
-def _utc_now_iso() -> str:
-	return _utc_now().strftime("%Y-%m-%dT%H:%M:%S%z")
-
-
-def _parse_iso(s: str) -> datetime | None:
-	if not s:
-		return None
-	try:
-		s = s.strip()
-		if len(s) >= 5 and (s[-5] in "+-" and s[-3] != ":"):
-			s = s[:-2] + ":" + s[-2:]
-		return datetime.fromisoformat(s)
-	except Exception:
-		return None
 
 
 def _as_id_list(value: str | int | Iterable[str | int] | None) -> list[str]:
@@ -72,7 +53,7 @@ class ShareRecordStore:
 
 
 	def _write_empty(self) -> None:
-		payload = JsonDict(updated_at=_utc_now_iso(), shares=JsonDict())
+		payload = JsonDict(updated_at=utc_now_iso(), shares=JsonDict())
 		self.path.write_text(
 			json.dumps(payload, ensure_ascii=False, indent=4),
 			encoding="utf-8",
@@ -126,7 +107,7 @@ class ShareRecordStore:
 	def _persist(self) -> None:
 		self._prune()
 		payload = JsonDict(
-			updated_at=_utc_now_iso(),
+			updated_at=utc_now_iso(),
 			shares=JsonDict({k: self._shares[k] for k in sorted(self._shares.keys())}),
 		)
 		self.path.write_text(
@@ -138,10 +119,10 @@ class ShareRecordStore:
 
 	def _prune(self) -> None:
 		"""丢弃超过保留时间的记录，避免文件无限增长。"""
-		now = _utc_now()
+		now = utc_now()
 		expired = [
 			key for key, info in self._shares.items()
-			if (exp := _parse_iso(info.expires_at)) is not None and now >= exp
+			if (exp := parse_iso(info.expires_at)) is not None and now >= exp
 		]
 		for key in expired:
 			del self._shares[key]
@@ -160,8 +141,8 @@ class ShareRecordStore:
 			info = self._shares.get(k)
 			if not info:
 				return None
-			exp = _parse_iso(info.expires_at)
-			if exp is not None and _utc_now() >= exp:
+			exp = parse_iso(info.expires_at)
+			if exp is not None and utc_now() >= exp:
 				del self._shares[k]
 				self._persist()
 				return None
@@ -173,11 +154,11 @@ class ShareRecordStore:
 		info = self.get(key)
 		if not info:
 			return 0.0
-		last = _parse_iso(info.last_shared_at)
+		last = parse_iso(info.last_shared_at)
 		if last is None:
 			return 0.0
 		days = cooldown_days if cooldown_days is not None else self.cooldown_days
-		left = (last + timedelta(days=days) - _utc_now()).total_seconds()
+		left = (last + timedelta(days=days) - utc_now()).total_seconds()
 		return max(0.0, left)
 
 
@@ -199,7 +180,7 @@ class ShareRecordStore:
 		public: bool = True,
 	) -> JsonDict:
 		"""写入 / 更新一条分享记录，返回最新记录。"""
-		now = _utc_now()
+		now = utc_now()
 		with self._lock:
 			self._maybe_reload()
 			k = str(key)

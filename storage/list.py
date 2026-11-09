@@ -7,11 +7,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from storage.utils import utc_now_iso
 from utils.json import JsonDict
-
-
-def _utc_now_iso() -> str:
-	return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
 class AuthorListStore:
@@ -29,7 +26,7 @@ class AuthorListStore:
 		self.reload(force=True)
 
 	def _write_empty(self) -> None:
-		payload = JsonDict(updated_at=_utc_now_iso(), authors=JsonDict())
+		payload = JsonDict(updated_at=utc_now_iso(), authors=JsonDict())
 		self.path.write_text(
 			json.dumps(payload, ensure_ascii=False, indent=4),
 			encoding="utf-8",
@@ -109,7 +106,7 @@ class AuthorListStore:
 
 	def _persist(self) -> None:
 		payload = JsonDict(
-			updated_at=_utc_now_iso(),
+			updated_at=utc_now_iso(),
 			authors=JsonDict(
 				{aid: self._authors[aid] for aid in sorted(self._authors.keys())}
 			),

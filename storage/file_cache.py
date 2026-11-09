@@ -4,30 +4,11 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
+from storage.utils import parse_iso, utc_now, utc_now_iso
 from utils.json import JsonDict
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _utc_now_iso() -> str:
-    return _utc_now().strftime("%Y-%m-%dT%H:%M:%S%z")
-
-
-def _parse_iso(s: str) -> datetime | None:
-    if not s:
-        return None
-    try:
-        s = s.strip()
-        if len(s) >= 5 and (s[-5] in "+-" and s[-3] != ":"):
-            s = s[:-2] + ":" + s[-2:]
-        return datetime.fromisoformat(s)
-    except Exception:
-        return None
 
 
 class FileCacheStore:
@@ -59,7 +40,7 @@ class FileCacheStore:
 
 
     def _write_empty(self) -> None:
-        payload = JsonDict(updated_at=_utc_now_iso(), files=JsonDict())
+        payload = JsonDict(updated_at=utc_now_iso(), files=JsonDict())
         self.path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=4),
             encoding="utf-8",
@@ -101,7 +82,7 @@ class FileCacheStore:
     def _persist(self) -> None:
         self._prune()
         payload = JsonDict(
-            updated_at=_utc_now_iso(),
+            updated_at=utc_now_iso(),
             files=JsonDict({k: self._files[k] for k in sorted(self._files.keys())}),
         )
         self.path.write_text(
@@ -113,10 +94,10 @@ class FileCacheStore:
 
     def _prune(self) -> None:
         """丢弃已过期的缓存条目，避免文件无限增长。"""
-        now = _utc_now()
+        now = utc_now()
         expired = [
             key for key, info in self._files.items()
-            if (exp := _parse_iso(info.expires_at)) is not None and now >= exp
+            if (exp := parse_iso(info.expires_at)) is not None and now >= exp
         ]
         for key in expired:
             del self._files[key]
@@ -133,8 +114,8 @@ class FileCacheStore:
             info = self._files.get(str(key))
             if not info or not info.file_id:
                 return None
-            exp = _parse_iso(info.expires_at)
-            if exp is not None and _utc_now() >= exp:
+            exp = parse_iso(info.expires_at)
+            if exp is not None and utc_now() >= exp:
                 del self._files[str(key)]
                 self._persist()
                 return None
@@ -151,7 +132,7 @@ class FileCacheStore:
     ) -> None:
         if not file_id:
             return
-        now = _utc_now()
+        now = utc_now()
         expires = now + timedelta(days=self.default_ttl_days)
         with self._lock:
             self._maybe_reload()
