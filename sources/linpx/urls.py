@@ -24,3 +24,11 @@ def url_user_data(user_id: str | int) -> str:
 
 def url_fav_user_data() -> str:
 	return f"{API_BASE}/fav/user/cache"
+
+
+# aliases
+def url_author(author_id: str | int) -> str:
+	return url_user(author_id)
+
+def url_author_data(author_id: str | int) -> str:
+	return url_user_data(author_id)
