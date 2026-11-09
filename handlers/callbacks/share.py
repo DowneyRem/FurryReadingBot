@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -13,65 +12,61 @@ from config import FURRY_READING, FURRY_NOVELS, FURRY_READING_NEW_GROUP, TEST_CH
 
 
 async def share(
-	update: Update, context: ContextTypes.DEFAULT_TYPE,
-	*, data: str, public: bool):
-	
+		update: Update, context: ContextTypes.DEFAULT_TYPE,
+		*, data: str, public: bool) -> bool:
+	"""把缓存中的文件分享到目标频道：成功返回 True，失败返回 False。"""
 	parts = data.split(";")
-	print(parts)
-	if len(parts) < 2:
+	# data 如 "snp;{kind};{item_id};{file_type}"
+	if len(parts) < 3:
 		await reply(update, context, "分享参数不完整")
-		return
+		return False
 
 	kind, item_id = parts[1], parts[2]
-	file_type = parts[3] if len(parts) > 2 else "txt"
+	file_type = parts[3] if len(parts) > 3 else "txt"
 	cache_key = FileCacheStore.make_key(kind, item_id, file_type)
-
 	cached = get_cache().get_valid(cache_key)
 	if not cached:
 		await reply(update, context, "缓存已失效，请重新下载后再分享")
-		return
+		return False
 
 	targets = TEST_CHANNEL
 	# targets = [x for x in (FURRY_READING, FURRY_NOVELS, FURRY_READING_NEW_GROUP) if x]
 	if not targets:
 		await reply(update, context, "未配置分享频道")
-		return
-	
+		return False
+
+	query = update.callback_query
 	caption = [cached.caption, ""]
-	if public:
-		caption.append(f"来自 {update.callback_query.from_user.first_name} 的分享")
+	if public and query and query.from_user:
+		caption.append(f"来自 {query.from_user.first_name} 的分享")
 	else:
-		caption.append(f"来自 匿名用户 的分享")
+		caption.append("来自 匿名用户 的分享")
 	caption.append(f"喜欢还请去Pixiv收藏或评论，以支持作者 {FURRY_READING}")
 	caption = "\n".join(caption)
+
 	await upload_file(
-		update, context, file_id=cached.file_id, filename=cached.filename or None,
+		update, context, file_id=cached.file_id, filename=cached.filename,
 		chat_id=targets, caption=caption, cache_key=cache_key)
+	return True
 
 
 async def share_public(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
-	await share(update, context, data=data, public=False)
-	await reply(update, context, f"已经公开分享至 {FURRY_READING}")
-	await asyncio.sleep(5)
-	await context.bot.delete_message(
-		chat_id=update.callback_query.message.chat.id,
-		message_id=update.callback_query.message.message_id +1)
+	if await share(update, context, data=data, public=True):
+		await reply(update, context, f"已经公开分享至 {FURRY_READING}")
 
 
 async def share_private(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
-	await share(update, context, data=data, public=False)
-	await reply(update, context, f"已经匿名分享至 {FURRY_READING}")
-	await asyncio.sleep(5)
-	await context.bot.delete_message(
-		chat_id=update.callback_query.message.chat.id,
-		message_id=update.callback_query.message.message_id +1)
+	if await share(update, context, data=data, public=False):
+		await reply(update, context, f"已经匿名分享至 {FURRY_READING}")
 
 
 async def share_reject(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		**kwargs) -> None:
-	await update.callback_query.edit_message_reply_markup(reply_markup=None)
+	query = update.callback_query
+	if query is not None:
+		await query.edit_message_reply_markup(reply_markup=None)

@@ -90,8 +90,8 @@ async def download(
 
 	if query:
 		await query.edit_message_text("还请去源网站，给作者一个收藏/评论，以表支持")
-		await asyncio.sleep(8)
 		try:
+			await asyncio.sleep(2)
 			await query.delete_message()
 		except Exception:
 			pass
