@@ -89,17 +89,9 @@ async def download(
 	)
 
 	await upload_file(
-		update,
-		context,
-		path=path,
-		file_id=file_id,
-		filename=filename,
-		cache_key=cache_key,
-		file_type=resolved_type,
-		reply_markup=share_novel_keyboard(novel_url),
-		caption=caption,
-		cleanup=True,
-	)
+		update, context, path=path, file_id=file_id, filename=filename,
+		reply_markup=share_novel_keyboard(kind, item_id, file_type),
+		caption=caption, cache_key=cache_key, cleanup=True)
 
 	if query:
 		await query.edit_message_text("还请去源网站，给作者一个收藏/评论，以表支持")

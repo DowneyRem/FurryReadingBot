@@ -36,7 +36,6 @@ async def upload_file(
 	caption: str | None = None,
 	reply_to_message_id: int | None = None,
 	cache_key: str | None = None,
-	file_type: str = "",
 	cleanup: bool = False,
 ) -> str | dict[int | str, str]:
 	"""优先 file_id；否则上传 path，成功后写入 FileCacheStore。"""
@@ -108,8 +107,8 @@ async def upload_file(
 		store.set(
 			cache_key,
 			last_file_id,
-			filename=filename or (file_path.name if file_path else ""),
-			file_type=file_type or (file_path.suffix.lstrip(".") if file_path else ""),
+			file_name=filename or (file_path.name if file_path else ""),
+			caption=caption or "",
 		)
 
 	if cleanup and file_path and file_path.is_file():

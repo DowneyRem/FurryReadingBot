@@ -38,7 +38,6 @@ class FileCacheStore:
       series:{id}:zip
       author:{id}:zip
     """
-
     DEFAULT_TTL_DAYS = 30
 
 
@@ -80,8 +79,8 @@ class FileCacheStore:
                 if isinstance(info, dict):
                     files[key] = JsonDict(
                         file_id=str(info.get("file_id") or ""),
-                        filename=str(info.get("filename") or ""),
-                        file_type=str(info.get("file_type") or ""),
+                        file_name=str(info.get("file_name") or ""),
+                        caption=str(info.get("caption") or ""),
                         uploaded_at=str(info.get("uploaded_at") or ""),
                         expires_at=str(info.get("expires_at") or ""),
                     )
@@ -131,8 +130,8 @@ class FileCacheStore:
         key: str,
         file_id: str,
         *,
-        filename: str = "",
-        file_type: str = "",
+        file_name: str = "",
+        caption: str = "",
         ttl_days: int | None = None,
     ) -> None:
         if not file_id:
@@ -144,8 +143,8 @@ class FileCacheStore:
             self._maybe_reload()
             self._files[str(key)] = JsonDict(
                 file_id=file_id,
-                filename=filename or "",
-                file_type=file_type or "",
+                file_name=file_name or "",
+                caption=caption or "",
                 uploaded_at=now.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 expires_at=expires.strftime("%Y-%m-%dT%H:%M:%S%z"),
             )
