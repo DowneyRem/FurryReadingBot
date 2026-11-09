@@ -141,3 +141,15 @@ def test_remove(tmp_path) -> None:
 	assert store.remove(key) is True
 	assert store.remove(key) is False
 	assert store.is_limited(key) is False
+
+
+def test_default_ttl_is_30_days(tmp_path) -> None:
+	"""分享记录保留时间写死在代码里：默认 30 天，不走 env / config。"""
+	assert ShareRecordStore.DEFAULT_TTL_DAYS == 30
+	store = _store(tmp_path, cooldown_days=7)
+	info = store.record(
+		ShareRecordStore.make_key("novel", "1"), kind="novel", item_id="1")
+	expires = datetime.strptime(info.expires_at, "%Y-%m-%dT%H:%M:%S%z")
+	left = expires - datetime.now(timezone.utc)
+	assert timedelta(days=29) < left <= timedelta(days=30)
+

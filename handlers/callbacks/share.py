@@ -13,7 +13,7 @@ from storage.file_cache import FileCacheStore
 from storage.share_record import ShareRecordStore
 from config import (
 	FURRY_READING, FURRY_NOVELS, FURRY_READING_NEW_GROUP, TEST_CHANNEL,
-	SHARE_COOLDOWN_DAYS, SHARE_RECORD_TTL_DAYS,
+	SHARE_COOLDOWN_DAYS,
 )
 
 
@@ -26,10 +26,7 @@ _inflight: set[str] = set()
 def get_share_records() -> ShareRecordStore:
 	global _share_records
 	if _share_records is None:
-		_share_records = ShareRecordStore(
-			cooldown_days=SHARE_COOLDOWN_DAYS,
-			ttl_days=SHARE_RECORD_TTL_DAYS,
-		)
+		_share_records = ShareRecordStore(cooldown_days=SHARE_COOLDOWN_DAYS)
 	return _share_records
 
 

@@ -14,3 +14,9 @@ TRANSIT_CHANNEL = os.environ.get("TRANSIT_NOVELS", "").strip()
 
 FURRY_READING_NEW_GROUP = os.environ.get("FURRY_READING_NEW_GROUP", "").strip()
 TEST_GROUP = os.environ.get("TEST_GROUP", "").strip()
+
+
+# 分享冷却：同一部作品在该时间（天）内不会重复发送到频道
+SHARE_COOLDOWN_DAYS = float(os.environ.get("SHARE_COOLDOWN_DAYS", 3))
+# 文件缓存天数：file_id 在该时间内可直接复用，不再重新上传
+FILE_CACHE_TTL_DAYS = float(os.environ.get("FILE_CACHE_TTL_DAYS", 7))

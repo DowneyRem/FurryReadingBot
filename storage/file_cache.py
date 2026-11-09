@@ -41,11 +41,14 @@ class FileCacheStore:
     DEFAULT_TTL_DAYS = 30
 
 
-    def __init__(self, path: Path | None = None, default_ttl_days: int | None = None) -> None:
+    def __init__(self, path: Path | None = None, default_ttl_days: float | None = None) -> None:
         if path is None:
             path = Path(__file__).parent.parent.resolve() / "data" / "files_cache.json"
         self.path = path
-        self.default_ttl_days = default_ttl_days or self.DEFAULT_TTL_DAYS
+        # bot 内由 config.FILE_CACHE_TTL_DAYS 覆盖；0 也是合法值，不能用 or 兜底
+        self.default_ttl_days = (
+            self.DEFAULT_TTL_DAYS if default_ttl_days is None else default_ttl_days
+        )
         self._lock = threading.RLock()
         self._mtime: float = 0.0
         self._files: JsonDict = JsonDict()
@@ -132,13 +135,11 @@ class FileCacheStore:
         *,
         file_name: str = "",
         caption: str = "",
-        ttl_days: int | None = None,
     ) -> None:
         if not file_id:
             return
-        ttl = ttl_days if ttl_days is not None else self.default_ttl_days
         now = _utc_now()
-        expires = now + timedelta(days=ttl)
+        expires = now + timedelta(days=self.default_ttl_days)
         with self._lock:
             self._maybe_reload()
             self._files[str(key)] = JsonDict(

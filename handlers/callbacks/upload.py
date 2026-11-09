@@ -9,6 +9,7 @@ from typing import Iterable
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
+from config import FILE_CACHE_TTL_DAYS
 from storage.file_async import remove_file
 from storage.file_cache import FileCacheStore
 
@@ -20,7 +21,7 @@ _file_cache: FileCacheStore | None = None
 def get_cache() -> FileCacheStore:
 	global _file_cache
 	if _file_cache is None:
-		_file_cache = FileCacheStore()
+		_file_cache = FileCacheStore(default_ttl_days=FILE_CACHE_TTL_DAYS)
 	return _file_cache
 
 

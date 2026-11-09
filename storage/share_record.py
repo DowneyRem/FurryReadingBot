@@ -42,11 +42,12 @@ class ShareRecordStore:
 
 	与 FileCacheStore 的区别：
 	  - key 是 "{kind}:{item_id}"，不含 file_type，同一作品的 txt / zip 共用一条记录；
-	  - 冷却窗口（cooldown）与记录保留时间（ttl）分开，互不影响；
+	  - 冷却窗口（cooldown）可配置，记录保留时间（ttl）固定为 DEFAULT_TTL_DAYS，互不影响；
 	  - 记录里保留分享者 / 频道 / 次数，便于统计与审计。
 	"""
 	
 	DEFAULT_COOLDOWN_DAYS = 7
+	# 记录保留时间写死在代码里，不提供配置入口
 	DEFAULT_TTL_DAYS = 30
 
 
@@ -54,7 +55,6 @@ class ShareRecordStore:
 		self,
 		path: Path | None = None,
 		cooldown_days: float | None = None,
-		ttl_days: float | None = None,
 	) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "share_records.json"
@@ -62,7 +62,6 @@ class ShareRecordStore:
 		self.cooldown_days = (
 			cooldown_days if cooldown_days is not None else self.DEFAULT_COOLDOWN_DAYS
 		)
-		self.ttl_days = ttl_days if ttl_days is not None else self.DEFAULT_TTL_DAYS
 		self._lock = threading.RLock()
 		self._mtime: float = 0.0
 		self._shares: JsonDict = JsonDict()
@@ -211,7 +210,7 @@ class ShareRecordStore:
 				title=str(title or prev.title or ""),
 				first_shared_at=str(prev.first_shared_at or now.strftime("%Y-%m-%dT%H:%M:%S%z")),
 				last_shared_at=now.strftime("%Y-%m-%dT%H:%M:%S%z"),
-				expires_at=(now + timedelta(days=self.ttl_days)).strftime("%Y-%m-%dT%H:%M:%S%z"),
+				expires_at=(now + timedelta(days=self.DEFAULT_TTL_DAYS)).strftime("%Y-%m-%dT%H:%M:%S%z"),
 				count=int(prev.count or 0) + 1,
 				last_user_id=str(user_id or ""),
 				last_user_name=str(user_name or ""),
