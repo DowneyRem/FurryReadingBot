@@ -89,6 +89,7 @@ class FileCacheStore:
                     )
             self._files = files
             self._mtime = mtime
+            self._prune()
             return True
 
 
@@ -98,6 +99,7 @@ class FileCacheStore:
 
 
     def _persist(self) -> None:
+        self._prune()
         payload = JsonDict(
             updated_at=_utc_now_iso(),
             files=JsonDict({k: self._files[k] for k in sorted(self._files.keys())}),
@@ -107,6 +109,17 @@ class FileCacheStore:
             encoding="utf-8",
         )
         self._mtime = self.path.stat().st_mtime
+
+
+    def _prune(self) -> None:
+        """丢弃已过期的缓存条目，避免文件无限增长。"""
+        now = _utc_now()
+        expired = [
+            key for key, info in self._files.items()
+            if (exp := _parse_iso(info.expires_at)) is not None and now >= exp
+        ]
+        for key in expired:
+            del self._files[key]
 
 
     @staticmethod
