@@ -17,9 +17,11 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	if data.series:
 		series_id = data.series.id
 		series_title = data.series.title
+		series_url = url_series(series_id)
 	else:
 		series_id = None
 		series_title = None
+		series_url = None
 	author_id = data.userId
 	author_name = data.userName
 	
@@ -51,6 +53,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		
 		source="Linpx",
 		novel_url=novel_url,
+		series_url=series_url,
 		raw=data,
 	)
 

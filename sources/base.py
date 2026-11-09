@@ -25,6 +25,7 @@ class Novel:
 
 	source: str = ""
 	novel_url: str = ""
+	series_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	# ----- 别名：兼容旧代码里的 .id / .title -----
