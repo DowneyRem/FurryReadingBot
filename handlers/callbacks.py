@@ -51,7 +51,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		path = await job()
 		item = await fetch(link)
 		await upload_file(
-			path, update, context,
+			update, context, path,
 			reply_markup=import_to_legado_keyboard(item.novel_url),
 			caption=f"{str(item)}\n{item.novel_url}",
 		)
@@ -76,9 +76,9 @@ async def _reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) 
 
 
 async def upload_file(
-	path: str | Path,
 	update: Update,
 	context: ContextTypes.DEFAULT_TYPE,
+	path: str | Path,
 	*,
 	chat_id: int | str | Iterable[int | str] | None = None,
 	reply_markup: InlineKeyboardMarkup | None = None,
