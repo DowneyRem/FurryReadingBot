@@ -10,7 +10,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from keyboards import share_novel_keyboard
-from sources import fetch, save
+from sources import fetch, save, resolve_link
 from storage.file import remove_file
 from storage.file_cache import FileCacheStore
 from utils.links import get_id
@@ -28,6 +28,8 @@ async def download(
 	
 	query = update.callback_query
 	action, _, link = data.partition(";")
+	print(action, link)
+	
 	mapping = {
 		"dn": ("novel", "txt"),
 		"ds": ("series", "auto"),
@@ -40,32 +42,37 @@ async def download(
 		return
 
 	kind, file_type = mapping[action]
-	item_id = get_id(link)
-	cache_key = FileCacheStore.make_key(kind, item_id, file_type)
-	
 	if query:
 		await query.edit_message_text("正在获取文件，请稍候……")
 
+	# 解析真正要下载的目标：单篇链接要求下载系列时，会解析为其所属系列
+	target_link = await resolve_link(link, kind)
+	item_id = get_id(target_link)
+	logger.debug(" ".join([action, kind, item_id, file_type, target_link]))
+	
+	# 获取缓存
 	store = get_cache()
+	cache_key = FileCacheStore.make_key(kind, item_id, file_type)
 	cached = store.get_valid(cache_key) if file_type != "auto" else None
 
 	path: Path | None = None
 	file_id: str | None = None
 	filename: str | None = None
-
 	if cached:
 		file_id = cached.file_id
-		filename = cached.filename or None
-		logger.info("命中缓存 key=%s", cache_key)
+		filename = cached.file_name
+		caption = cached.caption
+		logger.info(f"命中缓存 {cache_key} {filename}")
+		
 	else:
-		ext = "" if file_type == "auto" else file_type
-		path = await save(link, ext) if ext else await save(link)
-		path = Path(path)
+		item = await fetch(target_link)
+		caption = f"{str(item)}\n{item.url}"
+		
+		path = Path(await save(target_link, file_type))
 		filename = path.name
 		if file_type == "auto":
-			real_type = path.suffix.lstrip(".").lower() or "txt"
-			cache_key = FileCacheStore.make_key(kind, item_id, real_type)
-			file_type = real_type
+			file_type = path.suffix.lstrip(".").lower() or "txt"
+			cache_key = FileCacheStore.make_key(kind, item_id, file_type)
 			cached = store.get_valid(cache_key)
 			if cached:
 				file_id = cached.file_id
@@ -73,15 +80,6 @@ async def download(
 				if path.is_file():
 					remove_file(path)
 				path = None
-
-	item = await fetch(link)
-	novel_url = getattr(item, "novel_url", None) or link
-	caption = f"{str(item)}\n{novel_url}"
-	resolved_type = (
-		file_type
-		if file_type != "auto"
-		else (path.suffix.lstrip(".") if path else "txt")
-	)
 
 	await upload_file(
 		update, context, path=path, file_id=file_id, filename=filename,
