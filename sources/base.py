@@ -37,11 +37,15 @@ class Novel:
 	def title(self) -> str:
 		return self.novel_title
 	
+	@property
+	def url(self) -> str:
+		return self.novel_url
+	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
 	
 	def __repr__(self):
-		return f"{self.source}Source({self.novel_url})"
+		return f"{self.source}Source({self.url})"
 
 
 @dataclass
@@ -73,11 +77,15 @@ class Series:
 	def title(self) -> str:
 		return self.series_title
 	
+	@property
+	def url(self) -> str:
+		return self.series_url
+	
 	def __str__(self):
 		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
 	
 	def __repr__(self):
-		return f"{self.source}Source({self.series_url})"
+		return f"{self.source}Source({self.url})"
 
 
 @dataclass
@@ -101,6 +109,11 @@ class Author:
 	author_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
+	
+	@property
+	def url(self) -> str:
+		return self.author_url
+	
 	def __str__(self):
 		text = [
 			f"作者：{self.author_name} ({self.author_id})",
@@ -110,7 +123,7 @@ class Author:
 		return "\n".join(text)
 	
 	def __repr__(self):
-		return f"{self.source}Source({self.author_url})"
+		return f"{self.source}Source({self.url})"
 
 
 class NovelSource(ABC):
