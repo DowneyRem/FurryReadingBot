@@ -47,7 +47,7 @@ async def upload_file(
 		cached = store.get_valid(cache_key)
 		if cached:
 			file_id = cached.file_id
-			filename = filename or cached.filename or None
+			filename = filename or cached.file_name or None
 
 	if chat_id is None:
 		effective = update.effective_chat
