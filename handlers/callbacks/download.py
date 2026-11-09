@@ -11,13 +11,13 @@ from telegram.ext import ContextTypes
 
 from keyboards import share_novel_keyboard
 from sources import fetch, save
-from sources.linpx.config import AUTHOR_PATTERN, NOVEL_PATTERN, SERIES_PATTERN
-from sources.utils import get_id
 from storage.file import remove_file
 from storage.file_cache import FileCacheStore
+from utils.links import get_id
 
 from handlers.callbacks._common import reply
 from handlers.callbacks.upload import get_cache, upload_file
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +30,9 @@ async def download(
 	rest: str,
 	data: str,
 ) -> None:
+	
 	query = update.callback_query
 	link = rest
-
 	mapping = {
 		"dn": ("novel", "txt"),
 		"ds": ("series", "auto"),
@@ -45,11 +45,9 @@ async def download(
 		return
 
 	kind, file_type = mapping[action]
-	item_id = _extract_id(link, kind) or link.strip()
-	cache_key = FileCacheStore.make_key(
-		kind, item_id, file_type if file_type != "auto" else "auto"
-	)
-
+	item_id = get_id(link)
+	cache_key = FileCacheStore.make_key(kind, item_id, file_type)
+	
 	if query:
 		await query.edit_message_text("正在获取文件，请稍候……")
 
@@ -111,15 +109,3 @@ async def download(
 		except Exception:
 			pass
 
-
-def _extract_id(link: str, kind: str) -> str | None:
-	if str(link).isdigit():
-		return str(link)
-	pattern = {
-		"novel": NOVEL_PATTERN,
-		"series": SERIES_PATTERN,
-		"author": AUTHOR_PATTERN,
-	}.get(kind)
-	if pattern is None:
-		return None
-	return get_id(link, pattern)
