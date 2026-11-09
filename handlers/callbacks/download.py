@@ -23,16 +23,11 @@ logger = logging.getLogger(__name__)
 
 
 async def download(
-	update: Update,
-	context: ContextTypes.DEFAULT_TYPE,
-	*,
-	action: str,
-	rest: str,
-	data: str,
-) -> None:
+	update: Update, context: ContextTypes.DEFAULT_TYPE,
+	*, data: str,) -> None:
 	
 	query = update.callback_query
-	link = rest
+	action, _, link = data.partition(";")
 	mapping = {
 		"dn": ("novel", "txt"),
 		"ds": ("series", "auto"),

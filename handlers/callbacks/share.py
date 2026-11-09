@@ -14,7 +14,7 @@ from config import FURRY_READING, FURRY_NOVELS, FURRY_READING_NEW_GROUP, TEST_CH
 
 async def share(
 	update: Update, context: ContextTypes.DEFAULT_TYPE,
-	*, data: str, public: bool=True):
+	*, data: str, public: bool):
 	
 	parts = data.split(";")
 	print(parts)
@@ -32,7 +32,7 @@ async def share(
 		return
 
 	targets = TEST_CHANNEL
-	# targets = [x for x in (TEST_CHANNEL) if x]
+	# targets = [x for x in (FURRY_READING, FURRY_NOVELS, FURRY_READING_NEW_GROUP) if x]
 	if not targets:
 		await reply(update, context, "未配置分享频道")
 		return
@@ -50,9 +50,9 @@ async def share(
 
 
 async def share_public(
-	update: Update, context: ContextTypes.DEFAULT_TYPE,
-	*, action: str, rest: str, data: str) -> None:
-	await share(update, context, public=False, data=data)
+		update: Update, context: ContextTypes.DEFAULT_TYPE,
+		*, data: str) -> None:
+	await share(update, context, data=data, public=False)
 	await reply(update, context, f"已经公开分享至 {FURRY_READING}")
 	await asyncio.sleep(5)
 	await context.bot.delete_message(
@@ -61,9 +61,9 @@ async def share_public(
 
 
 async def share_private(
-	update: Update, context: ContextTypes.DEFAULT_TYPE,
-	*, action: str, rest: str, data: str) -> None:
-	await share(update, context, public=False, data=data)
+		update: Update, context: ContextTypes.DEFAULT_TYPE,
+		*, data: str) -> None:
+	await share(update, context, data=data, public=False)
 	await reply(update, context, f"已经匿名分享至 {FURRY_READING}")
 	await asyncio.sleep(5)
 	await context.bot.delete_message(
@@ -72,5 +72,6 @@ async def share_private(
 
 
 async def share_reject(
-	update: Update, context: ContextTypes.DEFAULT_TYPE, **kwargs) -> None:
+		update: Update, context: ContextTypes.DEFAULT_TYPE,
+		**kwargs) -> None:
 	await update.callback_query.edit_message_reply_markup(reply_markup=None)

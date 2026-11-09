@@ -59,7 +59,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		return
 
 	try:
-		await handler(update, context, action=action, rest=rest, data=data)
+		await handler(update, context, data=data)
 	except FileNotFoundError:
 		await reply(update, context, "抱歉，未找到生成的文件")
 	except NotImplementedError as e:
