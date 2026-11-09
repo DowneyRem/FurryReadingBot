@@ -8,7 +8,10 @@ from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from sources import fetch, save
-from keyboards import import_to_legado_keyboard
+from keyboards import (
+	share_novel_keyboard,
+	import_to_legado_keyboard,
+)
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -52,7 +55,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		item = await fetch(link)
 		await upload_file(
 			update, context, path,
-			reply_markup=import_to_legado_keyboard(item.novel_url),
+			reply_markup=share_novel_keyboard(item.novel_url),
+			# reply_markup=import_to_legado_keyboard(item.novel_url),
 			caption=f"{str(item)}\n{item.novel_url}",
 		)
 		await query.edit_message_text("还请去源网站，给作者一个收藏/评论，以表支持")

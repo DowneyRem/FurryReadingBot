@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes
 
 from config import FURRY_NOVELS, FURRY_READING
 from keyboards import (
-	apply_furry_keyboard,
+	apply_furry_author_keyboard,
 	down_author_keyboard,
 	down_novel_keyboard,
 	down_novel_series_keyboard,
@@ -72,7 +72,7 @@ async def check_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 		if not manager.is_furryauthor(author_id):
 			await message.reply_text(
 				text=f"不好意思，本 Bot 仅可下载兽人小说。\n{author_name} 目前不在兽人作者名单",
-				reply_markup=apply_furry_keyboard(link, author_id),
+				reply_markup=apply_furry_author_keyboard(link, author_id),
 			)
 			return
 	

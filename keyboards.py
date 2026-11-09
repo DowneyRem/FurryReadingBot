@@ -1,27 +1,27 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def apply_furry_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
+def apply_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
 				text="✅ 申请兽人作者",
 				callback_data=f"af;{link};{author_id}"),
 			InlineKeyboardButton(
-				text="🗑 忽略",
+				text="🗑️ 忽略",
 				callback_data=f"ignore"),
 		]]
 	)
 
-def check_furry_keyboard(link: str) -> InlineKeyboardMarkup:
+def check_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
-				text="✅ 确认为兽人小说",
-				callback_data=f"is_furry;{link}"),
+				text="✅ 确认为兽人作者",
+				callback_data=f"ifa;{link};{author_id}"),
 			InlineKeyboardButton(
-				text="🗑 确认非兽人小说",
-				callback_data=f"not_furry"),
+				text="❌ 确认非兽人作者",
+				callback_data=f"nfa"),
 		]]
 	)
 
@@ -85,11 +85,38 @@ def down_author_keyboard(link: str) -> InlineKeyboardMarkup:
 		]]
 	)
 
+def share_novel_keyboard(link: str) -> InlineKeyboardMarkup:
+	return InlineKeyboardMarkup(
+		[[
+			InlineKeyboardButton(
+				text="🉑 公开分享",
+				callback_data=f"snp;{link}"),
+			InlineKeyboardButton(
+				text="㊙️ 私密分享",
+				callback_data=f"sna;{link}"),
+			InlineKeyboardButton(
+				text="🈲 拒绝分享",
+				callback_data=f"snn;{link}"),
+		]]
+	)
+
+def check_novel_keyboard(link: str) -> InlineKeyboardMarkup:
+	return InlineKeyboardMarkup(
+		[[
+			InlineKeyboardButton(
+				text="🉑 允许分享",
+				callback_data=f"csna;{link}"),
+			InlineKeyboardButton(
+				text="🈲 禁止分享",
+				callback_data=f"csnf;{link}"),
+		]]
+	)
+
 def import_to_legado_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
-				text="⬇️ 下载开源阅读",
+				text="⬇️ 下载 开源阅读",
 				url="https://pixivsource.pages.dev/Download"),
 			InlineKeyboardButton(
 				text="🚀 导入 Pixiv 书源",
