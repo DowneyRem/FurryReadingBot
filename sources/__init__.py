@@ -19,6 +19,8 @@ def resolve_source(link: str) -> NovelSource | None:
 
 async def fetch(link: str) -> Novel | Series | Author:
 	source = resolve_source(link)
+	# if source is None:
+	# 	raise ValueError(f"暂不支持该链接：{link}")
 	if source.is_novel_link(link):
 		return await source.fetch_novel(link)
 	elif source.is_series_link(link):
@@ -27,8 +29,21 @@ async def fetch(link: str) -> Novel | Series | Author:
 		return await source.fetch_author(link)
 
 
+async def resolve_link(link: str, kind: str) -> str:
+	source = resolve_source(link)
+	# if source is None:
+	# 	raise ValueError(f"暂不支持该链接：{link}")
+	if kind == "series" and source.is_novel_link(link):
+		novel = await source.fetch_novel(link)
+		return novel.series_url or link
+	else:
+		return link
+
+
 async def save(link: str, ext: str="") -> Path:
 	source = resolve_source(link)
+	# if source is None:
+	# 	raise ValueError(f"暂不支持该链接：{link}")
 	if source.is_novel_link(link):
 		return await source.save_novel(link)
 	elif source.is_series_link(link):
