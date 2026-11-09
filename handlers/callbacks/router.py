@@ -10,11 +10,8 @@ from telegram.ext import ContextTypes
 from handlers.callbacks._common import reply
 # from handlers.callbacks.apply import handle_apply_furry, handle_confirm_furry
 from handlers.callbacks.download import download
-from handlers.callbacks.share import (
-	handle_share_private,
-	handle_share_public,
-	handle_share_reject,
-)
+from handlers.callbacks.share import share_private, share_public, share_reject
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +48,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		# "af": handle_apply_furry,
 		# "ifa": handle_confirm_furry,
 		# 分享
-		"snp": handle_share_public,
-		"sna": handle_share_private,
-		"snn": handle_share_reject,
+		"snp": share_public,
+		"sna": share_private,
+		"snn": share_reject,
 	}
 
 	handler = handlers.get(action)

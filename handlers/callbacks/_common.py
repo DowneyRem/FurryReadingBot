@@ -7,8 +7,7 @@ from telegram.ext import ContextTypes
 
 
 async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
-	message = update.effective_message
-	if message is not None:
-		await message.reply_text(text)
+	if update.effective_message:
+		await update.effective_message.reply_text(text)
 	elif update.effective_chat is not None:
 		await context.bot.send_message(chat_id=update.effective_chat.id, text=text)

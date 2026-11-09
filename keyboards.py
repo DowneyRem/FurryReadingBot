@@ -85,18 +85,20 @@ def down_author_keyboard(link: str) -> InlineKeyboardMarkup:
 		]]
 	)
 
-def share_novel_keyboard(link: str) -> InlineKeyboardMarkup:
+def share_novel_keyboard(
+		kind: str, item_id: str, file_type: str = "txt") -> InlineKeyboardMarkup:
+	payload = f"{kind};{item_id};{file_type}"
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(
 				text="🉑 公开分享",
-				callback_data=f"snp;{link}"),
+				callback_data=f"snp;{payload}"),
 			InlineKeyboardButton(
 				text="㊙️ 私密分享",
-				callback_data=f"sna;{link}"),
+				callback_data=f"sna;{payload}"),
 			InlineKeyboardButton(
 				text="🈲 拒绝分享",
-				callback_data=f"snn;{link}"),
+				callback_data=f"snn;{payload}"),
 		]]
 	)
 
