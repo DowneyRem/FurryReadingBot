@@ -11,10 +11,10 @@ def apply_author_keyboard(author_url: str, ) -> InlineKeyboardMarkup:
 		]]
 	)
 
-def confirm_apply_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
+def confirm_author_keyboard(author_url: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
-			InlineKeyboardButton(text="✅ 确认", callback_data=f"afy;{link};{author_id}"),
+			InlineKeyboardButton(text="✅ 确认", callback_data=f"afy;{author_url}"),
 			InlineKeyboardButton(text="🗑️ 取消", callback_data="ignore"),
 		]]
 	)
@@ -60,13 +60,16 @@ def down_series_keyboard(link: str, auto: bool = True) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup([buttons])
 
 
-def down_author_keyboard(link: str) -> InlineKeyboardMarkup:
-	return InlineKeyboardMarkup(
-		[[
-			InlineKeyboardButton(text="👤 全部下载", callback_data=f"dan;{link}"),
-			# InlineKeyboardButton(text="✅ 选择下载(未完成)", callback_data=f"das;{link}"),
-		]]
-	)
+def down_author_keyboard(link: str, is_furry: bool=True) -> InlineKeyboardMarkup:
+	from utils.links import get_id
+	buttons = []
+	if is_furry:
+		buttons.append(InlineKeyboardButton(text="👤 全部下载", callback_data=f"dan;{link}"))
+	else:
+		buttons.append(InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{link};{get_id(link)}"))
+	# buttons.append(InlineKeyboardButton(text="🈲 申请黑名单", callback_data=f"af;{link};{get_id(link)}"))
+	return InlineKeyboardMarkup([buttons])
+
 
 def share_novel_keyboard(kind: str, item_id: str, file_type: str = "txt") -> InlineKeyboardMarkup:
 	payload = f"{kind};{item_id};{file_type}"

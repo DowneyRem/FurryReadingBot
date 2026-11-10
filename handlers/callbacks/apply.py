@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.callbacks._common import reply
-from keyboards import confirm_apply_furry_author_keyboard
+from keyboards import confirm_author_keyboard
 from sources import fetch
 from storage.application import ApplicationStore
 from storage.list import ListManager
@@ -121,7 +121,7 @@ async def apply_furry(update: Update, context: ContextTypes.DEFAULT_TYPE,
 	await edit_or_reply(
 		update, context,
 		apply_notice(name, author_id),
-		reply_markup=confirm_apply_furry_author_keyboard(link, author_id))
+		reply_markup=confirm_author_keyboard(link))
 
 
 async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE,
