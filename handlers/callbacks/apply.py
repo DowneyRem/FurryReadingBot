@@ -10,9 +10,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import (
-	get_applications, guess_kind, reply, send_to_transit,
-)
+from handlers.callbacks.common import get_applications, guess_kind, reply, send_to_transit
 from keyboards import confirm_author_keyboard
 from sources import fetch
 from storage.application import ApplicationStore
@@ -44,19 +42,6 @@ def forbid_reason(author_id: str, manager: ListManager) -> str:
 		name = manager.furrylist.get_name(author_id) or author_id
 		return f"作者 {name} 已在兽人作者名单中，无需申请。"
 	return ""
-
-
-async def lookup_author_name(link: str, author_id: str = "") -> str:
-	"""从链接拉取作者名；失败时退回作者 ID。"""
-	if link:
-		try:
-			item = await fetch(link)
-			name = str(getattr(item, "author_name", "") or "")
-			if name:
-				return name
-		except Exception:
-			logger.warning("申请时拉取作者信息失败：%s", link, exc_info=True)
-	return author_id
 
 
 async def edit_or_reply(
@@ -134,14 +119,14 @@ async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 		link=link,
 		kind=guess_kind(link),
 		user_id=user.id,
-		user_name=user.first_name,
+		user_name=f"{user.first_name} {user.last_name}",
 	)
 	logger.info(f"收到兽人作者申请：\n{record.author_name}=({record.author_id}) count={record.count} user={record.user_id}")
 
 	# 用户确认后，相关小说转入中转频道，等待管理员人工核验
 	await send_to_transit(update, context, record)
 	message = [
-		f"已提交兽人作者申请：",
+		f"✅ 已提交兽人作者申请：",
 		f"{record.author_name}（#a{author_id}）",
 		f"管理员核验后会私聊通知结果"
 	]
