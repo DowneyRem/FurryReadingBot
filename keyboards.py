@@ -4,8 +4,16 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 def apply_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
-			InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{link};{author_id}"),
-			InlineKeyboardButton(text="🗑️ 忽略", callback_data=f"ignore"),
+			InlineKeyboardButton(text="✅ 申请", callback_data=f"af;{link};{author_id}"),
+			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
+		]]
+	)
+
+def confirm_apply_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
+	return InlineKeyboardMarkup(
+		[[
+			InlineKeyboardButton(text="✅ 确认", callback_data=f"afy;{link};{author_id}"),
+			InlineKeyboardButton(text="🗑️ 取消", callback_data="ignore"),
 		]]
 	)
 
@@ -13,7 +21,7 @@ def check_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboa
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(text="✅ 确认为兽人作者", callback_data=f"ifa;{link};{author_id}"),
-			InlineKeyboardButton(text="❌ 确认非兽人作者", callback_data=f"nfa"),
+			InlineKeyboardButton(text="🗑️ 确认非兽人作者", callback_data=f"nfa"),
 		]]
 	)
 

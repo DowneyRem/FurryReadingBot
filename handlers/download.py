@@ -64,14 +64,23 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		if manager.is_blacklisted(author_id):
 			if not author_name:
 				author_name = manager.blacklist.get_name(author_id)
-			await message.reply_text(
-				text=f"不好意思，作者 {author_name} 已禁止通过本 Bot 下载小说并分享至 {FURRY_READING} 以及 {FURRY_NOVELS}"
-			)
+			
+			text = [
+				f"不好意思，作者 {author_name} 已禁止通过本 Bot 下载小说并分享至 {FURRY_READING} 以及 {FURRY_NOVELS}",
+				"如需下载其他 Pixiv 小说，可以使用 @PixivNBot",
+			]
+			await message.reply_text("\n".join(text))
 			return
 		
 		if not manager.is_furryauthor(author_id):
+			text = [
+				f"不好意思，本 Bot 仅可下载兽人小说。",
+				f"作者：{author_name}（#a{author_id}）目前不在兽人小说作者名单", "",
+				"申请其为兽人小说作者？",
+				"如需下载其他 Pixiv 小说，可以使用 @PixivNBot",
+			]
 			await message.reply_text(
-				text=f"不好意思，本 Bot 仅可下载兽人小说。\n{author_name} 目前不在兽人作者名单",
+				text="\n".join(text),
 				reply_markup=apply_furry_author_keyboard(link, author_id),
 			)
 			return

@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.callbacks._common import reply
-# from handlers.callbacks.apply import handle_apply_furry, handle_confirm_furry
+from handlers.callbacks.apply import apply_furry, apply_furry_confirm
 from handlers.callbacks.download import download
 from handlers.callbacks.share import share_private, share_public, share_reject
 
@@ -44,9 +44,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		"dst": download,
 		"dsz": download,
 		"dan": download,
-		# # 申请 / 审核
-		# "af": handle_apply_furry,
-		# "ifa": handle_confirm_furry,
+		# 申请兽人作者：af 告知后果，afy 确认提交
+		"af": apply_furry,
+		"afy": apply_furry_confirm,
 		# 分享
 		"snp": share_public,
 		"sna": share_private,
