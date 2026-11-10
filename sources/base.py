@@ -9,10 +9,15 @@ from typing import Any
 @dataclass
 class Novel:
 	novel_id: str
+	novel_url: str
 	novel_title: str
+	
 	series_id: str | None
+	series_url: str | None
 	series_title: str | None
+	
 	author_id: str
+	author_url: str
 	author_name: str
 	
 	caption: str
@@ -24,8 +29,6 @@ class Novel:
 	images: dict[str, Any] = field(default_factory=dict)
 
 	source: str = ""
-	novel_url: str = ""
-	series_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	# ----- 别名：兼容旧代码里的 .id / .title -----
@@ -51,10 +54,15 @@ class Novel:
 @dataclass
 class Series:
 	novel_id: str
+	novel_url: str
 	novel_title: str
-	series_id: str | None
-	series_title: str | None
+	
+	series_id: str
+	series_url: str
+	series_title: str
+	
 	author_id: str
+	author_url: str
 	author_name: str
 	
 	caption: str = ""
@@ -64,8 +72,6 @@ class Series:
 	novel_titles: list[str] = field(default_factory=list)
 
 	source: str = ""
-	novel_url: str = ""
-	series_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	# ----- 别名：兼容旧代码里的 .id / .title -----
@@ -91,10 +97,15 @@ class Series:
 @dataclass
 class Author:
 	novel_id: str
+	novel_url: str
 	novel_title: str
+	
 	series_id: str | None
+	series_url: str | None
 	series_title: str | None
+	
 	author_id: str
+	author_url: str
 	author_name: str
 	
 	comment: str = ""
@@ -104,9 +115,6 @@ class Author:
 	series_ids: list[str] = field(default_factory=list)
 	
 	source: str = ""
-	novel_url: str = ""
-	series_url: str = ""
-	author_url: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
 	

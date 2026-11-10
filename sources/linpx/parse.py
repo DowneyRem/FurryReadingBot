@@ -13,16 +13,15 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		raise LinpxNotFoundError("Linpx 上不存在该小说数据", raw=data)
 	
 	novel_id = data.id
+	novel_url = url_novel(novel_id)
 	novel_title = data.title
-	if data.series:
-		series_id = data.series.id
-		series_title = data.series.title
-		series_url = url_series(series_id)
-	else:
-		series_id = None
-		series_title = None
-		series_url = None
+	
+	series_id = data.series.id if data.series else ""
+	series_title = data.series.title if data.series else ""
+	series_url = url_series(series_id) if series_id else ""
+	
 	author_id = data.userId
+	author_url = url_author(author_id)
 	author_name = data.userName
 	
 	caption = format_caption(data.desc)
@@ -31,17 +30,20 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	read_count = data.pixivReadCount
 	tags = list(data.tags or [])
 	images = dict(data.images or {})
-	
 	create_date = data.createDate
-	novel_url = url_novel(novel_id)
-
+	
 	return Novel(
 		novel_id=novel_id,
+		novel_url=novel_url,
 		novel_title=novel_title,
+		
 		series_id=series_id,
+		series_url=series_url,
 		series_title=series_title,
+		
 		author_id=author_id,
-		author_name = author_name,
+		author_url=author_url,
+		author_name=author_name,
 		
 		caption=caption,
 		content=content,
@@ -52,8 +54,6 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		images=images,
 		
 		source="Linpx",
-		novel_url=novel_url,
-		series_url=series_url,
 		raw=data,
 	)
 
@@ -65,10 +65,15 @@ def json_to_series(data: dict | JsonDict) -> Series:
 		raise LinpxNotFoundError("Linpx 上不存在该系列数据", raw=data)
 
 	novel_id = data.novels[0].id if data.novels else ""
+	novel_url = url_novel(novel_id) if novel_id else ""
 	novel_title = data.novels[0].title if data.novels else ""
+	
 	series_id = data.novels[0].seriesId if data.novels else ""
 	series_title = data.novels[0].seriesTitle if data.novels else ""
+	series_url = url_series(series_id) if series_id else ""
+	
 	author_id = data.userId
+	author_url = url_author(author_id)
 	author_name = data.userName
 	
 	caption = format_caption(data.caption)
@@ -82,15 +87,17 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	novel_ids = [novel.id for novel in novels]
 	novel_titles = [novel.title for novel in novels]
 	
-	novel_url = url_novel(novel_id) if novel_id else ""
-	series_url = url_series(series_id) if series_id else ""
-	
 	return Series(
 		novel_id=novel_id,
+		novel_url=novel_url,
 		novel_title=novel_title,
+		
 		series_id=series_id,
+		series_url=series_url,
 		series_title=series_title,
+		
 		author_id=author_id,
+		author_url=author_url,
 		author_name=author_name,
 		
 		caption=caption,
@@ -100,8 +107,6 @@ def json_to_series(data: dict | JsonDict) -> Series:
 		novel_titles=novel_titles,
 		
 		source="Linpx",
-		novel_url=novel_url,
-		series_url=series_url,
 		raw=data
 	)
 
@@ -112,10 +117,15 @@ def json_to_author(data: dict | JsonDict) -> Author:
 		raise LinpxNotFoundError("Linpx 上不存在该作者数据", raw=data)
 	
 	novel_id = data.novels[0] if data.novels else ""
+	novel_url = url_novel(novel_id) if novel_id else ""
 	novel_title = ""
+	
 	series_id = data.series[0].id if data.series else ""
+	series_url = url_series(series_id) if series_id else ""
 	series_title = data.series[0].title if data.series else ""
+	
 	author_id = data.id
+	author_url = url_author(author_id)
 	author_name = data.name
 	
 	tags = [item.tag for item in data.tags if item.time >= 3]
@@ -124,16 +134,17 @@ def json_to_author(data: dict | JsonDict) -> Author:
 	novel_ids = data.novels
 	series_ids = [item.id for item in data.series]
 	
-	novel_url = url_novel(novel_id) if novel_id else ""
-	series_url = url_series(series_id) if series_id else ""
-	author_url = url_author(author_id)
-	
 	return Author(
 		novel_id=novel_id,
+		novel_url=novel_url,
 		novel_title=novel_title,
+		
 		series_id=series_id,
+		series_url=series_url,
 		series_title=series_title,
+		
 		author_id=author_id,
+		author_url=author_url,
 		author_name=author_name,
 		
 		tags=tags,
@@ -143,8 +154,5 @@ def json_to_author(data: dict | JsonDict) -> Author:
 		series_ids=series_ids,
 		
 		source="Linpx",
-		novel_url=novel_url,
-		series_url=series_url,
-		author_url=author_url,
 		raw=data
 	)
