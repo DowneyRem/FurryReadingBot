@@ -1,4 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from sources.linpx.urls import url_author
+# todo 通用化 url_author
 
 
 def apply_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
@@ -17,14 +19,18 @@ def confirm_apply_furry_author_keyboard(link: str, author_id: str | int) -> Inli
 		]]
 	)
 
-def check_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
+def review_author_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
-		[[
-			InlineKeyboardButton(text="✅ 确认为兽人作者", callback_data=f"ifa;{link};{author_id}"),
-			InlineKeyboardButton(text="🗑️ 确认非兽人作者", callback_data=f"nfa"),
-		]]
+		[
+			[
+				InlineKeyboardButton(text="✅ 通过", callback_data=f"afa;{author_id}"),
+				InlineKeyboardButton(text="🈲 拒绝", callback_data=f"afr;{author_id}"),
+			# ], [
+			# 	InlineKeyboardButton(text="🚫 拉黑", callback_data=f"afb;{author_id}"),
+				InlineKeyboardButton(text="🏡 主页", url=url_author(author_id)),
+			],
+		]
 	)
-
 
 def down_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
