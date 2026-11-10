@@ -13,7 +13,7 @@ from pathlib import Path
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import ADMIN_IDS, TRANSIT_CHANNEL
+from config import TRANSIT_CHANNEL
 from handlers.callbacks.upload import get_cache, upload_file
 from keyboards import review_author_keyboard
 from sources import save
@@ -150,20 +150,4 @@ async def send_to_transit(
 	except Exception:
 		logger.exception("申请 %s 的核验消息发送失败", record.author_id)
 		return False
-
-
-async def is_admin_of_transit(
-		context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
-	"""判断用户是否为中转频道管理员（ADMIN_IDS 可额外放行）。"""
-	if ADMIN_IDS and user_id in ADMIN_IDS:
-		return True
-	if not TRANSIT_CHANNEL:
-		return False
-	try:
-		member = await context.bot.get_chat_member(TRANSIT_CHANNEL, user_id)
-	except Exception:
-		logger.warning(
-			"查询管理员身份失败 chat=%s user=%s", TRANSIT_CHANNEL, user_id, exc_info=True)
-		return False
-	return str(getattr(member, "status", "")) in {"creator", "administrator"}
 
