@@ -151,15 +151,24 @@ class ApplicationStore:
 			return JsonDict(self._applications[key])
 
 
-	def set_status(self, author_id: str | int, status: str) -> bool:
-		"""更新申请状态（审核通过 / 拒绝后调用）。"""
+	def set_status(
+		self, author_id: str | int, status: str,
+		*, expected: str | None = None) -> bool:
+		"""更新申请状态（审核通过 / 拒绝后调用）。
+
+		expected 不为空时，只有当前状态与它一致才写入，
+		用于保证并发核验（重复点击、多人同时审核）只有一个能生效。
+		"""
 		with self._lock:
 			self._maybe_reload()
 			key = self.make_key(author_id)
-			if key not in self._applications:
+			current = self._applications.get(key)
+			if current is None:
+				return False
+			if expected is not None and str(current.status or "") != expected:
 				return False
 			self._applications[key] = JsonDict({
-				**self._applications[key],
+				**current,
 				"status": status,
 				"updated_at": utc_now_iso(),
 			})
