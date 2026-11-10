@@ -1,4 +1,7 @@
-"""申请 / 审核类 callback：af（告知后果 + 二次确认）/ afy（提交申请）。"""
+"""用户侧申请 callback：af（告知后果 + 二次确认）/ afy（提交申请）。
+
+管理核验在 handlers.callbacks.review，公共工具在 handlers.callbacks.common。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +15,7 @@ from keyboards import confirm_author_keyboard
 from sources import fetch
 from storage.application import ApplicationStore
 from storage.list import ListManager
+from utils.links import get_id
 
 
 logger = logging.getLogger(__name__)
@@ -50,7 +54,7 @@ def apply_notice(author_name: str, author_id: str) -> str:
 		f"申请将作者 {author_name}（#a{author_id}）加入兽人作者名单前，请先确认你了解以下内容：", "",
 		f"1. 申请通过后，方可下载、分享该作者的小说",
 		f"2. 申请需要管理核验。申请期间，不能下载、分享该作者的小说",
-		f"3. 作者事后可以投诉，届时将禁止下载、分享该作者的小说", "",
+		f"3. 作者事后可以投诉，届时将下架相关内容，并禁止下载、分享该作者的小说", "",
 		"确认发起申请吗？"
 	]
 	return "\n".join(message)
@@ -97,10 +101,8 @@ async def edit_or_reply(
 async def apply_furry(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
 	"""af：告知申请后果，并给出二次确认按钮。"""
-	link, author_id = parse_apply_data(data)
-	if not author_id:
-		await edit_or_reply(update, context, "申请参数不完整，请重新发送小说链接")
-		return
+	link = data.split(";")[1]
+	author_id = get_id(link)
 	
 	manager = ListManager()
 	reason = forbid_reason(author_id, manager)
@@ -117,7 +119,8 @@ async def apply_furry(update: Update, context: ContextTypes.DEFAULT_TYPE,
 			f"作者 {name}（#a{author_id}）的申请已在审核中\n请等待管理员核验")
 		return
 	
-	name = await lookup_author_name(link, author_id)
+	author = await fetch(link)
+	name = author.author_name
 	await edit_or_reply(
 		update, context,
 		apply_notice(name, author_id),
@@ -126,11 +129,9 @@ async def apply_furry(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
-	"""afy：用户确认后写入申请记录，等待管理员核验。"""
-	link, author_id = parse_apply_data(data)
-	if not author_id:
-		await edit_or_reply(update, context, "申请参数不完整，请重新发送小说链接")
-		return
+	"""afy：用户确认后写入申请记录，并把作品转入中转频道。"""
+	link = data.split(";")[1]
+	author_id = get_id(link)
 	
 	manager = ListManager()
 	reason = forbid_reason(author_id, manager)
@@ -141,26 +142,32 @@ async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 	applications = get_applications()
 	record = applications.get(author_id)
 	if record and record.status == ApplicationStore.STATUS_PENDING:
-		name = record.author_name or author_id
+		name = record.author_name
 		await edit_or_reply(
 			update, context,
 			f"作者 {name}（#a{author_id}）的申请已在审核中，请勿重复提交")
 		return
 	
-	name = await lookup_author_name(link, author_id)
+	await edit_or_reply(update, context, "正在提交申请，请稍候……")
+	
+	author = await fetch(link)
+	name = author.author_name
 	user = update.effective_user
 	record = applications.submit(
 		author_id,
 		author_name=name,
 		link=link,
 		kind=guess_kind(link),
-		user_id=user.id if user else None,
-		user_name=(user.first_name or "") if user else "",
+		user_id=user.id,
+		user_name=user.first_name,
 	)
-	logger.info(
-		"收到兽人作者申请 author=%s(%s) count=%s user=%s",
-		record.author_id, record.author_name, record.count, record.user_id)
-	
-	await edit_or_reply(update, context,
-		text=f"已提交兽人作者申请：{record.author_name}（#a{author_id}）\n管理核验后会通知结果")
+	logger.info(f"收到兽人作者申请：\n{record.author_name}=({record.author_id}) count={record.count} user={record.user_id}")
 
+	# 用户确认后，相关小说转入中转频道，等待管理员人工核验
+	await send_to_transit(update, context, record)
+	message = [
+		f"已提交兽人作者申请：",
+		f"{record.author_name}（#a{author_id}）",
+		f"管理员核验后会私聊通知结果"
+	]
+	await edit_or_reply(update, context, "\n".join(message))
