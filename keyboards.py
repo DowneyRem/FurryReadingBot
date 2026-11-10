@@ -11,6 +11,7 @@ def apply_author_keyboard(author_url: str, ) -> InlineKeyboardMarkup:
 		]]
 	)
 
+
 def confirm_author_keyboard(author_url: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
@@ -18,6 +19,7 @@ def confirm_author_keyboard(author_url: str) -> InlineKeyboardMarkup:
 			InlineKeyboardButton(text="🗑️ 取消", callback_data="ignore"),
 		]]
 	)
+
 
 def review_author_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
@@ -32,6 +34,7 @@ def review_author_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 		]
 	)
 
+
 def down_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
@@ -39,6 +42,7 @@ def down_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 			# InlineKeyboardButton(text="👤 下载作者 zip", callback_data=f"da;{link}"),
 		]]
 	)
+
 
 def down_novel_series_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
@@ -50,6 +54,7 @@ def down_novel_series_keyboard(link: str) -> InlineKeyboardMarkup:
 			InlineKeyboardButton(text="📚 下载系列 zip", callback_data=f"dsz;{link}"),
 		]]
 	)
+
 
 def down_series_keyboard(link: str, auto: bool = True) -> InlineKeyboardMarkup:
 	buttons = []
@@ -73,6 +78,8 @@ def down_author_keyboard(link: str, is_furry: bool=True) -> InlineKeyboardMarkup
 
 def share_novel_keyboard(kind: str, item_id: str, file_type: str = "txt") -> InlineKeyboardMarkup:
 	payload = f"{kind};{item_id};{file_type}"
+	if file_type != "txt":
+		return InlineKeyboardMarkup([[]])
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(text="🉑 公开分享", callback_data=f"snp;{payload}"),
@@ -81,6 +88,7 @@ def share_novel_keyboard(kind: str, item_id: str, file_type: str = "txt") -> Inl
 		]]
 	)
 
+
 def check_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
@@ -88,6 +96,7 @@ def check_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 			InlineKeyboardButton(text="🈲 禁止分享", callback_data=f"csnf;{link}"),
 		]]
 	)
+
 
 def import_to_legado_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
