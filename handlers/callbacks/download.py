@@ -16,7 +16,7 @@ from storage.file_cache import FileCacheStore
 from utils.json import JsonDict
 from utils.links import get_id
 
-from handlers.callbacks._common import reply
+from handlers.callbacks.common import reply
 from handlers.callbacks.upload import get_cache, upload_file
 
 

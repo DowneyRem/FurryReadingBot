@@ -7,7 +7,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks._common import reply
+from handlers.callbacks.common import reply
 from handlers.callbacks.upload import upload_file, get_cache
 from storage.file_cache import FileCacheStore
 from storage.share_record import ShareRecordStore

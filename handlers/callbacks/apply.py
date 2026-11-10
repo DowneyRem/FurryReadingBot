@@ -10,7 +10,9 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks._common import reply
+from handlers.callbacks.common import (
+	get_applications, guess_kind, reply, send_to_transit,
+)
 from keyboards import confirm_author_keyboard
 from sources import fetch
 from storage.application import ApplicationStore
@@ -19,33 +21,6 @@ from utils.links import get_id
 
 
 logger = logging.getLogger(__name__)
-_applications: ApplicationStore | None = None
-
-
-def get_applications() -> ApplicationStore:
-	global _applications
-	if _applications is None:
-		_applications = ApplicationStore()
-	return _applications
-
-
-def parse_apply_data(data: str) -> tuple[str, str]:
-	"""拆出 callback_data 里的 link 与 author_id，形如 "af;{link};{author_id}"。"""
-	parts = data.split(";")
-	link = parts[1] if len(parts) > 1 else ""
-	author_id = parts[2] if len(parts) > 2 else ""
-	return link, author_id
-
-
-def guess_kind(link: str) -> str:
-	"""从链接猜申请对象类型，仅用于申请记录。"""
-	if "/series/" in link:
-		return "series"
-	if "/novel/" in link or "/pn/" in link:
-		return "novel"
-	if "/user/" in link or "/pu/" in link:
-		return "author"
-	return ""
 
 
 def apply_notice(author_name: str, author_id: str) -> str:
