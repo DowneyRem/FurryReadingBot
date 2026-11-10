@@ -66,13 +66,12 @@ def down_series_keyboard(link: str, auto: bool = True) -> InlineKeyboardMarkup:
 
 
 def down_author_keyboard(link: str, is_furry: bool=True) -> InlineKeyboardMarkup:
-	from utils.links import get_id
 	buttons = []
 	if is_furry:
 		buttons.append(InlineKeyboardButton(text="👤 全部下载", callback_data=f"dan;{link}"))
 	else:
-		buttons.append(InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{link};{get_id(link)}"))
-	# buttons.append(InlineKeyboardButton(text="🈲 申请黑名单", callback_data=f"af;{link};{get_id(link)}"))
+		buttons.append(InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{link}"))
+	# buttons.append(InlineKeyboardButton(text="🈲 申请黑名单", callback_data=f"af;{link}"))
 	return InlineKeyboardMarkup([buttons])
 
 
