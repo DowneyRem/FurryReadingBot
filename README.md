@@ -45,7 +45,7 @@ Copy-Item .env.example .env
 ```text
 bot.py            # 入口
 handlers/         # 命令、消息、回调
-services/         # 下载业务编排
+services/         # 下载 / 申请业务编排
 sources/          # Linpx 来源适配
 storage/          # 名单、申请、缓存、文件、zip
 utils/            # 通用工具

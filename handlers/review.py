@@ -7,8 +7,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import get_applications, send_to_transit
-from storage.application import ApplicationStore
+from handlers.callbacks.common import send_to_transit
+from services import ApplyService
 
 
 logger = logging.getLogger(__name__)
@@ -21,10 +21,7 @@ async def review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	if message is None or user is None:
 		return
 
-	records = [
-		record for record in get_applications().records().values()
-		if record.status == ApplicationStore.STATUS_PENDING
-	]
+	records = ApplyService().pending_records()
 	if not records:
 		await message.reply_text("✅ 当前没有待审核的申请")
 		return

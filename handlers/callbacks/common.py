@@ -14,12 +14,11 @@ from telegram.ext import ContextTypes
 
 from config import TRANSIT_CHANNEL
 from keyboards import review_author_keyboard
-from storage.application import ApplicationStore
+from services.apply_service import get_applications
 from utils.json import JsonDict
 
 
 logger = logging.getLogger(__name__)
-_applications: ApplicationStore | None = None
 
 
 async def reply(
@@ -38,14 +37,6 @@ async def reply(
 	if message and delete_after:
 		await asyncio.sleep(delete_after)
 		await message.delete()
-
-
-def get_applications() -> ApplicationStore:
-	"""申请记录是进程级单例，申请与核验共用同一份数据。"""
-	global _applications
-	if _applications is None:
-		_applications = ApplicationStore()
-	return _applications
 
 
 def guess_kind(link: str) -> str:

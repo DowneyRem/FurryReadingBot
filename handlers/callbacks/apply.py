@@ -1,6 +1,7 @@
 """用户侧申请 callback：af（告知后果 + 二次确认）/ afy（提交申请）。
 
-管理核验在 handlers.callbacks.review，公共工具在 handlers.callbacks.common。
+业务规则在 services.apply_service，管理核验在 handlers.callbacks.review，
+公共 Telegram 工具在 handlers.callbacks.common。
 """
 
 from __future__ import annotations
@@ -10,12 +11,9 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import get_applications, guess_kind, reply, send_to_transit
+from handlers.callbacks.common import reply, send_to_transit
 from keyboards import confirm_author_keyboard
-from sources import fetch
-from storage.application import ApplicationStore
-from storage.list import ListManager
-from utils.links import get_id
+from services import ApplyInvalidLinkError, ApplyService
 
 
 logger = logging.getLogger(__name__)
@@ -33,14 +31,18 @@ def apply_notice(author_name: str, author_id: str) -> str:
 	return "\n".join(message)
 
 
-def forbid_reason(author_id: str, manager: ListManager) -> str:
-	"""不可申请的原因；可以申请时返回空字符串。"""
-	if manager.is_blacklisted(author_id):
-		name = manager.blacklist.get_name(author_id) or author_id
-		return f"作者 {name} 已被禁止通过本 Bot 下载与分享，无法申请加入兽人作者名单。"
-	if manager.is_furryauthor(author_id):
-		name = manager.furrylist.get_name(author_id) or author_id
-		return f"作者 {name} 已在兽人作者名单中，无需申请。"
+def _link_from_data(data: str) -> str:
+	parts = data.split(";", 1)
+	if len(parts) < 2 or not parts[1]:
+		raise ApplyInvalidLinkError("申请链接为空。")
+	return parts[1]
+
+
+def _blocked_text(status: str, author_name: str) -> str:
+	if status == "blacklisted":
+		return f"作者 {author_name} 已被禁止通过本 Bot 下载与分享，无法申请加入兽人作者名单。"
+	if status == "already_furry":
+		return f"作者 {author_name} 已在兽人作者名单中，无需申请。"
 	return ""
 
 
@@ -61,72 +63,71 @@ async def edit_or_reply(
 async def apply_furry(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
 	"""af：告知申请后果，并给出二次确认按钮。"""
-	link = data.split(";")[1]
-	author_id = get_id(link)
-	
-	manager = ListManager()
-	reason = forbid_reason(author_id, manager)
-	if reason:
-		await edit_or_reply(update, context, reason)
+	try:
+		link = _link_from_data(data)
+		inspection = await ApplyService().inspect(link)
+	except ApplyInvalidLinkError:
+		await edit_or_reply(update, context, "无法从链接中解析作者 ID。")
 		return
-	
-	applications = get_applications()
-	record = applications.get(author_id)
-	if record and record.status == ApplicationStore.STATUS_PENDING:
-		name = record.author_name or author_id
+
+	blocked = _blocked_text(inspection.status, inspection.author_name)
+	if blocked:
+		await edit_or_reply(update, context, blocked)
+		return
+
+	if inspection.status == "pending":
 		await edit_or_reply(
 			update, context,
-			f"作者 {name}（#a{author_id}）的申请已在审核中\n请等待管理员核验")
+			f"作者 {inspection.author_name}（#a{inspection.author_id}）的申请已在审核中\n"
+			"请等待管理员核验")
 		return
-	
-	author = await fetch(link)
-	name = author.author_name
+
 	await edit_or_reply(
 		update, context,
-		apply_notice(name, author_id),
+		apply_notice(inspection.author_name, inspection.author_id),
 		reply_markup=confirm_author_keyboard(link))
 
 
 async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
 	"""afy：用户确认后写入申请记录，并把作品转入中转频道。"""
-	link = data.split(";")[1]
-	author_id = get_id(link)
-	
-	manager = ListManager()
-	reason = forbid_reason(author_id, manager)
-	if reason:
-		await edit_or_reply(update, context, reason)
+	user = update.effective_user
+	if user is None:
 		return
-	
-	applications = get_applications()
-	record = applications.get(author_id)
-	if record and record.status == ApplicationStore.STATUS_PENDING:
-		name = record.author_name
+
+	try:
+		link = _link_from_data(data)
+	except ApplyInvalidLinkError:
+		await edit_or_reply(update, context, "无法从链接中解析作者 ID。")
+		return
+
+	await edit_or_reply(update, context, "正在提交申请，请稍候……")
+
+	try:
+		result = await ApplyService().submit(
+			link,
+			user_id=user.id,
+			user_name=f"{user.first_name} {user.last_name}",
+			send_transit=lambda record: send_to_transit(update, context, record),
+		)
+	except ApplyInvalidLinkError:
+		await edit_or_reply(update, context, "无法从链接中解析作者 ID。")
+		return
+
+	blocked = _blocked_text(result.status, result.author_name)
+	if blocked:
+		await edit_or_reply(update, context, blocked)
+		return
+
+	if result.status == "pending":
 		await edit_or_reply(
 			update, context,
-			f"作者 {name}（#a{author_id}）的申请已在审核中，请勿重复提交")
+			f"作者 {result.author_name}（#a{result.author_id}）的申请已在审核中，请勿重复提交")
 		return
-	
-	await edit_or_reply(update, context, "正在提交申请，请稍候……")
-	
-	author = await fetch(link)
-	name = author.author_name
-	user = update.effective_user
-	record = applications.submit(
-		author_id,
-		author_name=name,
-		link=link,
-		user_id=user.id,
-		user_name=f"{user.first_name} {user.last_name}",
-	)
-	logger.info(f"收到兽人作者申请：\n{record.author_name}=({record.author_id}) count={record.count} user={record.user_id}")
 
-	# 用户确认后，相关小说转入中转频道，等待管理员人工核验
-	await send_to_transit(update, context, record)
 	message = [
 		f"✅ 已提交兽人作者申请：",
-		f"{record.author_name}（#a{author_id}）",
+		f"{result.author_name}（#a{result.author_id}）",
 		f"管理员核验后会私聊通知结果"
 	]
 	await edit_or_reply(update, context, "\n".join(message))
