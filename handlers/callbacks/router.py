@@ -23,15 +23,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		return
 
 	await query.answer()
-	try:
-		await query.edit_message_reply_markup(reply_markup=None)
-	except Exception:
-		pass
+	# try:
+	# 	await query.edit_message_reply_markup(reply_markup=None)
+	# except Exception:
+	# 	pass
 
 	data = query.data
 	action, _, rest = data.partition(";")
 
-	if action in {"ignore", "not_furry", "nfa"}:
+	if action in {
+		"ignore",
+		"not_furry",
+		"nfa",
+	}:
 		try:
 			await query.delete_message()
 		except Exception:

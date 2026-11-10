@@ -10,7 +10,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
-        await update.message.reply_text("可用命令：/start /help")
+        await update.message.reply_text(
+            "可用命令：/start /help /ping /down\n"
+            "管理员：/review（把待审核的申请重新送进中转频道）")
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(

@@ -35,6 +35,7 @@ def main() -> None:
 	app.add_handler(CommandHandler("help", help_cmd))
 	app.add_handler(CommandHandler("ping", ping))
 	app.add_handler(CommandHandler("down", download))
+	app.add_handler(CommandHandler("review", review))
 	
 	# 注册「非命令的私聊文字」
 	app.add_handler(
