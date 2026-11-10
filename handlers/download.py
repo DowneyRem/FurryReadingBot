@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes
 
 from config import FURRY_NOVELS, FURRY_READING
 from keyboards import (
-	apply_furry_author_keyboard,
+	apply_author_keyboard,
 	down_author_keyboard,
 	down_novel_keyboard,
 	down_novel_series_keyboard,
@@ -59,7 +59,7 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	
 	else:
 		# print(description)
-		author_id, author_name = item.author_id, item.author_name
+		author_id, author_name, author_url = item.author_id, item.author_name, item.author_url
 		manager = ListManager()
 		if manager.is_blacklisted(author_id):
 			if not author_name:
@@ -81,7 +81,7 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 			]
 			await message.reply_text(
 				text="\n".join(text),
-				reply_markup=apply_furry_author_keyboard(link, author_id),
+				reply_markup=apply_author_keyboard(item.author_url),
 			)
 			return
 	

@@ -3,10 +3,10 @@ from sources.linpx.urls import url_author
 # todo 通用化 url_author
 
 
-def apply_furry_author_keyboard(link: str, author_id: str | int) -> InlineKeyboardMarkup:
+def apply_author_keyboard(author_url: str, ) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
-			InlineKeyboardButton(text="✅ 申请", callback_data=f"af;{link};{author_id}"),
+			InlineKeyboardButton(text="✅ 申请", callback_data=f"af;{author_url}"),
 			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
 		]]
 	)
