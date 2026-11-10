@@ -9,20 +9,16 @@ from typing import Iterable
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from config import FILE_CACHE_TTL_DAYS
 from storage.file_async import remove_file
-from storage.file_cache import FileCacheStore
+from storage.file_cache import FileCacheStore, get_default_cache
 
 
 logger = logging.getLogger(__name__)
-_file_cache: FileCacheStore | None = None
 
 
 def get_cache() -> FileCacheStore:
-	global _file_cache
-	if _file_cache is None:
-		_file_cache = FileCacheStore(default_ttl_days=FILE_CACHE_TTL_DAYS)
-	return _file_cache
+	"""兼容旧调用方：返回共享的 file_id 缓存。"""
+	return get_default_cache()
 
 
 async def upload_file(

@@ -155,3 +155,16 @@ class FileCacheStore:
             del self._files[k]
             self._persist()
             return True
+
+
+_default_cache: FileCacheStore | None = None
+
+
+def get_default_cache() -> FileCacheStore:
+    """进程内共享的 file_id 缓存；TTL 由 config 控制。"""
+    global _default_cache
+    if _default_cache is None:
+        from config import FILE_CACHE_TTL_DAYS
+
+        _default_cache = FileCacheStore(default_ttl_days=FILE_CACHE_TTL_DAYS)
+    return _default_cache
