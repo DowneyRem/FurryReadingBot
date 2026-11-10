@@ -117,7 +117,6 @@ async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 		author_id,
 		author_name=name,
 		link=link,
-		kind=guess_kind(link),
 		user_id=user.id,
 		user_name=f"{user.first_name} {user.last_name}",
 	)

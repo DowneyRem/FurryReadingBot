@@ -25,7 +25,7 @@ class ApplicationStore:
 
 	def __init__(self, path: Path | None = None) -> None:
 		if path is None:
-			path = Path(__file__).parent.parent.resolve() / "data" / "applications.json"
+			path = Path(__file__).parent.parent.resolve() / "data" / "apply_authors.json"
 		self.path = path
 		self._lock = threading.RLock()
 		self._mtime: float = 0.0
@@ -50,7 +50,6 @@ class ApplicationStore:
 			author_id=str(info.get("author_id") or ""),
 			author_name=str(info.get("author_name") or ""),
 			link=str(info.get("link") or ""),
-			kind=str(info.get("kind") or ""),
 			user_id=str(info.get("user_id") or ""),
 			user_name=str(info.get("user_name") or ""),
 			status=str(info.get("status") or ApplicationStore.STATUS_PENDING),
@@ -125,7 +124,6 @@ class ApplicationStore:
 		*,
 		author_name: str = "",
 		link: str = "",
-		kind: str = "",
 		user_id: str | int | None = None,
 		user_name: str = "",
 		note: str = "",
@@ -140,7 +138,6 @@ class ApplicationStore:
 				author_id=key,
 				author_name=str(author_name or prev.author_name or ""),
 				link=str(link or prev.link or ""),
-				kind=str(kind or prev.kind or ""),
 				user_id=str(user_id or prev.user_id or ""),
 				user_name=str(user_name or prev.user_name or ""),
 				# 重新发起申请时回到待审核

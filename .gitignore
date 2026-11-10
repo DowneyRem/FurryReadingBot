@@ -5,4 +5,4 @@ files
 *.zip
 data/files_cache.json
 data/share_records.json
-data/applications.json
+data/apply_authors.json
