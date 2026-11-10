@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 
 from handlers.callbacks.common import reply
 from handlers.callbacks.apply import apply_furry, apply_furry_confirm
+from handlers.callbacks.review import apply_approve, apply_blacklist, apply_reject
 from handlers.callbacks.download import download
 from handlers.callbacks.share import share_private, share_public, share_reject
 
@@ -47,6 +48,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		# 申请兽人作者：af 告知后果，afy 确认提交
 		"af": apply_furry,
 		"afy": apply_furry_confirm,
+		# 中转频道核验：afa 通过，afr 拒绝，afb 拒绝并拉黑
+		"afa": apply_approve,
+		"afr": apply_reject,
+		"afb": apply_blacklist,
 		# 分享
 		"snp": share_public,
 		"sna": share_private,
