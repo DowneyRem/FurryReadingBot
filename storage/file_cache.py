@@ -39,6 +39,8 @@ class FileCacheStore(JsonStore):
 			file_id=str(info.get("file_id") or ""),
 			file_name=str(info.get("file_name") or ""),
 			caption=str(info.get("caption") or ""),
+			author_id=str(info.get("author_id") or ""),
+			author_name=str(info.get("author_name") or ""),
 			uploaded_at=str(info.get("uploaded_at") or ""),
 			expires_at=str(info.get("expires_at") or ""),
 		)
@@ -77,6 +79,8 @@ class FileCacheStore(JsonStore):
 		*,
 		file_name: str = "",
 		caption: str = "",
+		author_id: str | int = "",
+		author_name: str = "",
 	) -> None:
 		if not file_id:
 			return
@@ -88,6 +92,8 @@ class FileCacheStore(JsonStore):
 				file_id=file_id,
 				file_name=file_name or "",
 				caption=caption or "",
+				author_id=str(author_id or ""),
+				author_name=author_name or "",
 				uploaded_at=now.strftime("%Y-%m-%dT%H:%M:%S%z"),
 				expires_at=expires.strftime("%Y-%m-%dT%H:%M:%S%z"),
 			)

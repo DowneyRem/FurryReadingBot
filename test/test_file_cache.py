@@ -41,6 +41,19 @@ def test_set_then_get_valid(tmp_path) -> None:
 	assert timedelta(hours=23) < left <= timedelta(days=1)
 
 
+def test_author_fields_persist(tmp_path) -> None:
+	"""作者信息跟着 file_id 一起缓存：分享记录要按作者查冷却 / 下架。"""
+	path = tmp_path / "files_cache.json"
+	key = FileCacheStore.make_key("novel", "1", "txt")
+	FileCacheStore(path=path, default_ttl_days=1).set(
+		key, "FILE_ID", author_id="456", author_name="作者A")
+
+	info = FileCacheStore(path=path, default_ttl_days=1).get_valid(key)
+	assert info is not None
+	assert info.author_id == "456"
+	assert info.author_name == "作者A"
+
+
 def test_zero_ttl_means_immediately_expired(tmp_path) -> None:
 	"""default_ttl_days=0 不应被 or 兜底成默认 30 天。"""
 	store = _store(tmp_path, default_ttl_days=0)
