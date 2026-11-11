@@ -30,8 +30,12 @@ Copy-Item .env.example .env
 | 变量 | 说明 |
 |---|---|
 | `BOT_TOKEN` | Bot Token，必填 |
-| `TEST_CHANNEL` | 测试频道；当前分享的实际目标 |
+| `TEST_CHANNEL` | 测试频道；`SHARE_MODE=test` 时唯一的分享目标 |
+| `FURRY_READING` | 兽人阅读频道；`SHARE_MODE=prod` 且评分达标时同时发这里 |
+| `FURRY_NOVELS` | 兽人小说频道；`SHARE_MODE=prod` 时所有作品都发这里 |
 | `TRANSIT_CHANNEL` | 待审核申请的中转频道；未配置时回退 `TEST_CHANNEL` |
+| `SHARE_MODE` | `test`（默认，只发测试频道）/ `prod`（按评分分流到正式频道） |
+| `SHARE_SCORE_THRESHOLD` | `prod` 模式下同时发兽人阅读的评分下限，默认 7；未评分按低分处理 |
 | `SHARE_COOLDOWN_DAYS` | 分享冷却天数，默认 3 |
 | `FILE_CACHE_TTL_DAYS` | `file_id` 缓存天数，默认 7 |
 
