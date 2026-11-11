@@ -21,7 +21,7 @@ from sources import (
 )
 from sources.base import Author, Novel, NovelSource, Series
 from infra.files import remove_file
-from storage.authors_list import ListManager
+from storage.author_list import ListManager
 from storage.file_cache import FileCacheStore, get_default_cache
 from utils.json import JsonDict
 from utils.links import get_id, get_url

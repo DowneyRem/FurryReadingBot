@@ -5,7 +5,7 @@ from infra.files import read_json
 from infra.http import download_json, get_json
 from sources.linpx.config import HEADERS
 from sources.linpx.urls import url_fav_user_data
-from storage.authors_list import ListManager
+from storage.author_list import ListManager
 from utils.timer import timer
 
 

@@ -14,7 +14,7 @@ from typing import Awaitable, Callable, Literal
 
 from sources import fetch as sources_fetch
 from storage.applications import ApplicationStore
-from storage.authors_list import ListManager
+from storage.author_list import ListManager
 from utils.json import JsonDict
 from utils.links import get_id
 

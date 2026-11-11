@@ -1,4 +1,4 @@
-from storage.authors_list import ListManager
+from storage.author_list import ListManager
 
 
 def test_add_and_contains(tmp_path) -> None:
