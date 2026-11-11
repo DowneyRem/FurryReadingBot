@@ -135,10 +135,27 @@ def test_review_application_approved(monkeypatch) -> None:
 
 	assert service.called is not None
 	assert service.called["author_id"] == "42"
+	assert service.called["decision"] == "approve"
 	assert service.called["reviewer_id"] == 9
 	assert "✅ 通过" in closed[0]
 	assert len(notified) == 1
 	assert "已通过" in notified[0][1]
+
+
+def test_review_application_passes_decision_through(monkeypatch) -> None:
+	"""回归：管理员判定结果不能覆盖 handler 传入的审核决定。"""
+	for decision in ("approve", "reject", "blacklist"):
+		service, closed, _ = patch_review(
+			monkeypatch,
+			ReviewResult("rejected", "42", "作者", "pending", RECORD),
+		)
+
+		run(review_application(
+			FakeUpdate(), FakeContext(), data="afr;42", decision=decision))
+
+		assert service.called is not None
+		assert service.called["decision"] == decision
+		assert closed
 
 
 def test_review_application_missing(monkeypatch) -> None:

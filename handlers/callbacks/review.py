@@ -103,8 +103,8 @@ async def review_application(
 	if user is None:
 		return
 
-	decision = await transit_admin_policy(context.bot).check(user.id)
-	if not decision.allowed:
+	admin = await transit_admin_policy(context.bot).check(user.id)
+	if not admin.allowed:
 		logger.warning(
 			"非管理员尝试核验申请 author=%s user=%s", author_id or "-", user.id)
 		await close_transit_message(update, context, "仅中转频道管理员可以核验申请")
