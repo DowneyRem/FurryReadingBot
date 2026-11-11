@@ -41,7 +41,7 @@ Copy-Item .env.example .env
 .venv\Scripts\python.exe -m pytest test -q
 ```
 
-当前测试套件存在过期用例，且 `test/test_list.py` 会写入真实 `data/` 名单文件；运行前请先备份。实测状态见 [01 文档](docs/01-功能清单与缺口.md) 第 3 节。
+当前 `test/test_linpx.py` 已过期，运行时用 `--ignore` 排除：实测状态见 [01 文档](docs/01-功能清单与缺口.md) 第 1 节。
 
 ## 目录
 
@@ -50,6 +50,7 @@ bot.py             # 入口
 handlers/          # 命令、消息、回调
 handlers/telegram/ # 回复/上传/中转适配
 services/          # 下载 / 申请 / 审核 / 分享业务编排
+policy/            # 名单判定（黑名单 / 兽人作者名单）
 sources/           # Linpx 来源适配
 storage/           # 名单、申请、缓存、文件、zip
 utils/             # 通用工具
