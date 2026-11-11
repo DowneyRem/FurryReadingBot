@@ -16,9 +16,9 @@ from services.download_service import (
 	DownloadArtifact,
 	DownloadService,
 	FormatChoice,
-	InvalidLinkError,
-	UnsupportedActionError,
-	UnsupportedLinkError,
+	DownloadInvalidLinkError,
+	DownloadUnsupportedActionError,
+	DownloadUnsupportedLinkError,
 )
 from storage.file_cache import FileCacheStore
 
@@ -156,9 +156,9 @@ def test_inspect_text_and_kind(tmp_path) -> None:
 
 def test_inspect_text_requires_single_url(tmp_path) -> None:
 	service, _ = make_service(tmp_path)
-	with pytest.raises(InvalidLinkError):
+	with pytest.raises(DownloadInvalidLinkError):
 		run(service.inspect_text("没有链接"))
-	with pytest.raises(InvalidLinkError):
+	with pytest.raises(DownloadInvalidLinkError):
 		run(service.inspect_text(f"{NOVEL_LINK} {SERIES_LINK}"))
 
 
@@ -172,7 +172,7 @@ def test_inspect_series_and_author_kinds(tmp_path) -> None:
 
 def test_unsupported_source_raises(tmp_path) -> None:
 	service, _ = make_service(tmp_path, source=False)
-	with pytest.raises(UnsupportedLinkError):
+	with pytest.raises(DownloadUnsupportedLinkError):
 		run(service.inspect_link(NOVEL_LINK))
 
 
@@ -284,13 +284,13 @@ def test_prepare_resolves_novel_to_series(tmp_path) -> None:
 def test_prepare_invalid_target_id(tmp_path) -> None:
 	service, _ = make_service(
 		tmp_path, resolve=lambda link, kind: "https://linpx.ink/no-id")
-	with pytest.raises(InvalidLinkError):
+	with pytest.raises(DownloadInvalidLinkError):
 		run(service.prepare("dn", NOVEL_LINK))
 
 
 def test_prepare_empty_link(tmp_path) -> None:
 	service, _ = make_service(tmp_path)
-	with pytest.raises(InvalidLinkError):
+	with pytest.raises(DownloadInvalidLinkError):
 		run(service.prepare("dn", ""))
 
 
@@ -298,7 +298,7 @@ def test_unsupported_action_raises(tmp_path) -> None:
 	service, _ = make_service(tmp_path)
 	assert service.supports_action("dn") is True
 	assert service.supports_action("xx") is False
-	with pytest.raises(UnsupportedActionError):
+	with pytest.raises(DownloadUnsupportedActionError):
 		run(service.prepare("xx", NOVEL_LINK))
 
 

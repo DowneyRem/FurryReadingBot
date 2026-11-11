@@ -13,8 +13,8 @@ from keyboards import down_series_keyboard, share_novel_keyboard
 from services import (
 	DownloadArtifact,
 	DownloadService,
-	InvalidLinkError,
-	UnsupportedActionError,
+	DownloadInvalidLinkError,
+	DownloadUnsupportedActionError,
 )
 
 
@@ -62,10 +62,10 @@ async def download(
 
 	try:
 		outcome = await service.deliver(action, link, upload=send)
-	except InvalidLinkError:
+	except DownloadInvalidLinkError:
 		await reply(update, context, "请发送一个有效的小说、系列或作者链接。")
 		return
-	except UnsupportedActionError:
+	except DownloadUnsupportedActionError:
 		await reply(update, context, "暂不支持该下载操作。")
 		return
 

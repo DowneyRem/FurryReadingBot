@@ -37,15 +37,15 @@ class DownloadError(Exception):
 	"""下载相关错误的基类，handler 可按类型给出不同提示。"""
 
 
-class InvalidLinkError(DownloadError):
+class DownloadInvalidLinkError(DownloadError):
 	"""消息里没有有效链接，或链接里解析不出作品 ID。"""
 
 
-class UnsupportedLinkError(DownloadError):
+class DownloadUnsupportedLinkError(DownloadError):
 	"""链接不属于任何已注册来源。"""
 
 
-class UnsupportedActionError(DownloadError):
+class DownloadUnsupportedActionError(DownloadError):
 	"""callback 动作不在下载白名单里。"""
 
 
@@ -161,7 +161,7 @@ class DownloadService:
 		"""从用户消息里提取唯一链接并检查。"""
 		link = get_url(text)
 		if not isinstance(link, str) or not link:
-			raise InvalidLinkError("请发送一个有效的小说、系列或作者链接。")
+			raise DownloadInvalidLinkError("请发送一个有效的小说、系列或作者链接。")
 		return await self.inspect_link(link)
 
 
@@ -169,7 +169,7 @@ class DownloadService:
 		"""解析来源类型并拉取元信息，供 handler 展示下载菜单。"""
 		source = self._resolve_source(link)
 		if source is None:
-			raise UnsupportedLinkError(f"暂不支持该链接：{link}")
+			raise DownloadUnsupportedLinkError(f"暂不支持该链接：{link}")
 
 		if source.is_novel_link(link):
 			kind: DownloadKind = "novel"
@@ -178,7 +178,7 @@ class DownloadService:
 		elif source.is_author_link(link):
 			kind = "author"
 		else:
-			raise UnsupportedLinkError(f"暂不支持该链接：{link}")
+			raise DownloadUnsupportedLinkError(f"暂不支持该链接：{link}")
 
 		item = await self._fetch(link)
 		return DownloadOffer(
@@ -210,16 +210,16 @@ class DownloadService:
 		"""缓存优先地准备下载产物；不负责上传。"""
 		mapping = self._ACTIONS.get(action)
 		if mapping is None:
-			raise UnsupportedActionError(f"暂不支持该下载操作：{action}")
+			raise DownloadUnsupportedActionError(f"暂不支持该下载操作：{action}")
 		kind, requested_type = mapping
 		if not link:
-			raise InvalidLinkError("下载链接为空。")
+			raise DownloadInvalidLinkError("下载链接为空。")
 
 		# 单篇链接要求下载系列时，解析为其所属系列
 		target_link = await self._resolve_link(link, kind)
 		item_id = get_id(target_link)
 		if not item_id:
-			raise InvalidLinkError("无法从链接中解析作品 ID。")
+			raise DownloadInvalidLinkError("无法从链接中解析作品 ID。")
 
 		file_type = requested_type
 		cache_key = FileCacheStore.make_key(kind, item_id, file_type)

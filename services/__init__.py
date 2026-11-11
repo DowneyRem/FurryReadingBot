@@ -16,9 +16,9 @@ from services.download_service import (
 	DownloadOutcome,
 	DownloadService,
 	FormatChoice,
-	InvalidLinkError,
-	UnsupportedActionError,
-	UnsupportedLinkError,
+	DownloadInvalidLinkError,
+	DownloadUnsupportedActionError,
+	DownloadUnsupportedLinkError,
 )
 from services.review_service import (
 	ReviewDecision,
@@ -33,6 +33,7 @@ __all__ = [
 	"ApplyInvalidLinkError",
 	"ApplyService",
 	"ApplySubmission",
+	"get_applications",
 	
 	"AuthorAccess",
 	"DownloadArtifact",
@@ -41,12 +42,12 @@ __all__ = [
 	"DownloadOutcome",
 	"DownloadService",
 	"FormatChoice",
-	"InvalidLinkError",
+	"DownloadInvalidLinkError",
+	"DownloadUnsupportedActionError",
+	"DownloadUnsupportedLinkError",
+	
 	"ReviewDecision",
 	"ReviewResult",
 	"ReviewService",
 	"ReviewStatus",
-	"UnsupportedActionError",
-	"UnsupportedLinkError",
-	"get_applications",
 ]

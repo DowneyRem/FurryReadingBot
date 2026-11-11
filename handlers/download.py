@@ -11,8 +11,8 @@ from keyboards import (
 )
 from services import (
 	DownloadService,
-	InvalidLinkError,
-	UnsupportedLinkError,
+	DownloadInvalidLinkError,
+	DownloadUnsupportedLinkError,
 )
 from sources.linpx.errors import LinpxError
 
@@ -25,10 +25,10 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	service = DownloadService()
 	try:
 		offer = await service.inspect_text(message.text)
-	except InvalidLinkError:
+	except DownloadInvalidLinkError:
 		await message.reply_text("请发送一个有效的小说、系列或作者链接。")
 		return
-	except UnsupportedLinkError:
+	except DownloadUnsupportedLinkError:
 		await message.reply_text("暂不支持该链接，请发送 Linpx 小说、系列或作者链接。")
 		return
 	except LinpxError as e:
