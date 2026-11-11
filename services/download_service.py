@@ -21,6 +21,7 @@ from sources import (
 )
 from sources.base import Author, Novel, NovelSource, Series
 from infra.files import remove_file
+from policy.author import AuthorPolicy
 from storage.author_list import ListManager
 from storage.file_cache import FileCacheStore, get_default_cache
 from utils.json import JsonDict
@@ -128,6 +129,7 @@ class DownloadService:
 		resolve_link_fn: Callable[[str, str], Awaitable[str]] | None = None,
 		resolve_source_fn: Callable[[str], NovelSource | None] | None = None,
 		list_manager: ListManager | None = None,
+		policy: AuthorPolicy | None = None,
 	) -> None:
 		self._cache = cache
 		self._fetch = fetch_fn or sources_fetch
@@ -135,6 +137,7 @@ class DownloadService:
 		self._resolve_link = resolve_link_fn or sources_resolve_link
 		self._resolve_source = resolve_source_fn or sources_resolve_source
 		self._list_manager = list_manager
+		self._policy = policy
 
 
 	@classmethod
@@ -155,6 +158,13 @@ class DownloadService:
 		if self._list_manager is None:
 			self._list_manager = ListManager()
 		return self._list_manager
+
+
+	@property
+	def policy(self) -> AuthorPolicy:
+		if self._policy is None:
+			self._policy = AuthorPolicy(self.list_manager)
+		return self._policy
 
 
 	async def inspect_text(self, text: str) -> DownloadOffer:
@@ -193,15 +203,13 @@ class DownloadService:
 
 
 	def check_access(self, offer: DownloadOffer) -> AuthorAccess:
-		"""按当前名单判断该作者能否下载。"""
-		manager = self.list_manager
-		author_id = offer.author_id
-		if manager.is_blacklisted(author_id):
-			name = offer.author_name or manager.blacklist.get_name(author_id)
-			return AuthorAccess("blacklisted", author_id, name)
-		if manager.is_furryauthor(author_id):
-			return AuthorAccess("allowed", author_id, offer.author_name)
-		return AuthorAccess("needs_apply", author_id, offer.author_name)
+		"""按当前名单判断该作者能否下载（规则见 `policy.author`）。"""
+		decision = self.policy.check(offer.author_id, offer.author_name)
+		if decision.can_download:
+			return AuthorAccess("allowed", decision.author_id, decision.author_name)
+		if decision.status == "blacklisted":
+			return AuthorAccess("blacklisted", decision.author_id, decision.author_name)
+		return AuthorAccess("needs_apply", decision.author_id, decision.author_name)
 
 
 	async def prepare(

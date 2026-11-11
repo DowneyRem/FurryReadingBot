@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Literal
 
 from sources import fetch as sources_fetch
+from policy.author import AuthorPolicy
 from storage.applications import ApplicationStore
 from storage.author_list import ListManager
 from utils.json import JsonDict
@@ -82,10 +83,12 @@ class ApplyService:
 		applications: ApplicationStore | None = None,
 		*,
 		list_manager: ListManager | None = None,
+		policy: AuthorPolicy | None = None,
 		fetch_fn: Callable[[str], Awaitable[object]] | None = None,
 	) -> None:
 		self._applications = applications
 		self._list_manager = list_manager
+		self._policy = policy
 		self._fetch = fetch_fn or sources_fetch
 
 
@@ -101,6 +104,13 @@ class ApplyService:
 		if self._list_manager is None:
 			self._list_manager = ListManager()
 		return self._list_manager
+
+
+	@property
+	def policy(self) -> AuthorPolicy:
+		if self._policy is None:
+			self._policy = AuthorPolicy(self.list_manager)
+		return self._policy
 
 
 	def pending_records(self) -> list[JsonDict]:
@@ -205,11 +215,12 @@ class ApplyService:
 
 
 	def _blocked(self, link: str, author_id: str) -> ApplyInspection | None:
-		manager = self.list_manager
-		if manager.is_blacklisted(author_id):
-			name = manager.blacklist.get_name(author_id) or author_id
-			return ApplyInspection("blacklisted", author_id, name, link)
-		if manager.is_furryauthor(author_id):
-			name = manager.furrylist.get_name(author_id) or author_id
-			return ApplyInspection("already_furry", author_id, name, link)
+		"""黑名单禁止申请；已在兽人作者名单则无需申请。"""
+		decision = self.policy.check(author_id)
+		if decision.status == "blacklisted":
+			return ApplyInspection(
+				"blacklisted", decision.author_id, decision.author_name, link)
+		if decision.status == "furry":
+			return ApplyInspection(
+				"already_furry", decision.author_id, decision.author_name, link)
 		return None

@@ -84,6 +84,7 @@ class FakeListManager:
 		self.black = {str(x) for x in black}
 		self.furry = {str(x) for x in furry}
 		self.blacklist = FakeList({x: f"黑名单{x}" for x in self.black})
+		self.furrylist = FakeList({x: f"兽人{x}" for x in self.furry})
 
 	def is_blacklisted(self, author_id: str) -> bool:
 		return str(author_id) in self.black
