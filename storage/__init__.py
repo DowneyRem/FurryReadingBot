@@ -11,5 +11,14 @@
 from __future__ import annotations
 
 from storage.author_list import ListManager, get_lists
+from storage.blacklist_requests import (
+	BlacklistRequestStore,
+	get_blacklist_requests,
+)
 
-__all__ = ["ListManager", "get_lists"]
+__all__ = [
+	"BlacklistRequestStore",
+	"ListManager",
+	"get_blacklist_requests",
+	"get_lists",
+]
