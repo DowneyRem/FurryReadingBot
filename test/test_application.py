@@ -32,13 +32,12 @@ def test_submit_then_pending(tmp_path) -> None:
 	record = store.submit(
 		"123",
 		author_name="作者A", link="https://linpx.ink/pixiv/novel/1",
-		kind="novel", user_id=42, user_name="Alice",
+		user_id=42, user_name="Alice",
 	)
 
 	assert record.author_id == "123"
 	assert record.author_name == "作者A"
 	assert record.link == "https://linpx.ink/pixiv/novel/1"
-	assert record.kind == "novel"
 	assert record.user_id == "42"
 	assert record.user_name == "Alice"
 	assert record.status == ApplicationStore.STATUS_PENDING
@@ -94,6 +93,23 @@ def test_set_status(tmp_path) -> None:
 	assert info.status == ApplicationStore.STATUS_APPROVED
 	assert store.is_pending("3") is False
 	assert store.set_status("404", ApplicationStore.STATUS_APPROVED) is False
+
+
+def test_set_status_expected(tmp_path) -> None:
+	store = _store(tmp_path)
+	store.submit("4", author_name="待审")
+
+	assert store.set_status(
+		"4", ApplicationStore.STATUS_APPROVED,
+		expected=ApplicationStore.STATUS_PENDING,
+	) is True
+	assert store.set_status(
+		"4", ApplicationStore.STATUS_REJECTED,
+		expected=ApplicationStore.STATUS_PENDING,
+	) is False
+
+	info = store.get("4")
+	assert info.status == ApplicationStore.STATUS_APPROVED
 
 
 def test_remove(tmp_path) -> None:
