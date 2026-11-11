@@ -56,6 +56,8 @@ async def download(
 				artifact.kind, artifact.item_id, artifact.file_type),
 			caption=artifact.caption,
 			cache_key=artifact.cache_key,
+			author_id=artifact.author_id,
+			author_name=artifact.author_name,
 			cleanup=False,
 		)
 

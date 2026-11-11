@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -14,6 +15,14 @@ from storage.file_cache import FileCacheStore, get_default_cache
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SentDocument:
+	"""一次 send_document 的结果：file_id 用于缓存复用，message_id 用于日后下架。"""
+
+	file_id: str
+	message_id: int
 
 
 def get_cache() -> FileCacheStore:
@@ -34,8 +43,13 @@ async def upload_file(
 	reply_to_message_id: int | None = None,
 	cache_key: str | None = None,
 	cleanup: bool = False,
-) -> str | dict[int | str, str]:
-	"""优先 file_id；否则上传 path，成功后写入 FileCacheStore。"""
+	author_id: str | int = "",
+	author_name: str = "",
+) -> dict[int | str, SentDocument]:
+	"""优先 file_id；否则上传 path，成功后写入 FileCacheStore。
+
+	返回值按目标频道给出 file_id + message_id（下架要用 message_id）。
+	"""
 	
 	file_path = Path(path) if path else None
 	store = get_cache()
@@ -62,7 +76,7 @@ async def upload_file(
 	if not file_id and (not file_path or not file_path.is_file()):
 		raise FileNotFoundError(file_path or "(no path)")
 
-	file_ids: dict[int | str, str] = {}
+	documents: dict[int | str, SentDocument] = {}
 	last_file_id: str | None = None
 	used_local_upload = False
 
@@ -97,8 +111,12 @@ async def upload_file(
 			new_id = sent.video.file_id
 
 		if new_id:
-			file_ids[target] = new_id
 			last_file_id = new_id
+
+		documents[target] = SentDocument(
+			file_id=new_id or str(file_id or ""),
+			message_id=int(getattr(sent, "message_id", 0) or 0),
+		)
 
 	if used_local_upload and last_file_id and cache_key:
 		store.set(
@@ -106,11 +124,11 @@ async def upload_file(
 			last_file_id,
 			file_name=filename or (file_path.name if file_path else ""),
 			caption=caption or "",
+			author_id=author_id,
+			author_name=author_name,
 		)
 
 	if cleanup and file_path and file_path.is_file():
 		await remove_file(file_path)
 
-	if len(targets) == 1:
-		return file_ids.get(targets[0], last_file_id or "")
-	return file_ids
+	return documents

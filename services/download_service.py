@@ -94,6 +94,9 @@ class DownloadArtifact:
 	filename: str | None = None
 	cleanup: bool = False
 	from_cache: bool = False
+	# 作者信息：写进 file_id 缓存，分享记录以作者为第一层 key
+	author_id: str = ""
+	author_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -259,6 +262,8 @@ class DownloadService:
 				filename=cached.file_name or None,
 				cleanup=False,
 				from_cache=True,
+				author_id=str(cached.author_id or ""),
+				author_name=str(cached.author_name or ""),
 			)
 
 		item = await self._fetch(target_link)
@@ -284,6 +289,8 @@ class DownloadService:
 					filename=cached.file_name or path.name,
 					cleanup=False,
 					from_cache=True,
+					author_id=str(cached.author_id or ""),
+					author_name=str(cached.author_name or ""),
 				)
 
 		return DownloadArtifact(
@@ -296,6 +303,8 @@ class DownloadService:
 			path=path,
 			filename=path.name,
 			cleanup=True,
+			author_id=str(getattr(item, "author_id", "") or ""),
+			author_name=str(getattr(item, "author_name", "") or ""),
 		)
 
 

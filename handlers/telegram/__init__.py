@@ -7,7 +7,7 @@ from handlers.telegram.membership import (
 )
 from handlers.telegram.reply import reply
 from handlers.telegram.transit import send_to_transit, transit_author_caption
-from handlers.telegram.upload import get_cache, upload_file
+from handlers.telegram.upload import SentDocument, get_cache, upload_file
 
 __all__ = [
 	"clear_membership_cache",
@@ -15,6 +15,7 @@ __all__ = [
 	"get_transit_member_status",
 	"reply",
 	"send_to_transit",
+	"SentDocument",
 	"transit_admin_policy",
 	"transit_author_caption",
 	"upload_file",
