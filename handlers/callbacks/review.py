@@ -1,6 +1,7 @@
 """管理侧核验 callback：afa（通过）/ afr（拒绝）/ afb（拒绝并拉黑）。
 
-用户侧申请在 handlers.callbacks.apply，公共工具在 handlers.callbacks._common。
+审核状态与名单更新在 services.review_service；
+本模块只负责中转消息、审核回执和私聊通知。
 """
 
 from __future__ import annotations
@@ -10,9 +11,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import get_applications, reply
-from storage.application import ApplicationStore
-from storage.list import ListManager
+from handlers.callbacks.common import reply
+from services import ReviewDecision, ReviewResult, ReviewService
 from utils.json import JsonDict
 
 
@@ -69,62 +69,85 @@ async def close_transit_message(
 			logger.warning("审核回执发送失败", exc_info=True)
 
 
+def _author_id_from_data(data: str) -> str:
+	parts = data.split(";", 1)
+	if len(parts) < 2:
+		return ""
+	return parts[1].strip()
+
+
+def _receipt_text(result: ReviewResult, user) -> str:
+	author_id = result.author_id
+	name = result.author_name or author_id
+	text = ["#兽人作者申请已完成"]
+	if result.status == "approved":
+		text.append(f"✅ 通过：{name}（#a{author_id}）")
+	elif result.blacklisted:
+		text.append(f"🚫 拒绝并拉黑：{name}（#a{author_id}）")
+	else:
+		text.append(f"🈲 拒绝：{name}（#a{author_id}）")
+
+	record = result.record
+	if record is not None:
+		text.append(f"🈸 申请：{record.user_name}（#u{record.user_id}）")
+	text.append(f"👤 审核：{user.first_name} {user.last_name}（#u{user.id}）")
+	return "\n".join(text)
+
+
 async def review_application(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
-		*, data: str, approve: bool, blacklist: bool = False) -> None:
-	"""afa / afr / afb：在中转频道 / 测试频道里核验申请并更新名单。"""
-	author_id = data.split(";")[1]
+		*, data: str, decision: ReviewDecision) -> None:
+	"""afa / afr / afb：核验申请并更新名单。"""
+	author_id = _author_id_from_data(data)
 	user = update.effective_user
-	applications = get_applications()
-	record = applications.get(author_id)
-	if record is None:
-		await close_transit_message(update, context, f"申请记录不存在（#a{author_id}）")
+	if user is None:
 		return
-	if str(record.status or "") != ApplicationStore.STATUS_PENDING:
-		# 重复点击 / 并发核验：保证审核只生效一次
+	if not author_id:
+		await close_transit_message(update, context, "申请参数不完整")
+		return
+
+	result = ReviewService().review(
+		author_id,
+		decision,
+		reviewer_id=user.id,
+		reviewer_name=f"{user.first_name} {user.last_name}",
+	)
+
+	if result.status == "missing":
+		await close_transit_message(
+			update, context, f"申请记录不存在（#a{author_id}）")
+		return
+	if result.status == "already_processed":
 		await close_transit_message(
 			update, context,
-			f"该申请已处理（{record.status or '未知'}）："
-			f"{record.author_name or author_id}（#a{author_id}）")
+			f"该申请已处理（{result.previous_status or '未知'}）："
+			f"{result.author_name}（#a{author_id}）")
 		return
 
-	manager = ListManager()
-	name = record.author_name
-	text = ["#兽人作者申请_已完成"]
-	if approve:
-		applications.set_status(author_id, ApplicationStore.STATUS_APPROVED)
-		manager.add_furrylist(author_id, name=name, note="兽人作者申请通过")
-		text.append(f"✅ 通过：{name}（#a{author_id}）")
-	else:
-		applications.set_status(author_id, ApplicationStore.STATUS_REJECTED)
-		if blacklist:
-			manager.add_blacklist(author_id, name=name, note="申请核验未通过")
-			text.append(f"🚫 拒绝并拉黑：{name}（#a{author_id}）")
-		else:
-			text.append(f"🈲 拒绝：{name}（#a{author_id}）")
-	text.append(f"🈸 申请：{record.user_name}（#u{record.user_id}）")
-	text.append(f"👤 审核：{user.first_name} {user.last_name}（#u{user.id}）")
-
-	logger.info(f"申请核验 {author_id=} {approve=} {blacklist=}")
-	await close_transit_message(update, context, "\n".join(text))
-	await notify_applicant(
-		context, record,
-		applicant_text(record, approve=approve, blacklist=blacklist))
+	await close_transit_message(update, context, _receipt_text(result, user))
+	if result.record is not None:
+		await notify_applicant(
+			context, result.record,
+			applicant_text(
+				result.record,
+				approve=result.status == "approved",
+				blacklist=result.blacklisted,
+			))
 
 
 async def apply_approve(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
 	"""afa：核验通过，加入兽人作者名单。"""
-	await review_application(update, context, data=data, approve=True)
+	await review_application(update, context, data=data, decision="approve")
 
 
 async def apply_reject(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
 	"""afr：核验不通过，拒绝申请。"""
-	await review_application(update, context, data=data, approve=False)
+	await review_application(update, context, data=data, decision="reject")
 
 
 async def apply_blacklist(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
 	"""afb：核验不通过并拉黑作者。"""
-	await review_application(update, context, data=data, approve=False, blacklist=True)
+	await review_application(update, context, data=data, decision="blacklist")
