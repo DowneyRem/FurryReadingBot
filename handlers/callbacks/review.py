@@ -1,7 +1,11 @@
-"""管理侧核验 callback：afa（通过）/ afr（拒绝）/ afb（拒绝并拉黑）。
+"""管理侧核验 callback：afa（通过）/ afr（拒绝）。
 
 审核状态与名单更新在 services.review_service；
 本模块只负责中转消息、审核回执和私聊通知。
+
+**拉黑不在这里**：核验裁决的是「这位用户替作者提的申请是否成立」，
+不是「作者本人是否愿意被传播」。拉黑只能由作者本人的诉求触发，
+入口等「作者申请下架」流程定下来再接（`services/takedown_service.py` 已备好）。
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ from utils.json import JsonDict
 logger = logging.getLogger(__name__)
 
 
-def applicant_text(record: JsonDict, *, approve: bool, blacklist: bool = False) -> str:
+def applicant_text(record: JsonDict, *, approve: bool) -> str:
 	"""核验结果通知申请人的文案。"""
 	message = []
 	if approve:
@@ -30,8 +34,6 @@ def applicant_text(record: JsonDict, *, approve: bool, blacklist: bool = False) 
 		message.extend(["❌ 你提交的兽人作者申请未通过", ""])
 		message.append(f"作者：{record.author_name}（#a{record.author_id}）")
 		message.append("如有疑问，可以联系管理员")
-	if blacklist:
-		message.append("⚠️ 该作者已被禁止通过本 Bot 下载与分享")
 	return "\n".join(message)
 
 
@@ -82,8 +84,6 @@ def _receipt_text(result: ReviewResult, user) -> str:
 	text = ["#兽人作者申请已完成"]
 	if result.status == "approved":
 		text.append(f"✅ 通过：{name}（#a{author_id}）")
-	elif result.blacklisted:
-		text.append(f"🚫 拒绝并拉黑：{name}（#a{author_id}）")
 	else:
 		text.append(f"🈲 拒绝：{name}（#a{author_id}）")
 
@@ -97,7 +97,7 @@ def _receipt_text(result: ReviewResult, user) -> str:
 async def review_application(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str, decision: ReviewDecision) -> None:
-	"""afa / afr / afb：核验申请并更新名单。"""
+	"""afa / afr：核验申请并更新名单。"""
 	author_id = _author_id_from_data(data)
 	user = update.effective_user
 	if user is None:
@@ -139,7 +139,6 @@ async def review_application(
 			applicant_text(
 				result.record,
 				approve=result.status == "approved",
-				blacklist=result.blacklisted,
 			))
 
 
@@ -153,9 +152,3 @@ async def apply_reject(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
 	"""afr：核验不通过，拒绝申请。"""
 	await review_application(update, context, data=data, decision="reject")
-
-
-async def apply_blacklist(update: Update, context: ContextTypes.DEFAULT_TYPE,
-		*, data: str) -> None:
-	"""afb：核验不通过并拉黑作者。"""
-	await review_application(update, context, data=data, decision="blacklist")

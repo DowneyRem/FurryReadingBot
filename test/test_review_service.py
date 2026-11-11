@@ -19,25 +19,15 @@ AUTHOR_LINK = "https://linpx.ink/pixiv/user/42"
 class FakeListManager:
 	def __init__(self) -> None:
 		self.furry: set[str] = set()
-		self.black: set[str] = set()
 		self.calls: list[tuple[str, str, str, str]] = []
 
 	def add_furrylist(self, author_id, name: str = "", note: str = "") -> None:
 		self.calls.append(("furry", str(author_id), name, note))
 		self.furry.add(str(author_id))
 
-	def add_blacklist(self, author_id, name: str = "", note: str = "") -> None:
-		self.calls.append(("black", str(author_id), name, note))
-		self.black.add(str(author_id))
-
 
 class FailingFurryListManager(FakeListManager):
 	def add_furrylist(self, author_id, name: str = "", note: str = "") -> None:
-		raise RuntimeError("list write failed")
-
-
-class FailingBlackListManager(FakeListManager):
-	def add_blacklist(self, author_id, name: str = "", note: str = "") -> None:
 		raise RuntimeError("list write failed")
 
 
@@ -68,7 +58,6 @@ def test_approve_updates_status_and_furrylist(tmp_path) -> None:
 	assert result.status == "approved"
 	assert result.previous_status == ApplicationStore.STATUS_PENDING
 	assert result.author_name == "作者"
-	assert result.blacklisted is False
 	assert result.record is not None
 	assert result.record.status == ApplicationStore.STATUS_APPROVED
 	assert AUTHOR_ID in manager.furry
@@ -87,25 +76,20 @@ def test_reject_updates_status_without_list(tmp_path) -> None:
 	assert result.status == "rejected"
 	assert result.record is not None
 	assert result.record.status == ApplicationStore.STATUS_REJECTED
-	assert result.blacklisted is False
 	assert manager.calls == []
 	assert store.get(AUTHOR_ID).status == ApplicationStore.STATUS_REJECTED
 
 
-def test_blacklist_updates_status_and_blacklist(tmp_path) -> None:
+def test_blacklist_is_not_a_review_decision(tmp_path) -> None:
+	"""拉黑是作者本人的诉求，不能从「核验申请」这条路走。"""
 	service, store, manager = make_service(tmp_path)
 	submit(store)
 
-	result = service.review(AUTHOR_ID, "blacklist")
+	with pytest.raises(ValueError):
+		service.review(AUTHOR_ID, "blacklist")  # type: ignore[arg-type]
 
-	assert result.status == "rejected"
-	assert result.blacklisted is True
-	assert result.record is not None
-	assert result.record.status == ApplicationStore.STATUS_REJECTED
-	assert AUTHOR_ID in manager.black
-	assert manager.calls == [
-		("black", AUTHOR_ID, "作者", "申请核验未通过"),
-	]
+	assert manager.calls == []
+	assert store.get(AUTHOR_ID).status == ApplicationStore.STATUS_PENDING
 
 
 def test_missing_record(tmp_path) -> None:
@@ -158,20 +142,6 @@ def test_approve_rolls_back_status_when_list_fails(tmp_path) -> None:
 	assert record is not None
 	assert record.status == ApplicationStore.STATUS_PENDING
 	assert manager.furry == set()
-
-
-def test_blacklist_rolls_back_status_when_list_fails(tmp_path) -> None:
-	manager = FailingBlackListManager()
-	service, store, _ = make_service(tmp_path, manager)
-	submit(store)
-
-	with pytest.raises(RuntimeError):
-		service.review(AUTHOR_ID, "blacklist")
-
-	record = store.get(AUTHOR_ID)
-	assert record is not None
-	assert record.status == ApplicationStore.STATUS_PENDING
-	assert manager.black == set()
 
 
 def test_unknown_decision_raises(tmp_path) -> None:

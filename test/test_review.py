@@ -98,10 +98,18 @@ def test_applicant_text_approve() -> None:
 	assert "重新发送链接" in text
 
 
-def test_applicant_text_blacklist() -> None:
-	text = applicant_text(RECORD, approve=False, blacklist=True)
+def test_applicant_text_rejected() -> None:
+	text = applicant_text(RECORD, approve=False)
 	assert "未通过" in text
-	assert "禁止通过" in text
+	assert "如有疑问" in text
+
+
+def test_receipt_text_rejected() -> None:
+	text = _receipt_text(
+		ReviewResult("rejected", "42", "作者", "pending", RECORD),
+		FakeUser(),
+	)
+	assert "🈲 拒绝" in text
 
 
 def test_receipt_text_approved() -> None:
@@ -113,15 +121,6 @@ def test_receipt_text_approved() -> None:
 	assert "✅ 通过" in text
 	assert "🈸 申请" in text
 	assert "👤 审核" in text
-
-
-def test_receipt_text_blacklisted() -> None:
-	text = _receipt_text(
-		ReviewResult(
-			"rejected", "42", "作者", "pending", RECORD, blacklisted=True),
-		FakeUser(),
-	)
-	assert "🚫 拒绝并拉黑" in text
 
 
 def test_review_application_approved(monkeypatch) -> None:
@@ -144,7 +143,7 @@ def test_review_application_approved(monkeypatch) -> None:
 
 def test_review_application_passes_decision_through(monkeypatch) -> None:
 	"""回归：管理员判定结果不能覆盖 handler 传入的审核决定。"""
-	for decision in ("approve", "reject", "blacklist"):
+	for decision in ("approve", "reject"):
 		service, closed, _ = patch_review(
 			monkeypatch,
 			ReviewResult("rejected", "42", "作者", "pending", RECORD),
@@ -206,3 +205,17 @@ def test_review_application_invalid_data(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="afa", decision="approve"))
 
 	assert "申请参数不完整" in closed[0]
+
+
+def test_review_keyboard_has_no_blacklist_button() -> None:
+	"""核验卡片只裁决申请是否通过，不裁决作者：拉黑不能出现在这里。"""
+	from keyboards import review_author_keyboard
+
+	buttons = [
+		button.callback_data
+		for row in review_author_keyboard("42").inline_keyboard
+		for button in row
+	]
+	assert "afa;42" in buttons
+	assert "afr;42" in buttons
+	assert "afb;42" not in buttons

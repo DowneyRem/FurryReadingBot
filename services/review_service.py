@@ -19,7 +19,7 @@ from utils.json import JsonDict
 
 logger = logging.getLogger(__name__)
 
-ReviewDecision = Literal["approve", "reject", "blacklist"]
+ReviewDecision = Literal["approve", "reject"]
 ReviewStatus = Literal[
 	"approved", "rejected", "missing", "already_processed",
 ]
@@ -34,7 +34,6 @@ class ReviewResult:
 	author_name: str = ""
 	previous_status: str = ""
 	record: JsonDict | None = None
-	blacklisted: bool = False
 
 
 class ReviewService:
@@ -72,8 +71,12 @@ class ReviewService:
 		reviewer_id: str | int | None = None,
 		reviewer_name: str = "",
 	) -> ReviewResult:
-		"""审核一条申请；同一申请只会成功处理一次。"""
-		if decision not in ("approve", "reject", "blacklist"):
+		"""审核一条申请；同一申请只会成功处理一次。
+
+		只裁决「通过 / 拒绝」。拉黑是作者本人的诉求，不走这里——
+		管理员核验的是「这位用户替作者提的申请是否成立」。
+		"""
+		if decision not in ("approve", "reject"):
 			raise ValueError(f"未知审核决定：{decision}")
 
 		current = self.applications.get(author_id)
@@ -105,7 +108,7 @@ class ReviewService:
 				self._rollback(author_id, ApplicationStore.STATUS_APPROVED)
 				raise
 			result = self._updated(
-				author_id, "approved", previous, current, blacklisted=False)
+				author_id, "approved", previous, current)
 		else:
 			if not self.applications.set_status(
 				author_id, ApplicationStore.STATUS_REJECTED,
@@ -113,18 +116,8 @@ class ReviewService:
 			):
 				return self._already_processed(author_id, current)
 
-			blacklisted = decision == "blacklist"
-			if blacklisted:
-				try:
-					self.list_manager.add_blacklist(
-						author_id, name=name, note="申请核验未通过")
-				except Exception:
-					self._rollback(
-						author_id, ApplicationStore.STATUS_REJECTED)
-					raise
 			result = self._updated(
-				author_id, "rejected", previous, current,
-				blacklisted=blacklisted)
+				author_id, "rejected", previous, current)
 
 		logger.info(
 			"申请核验 author=%s decision=%s reviewer=%s(%s)",
@@ -139,8 +132,6 @@ class ReviewService:
 		status: Literal["approved", "rejected"],
 		previous: str,
 		fallback: JsonDict,
-		*,
-		blacklisted: bool,
 	) -> ReviewResult:
 		record = self.applications.get(author_id) or fallback
 		return ReviewResult(
@@ -149,7 +140,6 @@ class ReviewService:
 			author_name=str(record.author_name or author_id),
 			previous_status=previous,
 			record=record,
-			blacklisted=blacklisted,
 		)
 
 
