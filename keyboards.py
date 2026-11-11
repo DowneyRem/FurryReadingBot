@@ -3,22 +3,14 @@ from sources.linpx.urls import url_author
 # todo 通用化 url_author
 
 
-def apply_author_keyboard(
-		author_url: str, *, show_blacklist: bool = False) -> InlineKeyboardMarkup:
-	"""「申请加入兽人作者名单」菜单。
-
-	``show_blacklist`` 只在「作者主页链接」时为 True：下架入口不能出现在
-	作品 / 系列链接的菜单里（见 docs/02 第 4 节）。
-	"""
-	row = [
-		InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{author_url}"),
-	]
-	if show_blacklist:
-		row.append(
-			InlineKeyboardButton(
-				text="🈲 申请黑名单", callback_data=f"ab;{author_url}"))
-	row.append(InlineKeyboardButton(text="🗑️ 取消", callback_data="ignore"))
-	return InlineKeyboardMarkup([row])
+def apply_author_keyboard(author_url: str) -> InlineKeyboardMarkup:
+	return InlineKeyboardMarkup(
+		[[
+			InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{author_url}"),
+	        InlineKeyboardButton(text="🈲 申请下架", callback_data=f"ab;{author_url}"),
+	        InlineKeyboardButton(text="🗑️ 取消", callback_data="ignore")
+		]]
+	)
 
 
 def confirm_furry_keyboard(author_url: str) -> InlineKeyboardMarkup:
@@ -39,7 +31,7 @@ def confirm_black_keyboard(author_url: str) -> InlineKeyboardMarkup:
 	)
 
 
-def review_author_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
+def review_furry_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[
 			[
@@ -51,7 +43,7 @@ def review_author_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	)
 
 
-def blacklist_review_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
+def review_black_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	"""中转频道里「作者申请下架」的核验键盘。"""
 	return InlineKeyboardMarkup(
 		[
@@ -100,7 +92,7 @@ def down_author_keyboard(author_url: str, is_furry: bool=True) -> InlineKeyboard
 		buttons.append(InlineKeyboardButton(text="👤 全部下载", callback_data=f"dan;{author_url}"))
 	else:
 		buttons.append(InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{author_url}"))
-	buttons.append(InlineKeyboardButton(text="🈲 申请黑名单", callback_data=f"ab;{author_url}"))
+	buttons.append(InlineKeyboardButton(text="🈲 申请下架", callback_data=f"ab;{author_url}"))
 	buttons.append(InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"))
 	return InlineKeyboardMarkup([buttons])
 

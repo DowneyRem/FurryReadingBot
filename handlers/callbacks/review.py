@@ -79,18 +79,20 @@ def _author_id_from_data(data: str) -> str:
 
 
 def _receipt_text(result: ReviewResult, user) -> str:
-	author_id = result.author_id
-	name = result.author_name or author_id
-	text = ["#兽人作者申请已完成"]
+	text = []
 	if result.status == "approved":
-		text.append(f"✅ 通过：{name}（#a{author_id}）")
+		text.append(f"#兽人作者申请已通过")
+		text.append(f"✅ 通过：{result.author_name}（#a{result.author_id}）")
 	else:
-		text.append(f"🈲 拒绝：{name}（#a{author_id}）")
+		text.append(f"#兽人作者申请已拒绝")
+		text.append(f"❌ 拒绝：{result.author_name}（#a{result.author_id}）")
 
 	record = result.record
 	if record is not None:
 		text.append(f"🈸 申请：{record.user_name}（#u{record.user_id}）")
-	text.append(f"👤 审核：{user.first_name} {user.last_name}（#u{user.id}）")
+	if user.last_name:
+		user.first_name = f"{user.first_name} {user.last_name}"
+	text.append(f"👤 审核：{user.first_name}（#u{user.id}）")
 	return "\n".join(text)
 
 

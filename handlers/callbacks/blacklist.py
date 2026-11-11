@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 BLACKLIST_NOTICE = "\n".join([
 	"申请把该作者加入黑名单前，请先确认：", "",
 	"1. 只有作者本人可以发起下架申请",
-	"2. 下一步需要提交能证明你是该作者的截图（Pixiv 后台 / 投稿管理页）",
-	"3. 审核通过后，该作者不能再被下载或分享",
+	"2. 需要提交能证明你是该作者的截图（Pixiv 后台投稿管理页）",
+	"3. 审核通过后，该作者的作品不能再被下载或分享",
 	"4. 申请需要管理员人工核验，核验期间仍可能被分享", "",
 	"确认发起申请吗？",
 ])
@@ -47,39 +47,39 @@ def material_notice(author_name: str, author_id: str) -> str:
 		"1. Pixiv 后台「作品管理」或「投稿一览」截图",
 		"2. 截图里能看到该账号与至少一个作品标题",
 		"",
-		"请在 {} 分钟内发送；管理员核验后会私聊通知结果。".format(
-			BlacklistRequestStore.MATERIAL_TTL_MINUTES),
+		f"请在 {BlacklistRequestStore.MATERIAL_TTL_MINUTES} 分钟内发送；管理员核验后会私聊通知结果。",
 	])
 
 
 def review_receipt(result: BlacklistReview, user) -> str:
 	"""中转频道的核验回执。"""
-	lines = ["#作者下架申请已完成"]
+	text = []
 	if result.status == "approved":
-		lines.append(f"🚫 已拉黑：{result.author_name}（#a{result.author_id}）")
+		text.append("#作者下架申请已拉黑")
+		text.append(f"🚫 已拉黑：{result.author_name}（#a{result.author_id}）")
 	else:
-		lines.append(f"🈲 拒绝下架申请：{result.author_name}（#a{result.author_id}）")
+		text.append("#作者下架申请已拒绝")
+		text.append(f"❌ 已拒绝：{result.author_name}（#a{result.author_id}）")
 
 	record = result.record
 	if record is not None:
-		lines.append(f"🈸 申请人：{record.user_name}（#u{record.user_id}）")
-	lines.append(f"👤 审核：{user.first_name} {user.last_name}（#u{user.id}）")
-	return "\n".join(lines)
+		text.append(f"🈸 申请：{record.user_name}（#u{record.user_id}）")
+	text.append(f"👤 审核：{user.first_name} {user.last_name}（#u{user.id}）")
+	return "\n".join(text)
 
 
 def applicant_text(result: BlacklistReview) -> str:
 	"""私聊通知申请人的文案。"""
+	message = []
 	if result.status == "approved":
-		return "\n".join([
-			"✅ 你的下架申请已通过",
-			f"作者：{result.author_name}（#a{result.author_id}）",
-			"该作者已加入黑名单，之后不会再被下载或分享",
-		])
-	return "\n".join([
-		"❌ 你的下架申请未通过",
-		f"作者：{result.author_name}（#a{result.author_id}）",
-		"如有疑问，可以联系管理员",
-	])
+		message.extend(["✅ 你提交的小说下架申请已通过", ""])
+		message.append(f"作者：{result.author_name}（#a{result.author_id}）")
+		message.append(f"该作者已加入黑名单，之后不会再被下载或分享")
+	else:
+		message.extend(["❌ 你提交的小说下架申请未通过", ""])
+		message.append(f"作者：{result.author_name}（#a{result.author_id}）")
+		message.append(f"如有疑问，可以联系管理员")
+	return "\n".join(message)
 
 
 def _link_from_data(data: str) -> str:
@@ -140,7 +140,7 @@ async def request_blacklist_confirm(
 	if result.status == "pending_review":
 		await edit_or_reply(
 			update, context,
-			f"作者 {result.author_name} 的下架申请已在核验中，请等待管理员处理。")
+			f"作者 {result.author_name} 的下架申请已在核验中\n请等待管理员处理。")
 		return
 
 	await edit_or_reply(

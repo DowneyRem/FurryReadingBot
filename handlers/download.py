@@ -42,23 +42,21 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	if access.status == "blacklisted":
 		text = [
 			f"不好意思，作者 {access.author_name} 已禁止通过本 Bot 下载小说并分享至 {FURRY_READING} 以及 {FURRY_NOVELS}",
-			"如需下载其他 Pixiv 小说，可以使用 @PixivNBot",
+			f"", "如需下载其他 Pixiv 小说，可以使用 @PixivNBot",
 		]
 		await message.reply_text("\n".join(text))
 		return
 
 	if access.status == "needs_apply":
 		text = [
-			"不好意思，本 Bot 仅可下载兽人小说。",
-			f"作者：{access.author_name}（#a{access.author_id}）目前不在兽人小说作者名单", "",
-			"申请其为兽人小说作者？",
-			"如需下载其他 Pixiv 小说，可以使用 @PixivNBot",
+			"不好意思，本 Bot 仅可下载、分享兽人小说。",
+			f"作者：{access.author_name}（#a{access.author_id}）目前不在兽人作者名单", "",
+			f"申请其为兽人小说作者？",
+			f"如需下载其他 Pixiv 小说，可以使用 @PixivNBot",
 		]
 		await message.reply_text(
 			text="\n".join(text),
-			# 下架入口只在作者主页链接上出现
-			reply_markup=apply_author_keyboard(
-				offer.author_url, show_blacklist=offer.kind == "author"),
+			reply_markup=apply_author_keyboard(offer.author_url),
 		)
 		return
 

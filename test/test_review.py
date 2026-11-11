@@ -209,11 +209,11 @@ def test_review_application_invalid_data(monkeypatch) -> None:
 
 def test_review_keyboard_has_no_blacklist_button() -> None:
 	"""核验卡片只裁决申请是否通过，不裁决作者：拉黑不能出现在这里。"""
-	from keyboards import review_author_keyboard
+	from keyboards import review_furry_keyboard
 
 	buttons = [
 		button.callback_data
-		for row in review_author_keyboard("42").inline_keyboard
+		for row in review_furry_keyboard("42").inline_keyboard
 		for button in row
 	]
 	assert "afa;42" in buttons

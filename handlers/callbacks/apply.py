@@ -126,7 +126,7 @@ async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 		return
 
 	message = [
-		f"✅ 已提交兽人作者申请：",
+		f"✅ 已提交兽人作者申请：", "",
 		f"{result.author_name}（#a{result.author_id}）",
 		f"管理员核验后会私聊通知结果"
 	]
