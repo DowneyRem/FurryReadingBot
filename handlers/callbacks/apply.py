@@ -12,7 +12,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.telegram import reply, send_to_transit
-from keyboards import confirm_author_keyboard
+from keyboards import confirm_furry_keyboard
 from services import ApplyInvalidLinkError, ApplyService
 
 
@@ -85,7 +85,7 @@ async def apply_furry(update: Update, context: ContextTypes.DEFAULT_TYPE,
 	await edit_or_reply(
 		update, context,
 		apply_notice(inspection.author_name, inspection.author_id),
-		reply_markup=confirm_author_keyboard(link))
+		reply_markup=confirm_furry_keyboard(link))
 
 
 async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE,

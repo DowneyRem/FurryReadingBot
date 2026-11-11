@@ -27,8 +27,6 @@ def review_author_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 			[
 				InlineKeyboardButton(text="✅ 通过", callback_data=f"afa;{author_id}"),
 				InlineKeyboardButton(text="❌ 拒绝", callback_data=f"afr;{author_id}"),
-			# ], [
-			# 	InlineKeyboardButton(text="🈲 拉黑", callback_data=f"afb;{author_id}"),
 				InlineKeyboardButton(text="🏡 主页", url=url_author(author_id)),
 			],
 		]
@@ -39,7 +37,7 @@ def down_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(text="📄 下载本章 txt", callback_data=f"dn;{link}"),
-			# InlineKeyboardButton(text="👤 下载作者 zip", callback_data=f"da;{link}"),
+			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
 		]]
 	)
 
@@ -47,11 +45,11 @@ def down_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 def down_novel_series_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
-			InlineKeyboardButton(text="📄 下载本章 txt", callback_data=f"dn;{link}"),
-			# InlineKeyboardButton(text="👤 下载作者 zip", callback_data=f"da;{link}"),
-		# ], [
 			InlineKeyboardButton(text="📒 下载系列 txt", callback_data=f"dst;{link}"),
 			InlineKeyboardButton(text="📚 下载系列 zip", callback_data=f"dsz;{link}"),
+		], [
+			InlineKeyboardButton(text="📄 下载本章 txt", callback_data=f"dn;{link}"),
+			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
 		]]
 	)
 
@@ -65,13 +63,14 @@ def down_series_keyboard(link: str, auto: bool = True) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup([buttons])
 
 
-def down_author_keyboard(link: str, is_furry: bool=True) -> InlineKeyboardMarkup:
+def down_author_keyboard(author_url: str, is_furry: bool=True) -> InlineKeyboardMarkup:
 	buttons = []
 	if is_furry:
-		buttons.append(InlineKeyboardButton(text="👤 全部下载", callback_data=f"dan;{link}"))
+		buttons.append(InlineKeyboardButton(text="👤 全部下载", callback_data=f"dan;{author_url}"))
 	else:
-		buttons.append(InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{link}"))
-	# buttons.append(InlineKeyboardButton(text="🈲 申请黑名单", callback_data=f"af;{link}"))
+		buttons.append(InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{author_url}"))
+	buttons.append(InlineKeyboardButton(text="🈲 申请黑名单", callback_data=f"ab;{author_url}"))
+	buttons.append(InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"))
 	return InlineKeyboardMarkup([buttons])
 
 
