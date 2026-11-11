@@ -7,7 +7,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.telegram import send_to_transit
+from handlers.telegram import send_to_transit, transit_admin_policy
 from services import ApplyService
 
 
@@ -19,6 +19,11 @@ async def review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	message = update.effective_message
 	user = update.effective_user
 	if message is None or user is None:
+		return
+
+	decision = await transit_admin_policy(context.bot).check(user.id)
+	if not decision.allowed:
+		await message.reply_text("⚠️ 仅中转频道管理员可以重新推送待审核申请")
 		return
 
 	records = ApplyService().pending_records()

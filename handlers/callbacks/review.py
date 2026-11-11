@@ -11,7 +11,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.telegram import reply
+from handlers.telegram import reply, transit_admin_policy
 from services import ReviewDecision, ReviewResult, ReviewService
 from utils.json import JsonDict
 
@@ -102,6 +102,14 @@ async def review_application(
 	user = update.effective_user
 	if user is None:
 		return
+
+	decision = await transit_admin_policy(context.bot).check(user.id)
+	if not decision.allowed:
+		logger.warning(
+			"非管理员尝试核验申请 author=%s user=%s", author_id or "-", user.id)
+		await close_transit_message(update, context, "仅中转频道管理员可以核验申请")
+		return
+
 	if not author_id:
 		await close_transit_message(update, context, "申请参数不完整")
 		return

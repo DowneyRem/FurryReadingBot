@@ -14,6 +14,7 @@ from handlers.callbacks.review import (
 	_receipt_text,
 	review_application,
 )
+from policy.admin import AdminDecision
 from services.review_service import ReviewResult
 from utils.json import JsonDict
 
@@ -42,6 +43,18 @@ class FakeUpdate:
 		self.effective_user = FakeUser()
 
 
+class FakeContext:
+	bot = object()
+
+
+class FakeAdminPolicy:
+	def __init__(self, allowed: bool) -> None:
+		self.allowed = allowed
+
+	async def check(self, user_id):
+		return AdminDecision(str(user_id), self.allowed)
+
+
 class FakeService:
 	def __init__(self, result: ReviewResult) -> None:
 		self.result = result
@@ -57,9 +70,13 @@ class FakeService:
 		return self.result
 
 
-def patch_review(monkeypatch, result: ReviewResult):
+def patch_review(
+		monkeypatch, result: ReviewResult, *, admin: bool = True):
 	service = FakeService(result)
 	monkeypatch.setattr(review_handler, "ReviewService", lambda: service)
+	monkeypatch.setattr(
+		review_handler, "transit_admin_policy",
+		lambda bot: FakeAdminPolicy(admin))
 	closed: list[str] = []
 	notified: list[tuple[JsonDict, str]] = []
 
@@ -114,7 +131,7 @@ def test_review_application_approved(monkeypatch) -> None:
 	)
 
 	run(review_application(
-		FakeUpdate(), object(), data="afa;42", decision="approve"))
+		FakeUpdate(), FakeContext(), data="afa;42", decision="approve"))
 
 	assert service.called is not None
 	assert service.called["author_id"] == "42"
@@ -129,7 +146,7 @@ def test_review_application_missing(monkeypatch) -> None:
 		monkeypatch, ReviewResult("missing", "404"))
 
 	run(review_application(
-		FakeUpdate(), object(), data="afa;404", decision="approve"))
+		FakeUpdate(), FakeContext(), data="afa;404", decision="approve"))
 
 	assert "申请记录不存在" in closed[0]
 	assert notified == []
@@ -143,9 +160,24 @@ def test_review_application_already_processed(monkeypatch) -> None:
 	)
 
 	run(review_application(
-		FakeUpdate(), object(), data="afa;42", decision="approve"))
+		FakeUpdate(), FakeContext(), data="afa;42", decision="approve"))
 
 	assert "该申请已处理" in closed[0]
+	assert notified == []
+
+
+def test_review_application_requires_admin(monkeypatch) -> None:
+	service, closed, notified = patch_review(
+		monkeypatch,
+		ReviewResult("approved", "42", "作者", "pending", RECORD),
+		admin=False,
+	)
+
+	run(review_application(
+		FakeUpdate(), FakeContext(), data="afa;42", decision="approve"))
+
+	assert service.called is None
+	assert "仅中转频道管理员" in closed[0]
 	assert notified == []
 
 
@@ -154,6 +186,6 @@ def test_review_application_invalid_data(monkeypatch) -> None:
 		monkeypatch, ReviewResult("missing", ""))
 
 	run(review_application(
-		FakeUpdate(), object(), data="afa", decision="approve"))
+		FakeUpdate(), FakeContext(), data="afa", decision="approve"))
 
 	assert "申请参数不完整" in closed[0]

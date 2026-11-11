@@ -50,7 +50,7 @@ def main() -> None:
 	
 	app.add_handler(CallbackQueryHandler(button_callback))
 	app.add_error_handler(error_handler)
-	app.post_shutdown(post_shutdown)
+	# app.post_shutdown(post_shutdown)
 	
 	logger.info("Bot 启动中……")
 	print("Bot 启动中……")
