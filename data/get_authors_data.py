@@ -4,7 +4,7 @@ from infra.files import read_json_sync
 from infra.http import download_json_sync, get_json_sync
 from sources.linpx.config import HEADERS
 from sources.linpx.urls import url_fav_user_data
-from storage.authors import ListManager
+from storage.authors_list import ListManager
 from utils.timer import timer
 
 
