@@ -9,6 +9,12 @@ from telegram.ext import ContextTypes
 
 from handlers.telegram import reply
 from handlers.callbacks.apply import apply_furry, apply_furry_confirm
+from handlers.callbacks.blacklist import (
+	blacklist_approve,
+	blacklist_reject,
+	request_blacklist,
+	request_blacklist_confirm,
+)
 from handlers.callbacks.review import apply_approve, apply_reject
 from handlers.callbacks.download import download
 from handlers.callbacks.share import share_private, share_public, share_reject
@@ -35,6 +41,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		"ignore",
 		"not_furry",
 		"nfa",
+		"afn",
+		"abn",
 	}:
 		try:
 			await query.delete_message()
@@ -52,9 +60,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		# 申请兽人作者：af 告知后果，afy 确认提交
 		"af": apply_furry,
 		"afy": apply_furry_confirm,
+		# 作者申请下架：ab 告知后果，aby 受理并回材料清单
+		"ab": request_blacklist,
+		"aby": request_blacklist_confirm,
 		# 中转频道核验：afa 通过，afr 拒绝；拉黑不走核验入口（见 docs/02 第 4 节）
 		"afa": apply_approve,
 		"afr": apply_reject,
+		# 中转频道核验作者下架申请：ablock 拉黑，abdeny 拒绝
+		"ablock": blacklist_approve,
+		"abdeny": blacklist_reject,
 		# 分享
 		"snp": share_public,
 		"sna": share_private,

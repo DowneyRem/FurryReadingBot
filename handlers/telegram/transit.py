@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import TRANSIT_CHANNEL
-from keyboards import review_author_keyboard
+from keyboards import blacklist_review_keyboard, review_author_keyboard
 from utils.json import JsonDict
 
 
@@ -48,4 +48,42 @@ async def send_to_transit(
 		return True
 	except Exception:
 		logger.exception("申请 %s 的核验消息发送失败", record.author_id)
+		return False
+
+
+def blacklist_caption(record: JsonDict) -> str:
+	"""作者下架申请的核验卡片文案。"""
+	message = [
+		"#作者申请下架",
+		f"👤 作者：{record.author_name}（#a{record.author_id}）",
+		f"🏡 主页：{record.author_url}",
+		f"🈸 申请人：{record.user_name}（#u{record.user_id}）",
+		f"🔢 申请次数：{record.count or 1}",
+		"",
+		"🧾 材料：作者后台截图（见附图）",
+		"请确认截图确实是该作者的账号，再决定是否拉黑",
+	]
+	return "\n".join(message)
+
+
+async def send_blacklist_card(
+		context: ContextTypes.DEFAULT_TYPE, record: JsonDict) -> bool:
+	"""把作者下架申请（含截图）送进中转频道。"""
+	if not TRANSIT_CHANNEL:
+		logger.warning("未配置中转频道，下架申请 %s 无法送审", record.author_id)
+		return False
+	if not record.photo_file_id:
+		logger.warning("下架申请 %s 没有截图", record.author_id)
+		return False
+
+	try:
+		await context.bot.send_photo(
+			chat_id=TRANSIT_CHANNEL,
+			photo=record.photo_file_id,
+			caption=blacklist_caption(record)[:1024],
+			reply_markup=blacklist_review_keyboard(record.author_id),
+		)
+		return True
+	except Exception:
+		logger.exception("下架申请 %s 的核验卡片发送失败", record.author_id)
 		return False

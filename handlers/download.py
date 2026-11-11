@@ -56,7 +56,9 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		]
 		await message.reply_text(
 			text="\n".join(text),
-			reply_markup=apply_author_keyboard(offer.author_url),
+			# 下架入口只在作者主页链接上出现
+			reply_markup=apply_author_keyboard(
+				offer.author_url, show_blacklist=offer.kind == "author"),
 		)
 		return
 
