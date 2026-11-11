@@ -14,8 +14,8 @@ from typing import Awaitable, Callable, Literal
 
 from sources import fetch as sources_fetch
 from policy.author import AuthorPolicy
+from storage import ListManager, get_lists
 from storage.applications import ApplicationStore
-from storage.author_list import ListManager
 from utils.json import JsonDict
 from utils.links import get_id
 
@@ -102,7 +102,7 @@ class ApplyService:
 	@property
 	def list_manager(self) -> ListManager:
 		if self._list_manager is None:
-			self._list_manager = ListManager()
+			self._list_manager = get_lists()
 		return self._list_manager
 
 

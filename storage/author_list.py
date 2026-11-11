@@ -117,3 +117,20 @@ class ListManager:
 
 	def remove_blacklist(self, author_id: str | int) -> bool:
 		return self.blacklist.remove(author_id)
+
+
+_default_lists: ListManager | None = None
+
+
+def get_lists() -> ListManager:
+	"""进程内共享的名单管理器。
+
+	三份名单被策略、申请、下载、审核四处同时使用。
+	各建一个实例也能跑（``_maybe_reload`` 会按 mtime 重新加载），
+	但「重新加载 → 全量重写」之间没有文件锁，两个实例交错写入会丢记录；
+	共用同一个实例就没有这个窗口。
+	"""
+	global _default_lists
+	if _default_lists is None:
+		_default_lists = ListManager()
+	return _default_lists

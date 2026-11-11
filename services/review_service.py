@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from services.apply_service import get_applications
+from storage import ListManager, get_lists
 from storage.applications import ApplicationStore
-from storage.author_list import ListManager
 from utils.json import JsonDict
 
 
@@ -60,7 +60,7 @@ class ReviewService:
 	@property
 	def list_manager(self) -> ListManager:
 		if self._list_manager is None:
-			self._list_manager = ListManager()
+			self._list_manager = get_lists()
 		return self._list_manager
 
 

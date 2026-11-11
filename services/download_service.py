@@ -22,7 +22,7 @@ from sources import (
 from sources.base import Author, Novel, NovelSource, Series
 from infra.files import remove_file
 from policy.author import AuthorPolicy
-from storage.author_list import ListManager
+from storage import ListManager, get_lists
 from storage.file_cache import FileCacheStore, get_default_cache
 from utils.json import JsonDict
 from utils.links import get_id, get_url
@@ -156,7 +156,7 @@ class DownloadService:
 	@property
 	def list_manager(self) -> ListManager:
 		if self._list_manager is None:
-			self._list_manager = ListManager()
+			self._list_manager = get_lists()
 		return self._list_manager
 
 

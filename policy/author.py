@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from storage.author_list import ListManager
+from storage import ListManager, get_lists
 
 
 AuthorStatus = Literal["blacklisted", "furry", "unknown"]
@@ -56,7 +56,7 @@ class AuthorPolicy:
 	@property
 	def list_manager(self) -> ListManager:
 		if self._list_manager is None:
-			self._list_manager = ListManager()
+			self._list_manager = get_lists()
 		return self._list_manager
 
 
