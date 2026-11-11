@@ -14,7 +14,7 @@ import pytest
 
 from services.share_service import ShareRequest, ShareService
 from storage.file_cache import FileCacheStore
-from storage.share_record import ShareRecordStore
+from storage.share_records import ShareRecordStore
 
 
 def run(coro):

@@ -16,7 +16,7 @@ from services.apply_service import (
 	ApplyService,
 	ApplyInvalidLinkError,
 )
-from storage.application import ApplicationStore
+from storage.applications import ApplicationStore
 
 
 AUTHOR_LINK = "https://linpx.ink/pixiv/user/42"

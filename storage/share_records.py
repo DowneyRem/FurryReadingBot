@@ -1,13 +1,14 @@
+"""分享记录：按 kind:id 记录分享情况，支持冷却窗口与 TTL，热加载。"""
+
 from __future__ import annotations
 
-import json
-import threading
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
-from storage.utils import parse_iso, utc_now, utc_now_iso
+from storage.json_store import JsonStore
 from utils.json import JsonDict
+from utils.time import parse_iso, utc_now
 
 
 def _as_id_list(value: str | int | Iterable[str | int] | None) -> list[str]:
@@ -18,19 +19,13 @@ def _as_id_list(value: str | int | Iterable[str | int] | None) -> list[str]:
 	return [str(v) for v in value]
 
 
-class ShareRecordStore:
-	"""分享记录：按 kind:id 记录分享情况，支持冷却窗口与 TTL，热加载。
+class ShareRecordStore(JsonStore):
+	"""分享记录：冷却窗口与记录保留时间（TTL）相互独立。"""
 
-	与 FileCacheStore 的区别：
-	  - key 是 "{kind}:{item_id}"，不含 file_type，同一作品的 txt / zip 共用一条记录；
-	  - 冷却窗口（cooldown）可配置，记录保留时间（ttl）固定为 DEFAULT_TTL_DAYS，互不影响；
-	  - 记录里保留分享者 / 频道 / 次数，便于统计与审计。
-	"""
-	
+	DATA_KEY = "shares"
 	DEFAULT_COOLDOWN_DAYS = 7
 	# 记录保留时间写死在代码里，不提供配置入口
 	DEFAULT_TTL_DAYS = 30
-
 
 	def __init__(
 		self,
@@ -39,29 +34,14 @@ class ShareRecordStore:
 	) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "share_records.json"
-		self.path = path
 		self.cooldown_days = (
 			cooldown_days if cooldown_days is not None else self.DEFAULT_COOLDOWN_DAYS
 		)
-		self._lock = threading.RLock()
-		self._mtime: float = 0.0
-		self._shares: JsonDict = JsonDict()
-		self.path.parent.mkdir(parents=True, exist_ok=True)
-		if not self.path.exists():
-			self._write_empty()
-		self.reload(force=True)
+		super().__init__(path)
 
-
-	def _write_empty(self) -> None:
-		payload = JsonDict(updated_at=utc_now_iso(), shares=JsonDict())
-		self.path.write_text(
-			json.dumps(payload, ensure_ascii=False, indent=4),
-			encoding="utf-8",
-		)
-
-
-	@staticmethod
-	def _normalize(info: dict) -> JsonDict:
+	def _normalize(self, info: Any) -> JsonDict | None:
+		if not isinstance(info, dict):
+			return None
 		return JsonDict(
 			kind=str(info.get("kind") or ""),
 			item_id=str(info.get("item_id") or ""),
@@ -77,77 +57,34 @@ class ShareRecordStore:
 			public=bool(info.get("public", True)),
 		)
 
-
-	def reload(self, force: bool = False) -> bool:
-		with self._lock:
-			if not self.path.exists():
-				self._write_empty()
-				return True
-			mtime = self.path.stat().st_mtime
-			if not force and mtime == self._mtime:
-				return False
-			data = JsonDict.from_obj(json.loads(self.path.read_text(encoding="utf-8")))
-			raw = data.shares or JsonDict()
-			shares = JsonDict()
-			for key, info in raw.items():
-				key = str(key)
-				if isinstance(info, dict):
-					shares[key] = self._normalize(info)
-			self._shares = shares
-			self._mtime = mtime
-			self._prune()
-			return True
-
-
-	def _maybe_reload(self) -> None:
-		if self.path.exists() and self.path.stat().st_mtime != self._mtime:
-			self.reload(force=True)
-
-
-	def _persist(self) -> None:
-		self._prune()
-		payload = JsonDict(
-			updated_at=utc_now_iso(),
-			shares=JsonDict({k: self._shares[k] for k in sorted(self._shares.keys())}),
-		)
-		self.path.write_text(
-			json.dumps(payload, ensure_ascii=False, indent=4),
-			encoding="utf-8",
-		)
-		self._mtime = self.path.stat().st_mtime
-
-
 	def _prune(self) -> None:
 		"""丢弃超过保留时间的记录，避免文件无限增长。"""
 		now = utc_now()
 		expired = [
-			key for key, info in self._shares.items()
+			key for key, info in self._items.items()
 			if (exp := parse_iso(info.expires_at)) is not None and now >= exp
 		]
 		for key in expired:
-			del self._shares[key]
-
+			del self._items[key]
 
 	@staticmethod
 	def make_key(kind: str, item_id: str | int) -> str:
 		return f"{kind}:{item_id}"
-
 
 	def get(self, key: str) -> JsonDict | None:
 		"""返回未过期的分享记录，没有则返回 None。"""
 		self._maybe_reload()
 		with self._lock:
 			k = str(key)
-			info = self._shares.get(k)
+			info = self._items.get(k)
 			if not info:
 				return None
 			exp = parse_iso(info.expires_at)
 			if exp is not None and utc_now() >= exp:
-				del self._shares[k]
+				del self._items[k]
 				self._persist()
 				return None
 			return info
-
 
 	def remaining(self, key: str, *, cooldown_days: float | None = None) -> float:
 		"""距离冷却结束还剩多少秒；0 表示当前可以分享。"""
@@ -161,10 +98,8 @@ class ShareRecordStore:
 		left = (last + timedelta(days=days) - utc_now()).total_seconds()
 		return max(0.0, left)
 
-
 	def is_limited(self, key: str, *, cooldown_days: float | None = None) -> bool:
 		return self.remaining(key, cooldown_days=cooldown_days) > 0
-
 
 	def record(
 		self,
@@ -184,8 +119,8 @@ class ShareRecordStore:
 		with self._lock:
 			self._maybe_reload()
 			k = str(key)
-			prev = self._shares.get(k) or JsonDict()
-			self._shares[k] = JsonDict(
+			prev = self._items.get(k) or JsonDict()
+			self._items[k] = JsonDict(
 				kind=str(kind or prev.kind or ""),
 				item_id=str(item_id or prev.item_id or ""),
 				title=str(title or prev.title or ""),
@@ -200,24 +135,21 @@ class ShareRecordStore:
 				public=bool(public),
 			)
 			self._persist()
-			return self._shares[k]
-
+			return self._items[k]
 
 	def remove(self, key: str) -> bool:
 		with self._lock:
 			self._maybe_reload()
 			k = str(key)
-			if k not in self._shares:
+			if k not in self._items:
 				return False
-			del self._shares[k]
+			del self._items[k]
 			self._persist()
 			return True
-
 
 	def records(self) -> JsonDict:
 		"""返回全部有效记录的浅拷贝，便于统计 / 管理端展示。"""
 		self._maybe_reload()
 		with self._lock:
 			self._prune()
-			return JsonDict(dict(self._shares))
-
+			return JsonDict(dict(self._items))

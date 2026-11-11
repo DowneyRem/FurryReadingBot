@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Literal
 
 from sources import fetch as sources_fetch
-from storage.application import ApplicationStore
-from storage.list import ListManager
+from storage.applications import ApplicationStore
+from storage.authors import ListManager
 from utils.json import JsonDict
 from utils.links import get_id
 

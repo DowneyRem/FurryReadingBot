@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
-from storage.share_record import ShareRecordStore
+from storage.share_records import ShareRecordStore
 
 
 def _store(tmp_path, **kwargs) -> ShareRecordStore:

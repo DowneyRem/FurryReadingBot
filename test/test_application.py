@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from storage.application import ApplicationStore
+from storage.applications import ApplicationStore
 
 
 def _store(tmp_path) -> ApplicationStore:

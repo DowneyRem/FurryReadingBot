@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from services.apply_service import get_applications
-from storage.application import ApplicationStore
-from storage.list import ListManager
+from storage.applications import ApplicationStore
+from storage.authors import ListManager
 from utils.json import JsonDict
 
 

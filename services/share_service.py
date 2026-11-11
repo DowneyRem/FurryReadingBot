@@ -14,7 +14,7 @@ from typing import Awaitable, Callable, Literal
 
 from config import FURRY_READING, SHARE_COOLDOWN_DAYS, TEST_CHANNEL
 from storage.file_cache import FileCacheStore, get_default_cache
-from storage.share_record import ShareRecordStore
+from storage.share_records import ShareRecordStore
 from utils.json import JsonDict
 
 

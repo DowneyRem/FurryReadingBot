@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from services.review_service import ReviewService
-from storage.application import ApplicationStore
+from storage.applications import ApplicationStore
 
 
 AUTHOR_ID = "42"
