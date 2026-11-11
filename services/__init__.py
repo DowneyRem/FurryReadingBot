@@ -34,6 +34,11 @@ from services.share_service import (
 	ShareStatus,
 	get_share_records,
 )
+from services.takedown_service import (
+	TakedownDelete,
+	TakedownResult,
+	TakedownService,
+)
 
 __all__ = [
 	"ApplyError",
@@ -65,4 +70,8 @@ __all__ = [
 	"ShareService",
 	"ShareStatus",
 	"get_share_records",
+
+	"TakedownDelete",
+	"TakedownResult",
+	"TakedownService",
 ]
