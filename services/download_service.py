@@ -20,9 +20,9 @@ from sources import (
 	save as sources_save,
 )
 from sources.base import Author, Novel, NovelSource, Series
-from storage.file_async import remove_file
+from infra.files import remove_file
+from storage.authors import ListManager
 from storage.file_cache import FileCacheStore, get_default_cache
-from storage.list import ListManager
 from utils.json import JsonDict
 from utils.links import get_id, get_url
 

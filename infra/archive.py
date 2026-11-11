@@ -1,5 +1,12 @@
+"""压缩 / 解压：同步实现 + 异步包装（线程池执行）。
+
+原来 ``storage/zip.py`` 与 ``storage/zip_async.py`` 的职责合并到这里，
+业务侧统一使用模块底部的异步 API。
+"""
+
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Iterable
@@ -36,7 +43,7 @@ def _common_path(paths: list[Path | str]) -> Path:
 	return Path(os.path.commonpath([str(p) for p in paths]))
 
 
-def zip_files(
+def _zip_files(
 	paths: str | Path | list[str | Path],
 	*,
 	password: str = "",
@@ -85,7 +92,7 @@ def zip_files(
 	return out
 
 
-def zip_each_file(
+def _zip_each_file(
 	paths: str | Path | list[str | Path],
 	*,
 	password: str = "",
@@ -143,7 +150,7 @@ def zip_each_file(
 	return results
 
 
-def zip_folder(
+def _zip_folder(
 	folder: str | Path,
 	*,
 	password: str = "",
@@ -187,7 +194,7 @@ def zip_folder(
 	return out
 
 
-def zip_path(
+def _zip_path(
 	path: str | Path | list[str | Path],
 	*,
 	password: str = "",
@@ -212,18 +219,18 @@ def zip_path(
 	"""
 	if isinstance(path, (list, tuple)) or Path(path).is_file():
 		if each:
-			return zip_each_file(path, password=password, zip_dir=zippath, comment=comment, delete=delete)
-		return zip_files(path, password=password, zippath=zippath, comment=comment, delete=delete)
+			return _zip_each_file(path, password=password, zip_dir=zippath, comment=comment, delete=delete)
+		return _zip_files(path, password=password, zippath=zippath, comment=comment, delete=delete)
 
 	p = Path(path)
 	if p.is_dir():
-		return zip_folder(p, password=password, zippath=zippath, comment=comment, delete=delete)
+		return _zip_folder(p, password=password, zippath=zippath, comment=comment, delete=delete)
 	
 	logger.warning("无法压缩，不存在：%s", path)
 	return ""
 
 
-def unzip_file(
+def _unzip_file(
 	zippath: str | Path,
 	*,
 	password: str = "",
@@ -288,7 +295,7 @@ def unzip_file(
 				inner = extract_to / name
 				if nested and name.lower().endswith(".zip") and inner.is_file():
 					logger.info("解压内部 zip：%s", inner)
-					unzip_file(inner, password=password, nested=nested, delete=True)
+					_unzip_file(inner, password=password, nested=nested, delete=True)
 			logger.info("解压完成：%s", zippath)
 		except RuntimeError:
 			logger.error("密码【%s】错误，解压失败：%s", password, zippath)
@@ -299,7 +306,7 @@ def unzip_file(
 	return result
 
 
-def unzip_folder(
+def _unzip_folder(
 	folder: str | Path,
 	*,
 	password: str = "",
@@ -329,11 +336,11 @@ def unzip_folder(
 	last: Path | str = ""
 	for zp in zips:
 		logger.info("正在解压：%s", zp)
-		last = unzip_file(zp, password=password, dest=dest, nested=nested, delete=delete)
+		last = _unzip_file(zp, password=password, dest=dest, nested=nested, delete=delete)
 	return last
 
 
-def unzip_path(
+def _unzip_path(
 	path: str | Path,
 	*,
 	password: str = "",
@@ -356,8 +363,168 @@ def unzip_path(
 	"""
 	path = Path(path)
 	if zf.is_zipfile(path):
-		return unzip_file(path, password=password, dest=dest, nested=nested, delete=delete)
+		return _unzip_file(path, password=password, dest=dest, nested=nested, delete=delete)
 	if path.is_dir():
-		return unzip_folder(path, password=password, dest=dest, nested=nested, delete=delete)
+		return _unzip_folder(path, password=password, dest=dest, nested=nested, delete=delete)
 	logger.warning("%s 非 zip 文件，亦非含有 zip 的目录", path)
+	return ""
+
+
+# ----- 异步 API：业务代码统一使用以下函数 -----
+
+async def zip_files(
+	paths: str | Path | list[str | Path],
+	*,
+	password: str = "",
+	zippath: str | Path | None = None,
+	comment: str = "",
+	delete: bool = False,
+) -> Path:
+	"""异步压缩多个文件成单个 zip。"""
+	return await asyncio.to_thread(
+		_zip_files,
+		paths,
+		password=password,
+		zippath=zippath,
+		comment=comment,
+		delete=delete,
+	)
+
+
+async def zip_each_file(
+	paths: str | Path | list[str | Path],
+	*,
+	password: str = "",
+	zip_dir: str | Path | None = None,
+	comment: str = "",
+	delete: bool = False,
+) -> list[Path]:
+	"""异步把每个文件分别压缩为独立的「文件名.zip」。"""
+	return await asyncio.to_thread(
+		_zip_each_file,
+		paths,
+		password=password,
+		zip_dir=zip_dir,
+		comment=comment,
+		delete=delete,
+	)
+
+
+async def zip_folder(
+	folder: str | Path,
+	*,
+	password: str = "",
+	zippath: str | Path | None = None,
+	comment: str = "",
+	delete: bool = False,
+) -> Path:
+	"""异步压缩文件夹及其子文件。"""
+	return await asyncio.to_thread(
+		_zip_folder,
+		folder,
+		password=password,
+		zippath=zippath,
+		comment=comment,
+		delete=delete,
+	)
+
+
+async def zip_path(
+	path: str | Path | list[str | Path],
+	*,
+	password: str = "",
+	zippath: str | Path | None = None,
+	comment: str = "",
+	delete: bool = False,
+	each: bool = False,
+) -> Path | list[Path] | str:
+	"""异步压缩传入的文件或文件夹。"""
+	return await asyncio.to_thread(
+		_zip_path,
+		path,
+		password=password,
+		zippath=zippath,
+		comment=comment,
+		delete=delete,
+		each=each,
+	)
+
+
+async def unzip_file(
+	zippath: str | Path,
+	*,
+	password: str = "",
+	dest: str | Path | None = None,
+	nested: bool = True,
+	delete: bool = False,
+) -> Path:
+	"""异步解压单个 zip。"""
+	return await asyncio.to_thread(
+		_unzip_file,
+		zippath,
+		password=password,
+		dest=dest,
+		nested=nested,
+		delete=delete,
+	)
+
+
+async def unzip_folder(
+	folder: str | Path,
+	*,
+	password: str = "",
+	dest: str | Path | None = None,
+	nested: bool = False,
+	delete: bool = False,
+	max_concurrency: int = 4,
+) -> Path | str:
+	"""异步解压目录下所有 zip；多个 zip 在线程池中有限并发。"""
+	folder_p = Path(folder)
+	zips = sorted(folder_p.rglob("*.zip"))
+	if not zips:
+		logger.info("%s 目录下无 zip 文件", folder_p)
+		return ""
+
+	sem = asyncio.Semaphore(max(1, max_concurrency))
+
+	async def _one(zp: Path) -> Path:
+		async with sem:
+			logger.info("正在解压：%s", zp)
+			return await unzip_file(
+				zp, password=password, dest=dest, nested=nested, delete=delete
+			)
+
+	results = await asyncio.gather(
+		*[_one(zp) for zp in zips],
+		return_exceptions=True,
+	)
+
+	last: Path | str = ""
+	for zp, result in zip(zips, results):
+		if isinstance(result, Exception):
+			logger.error("解压失败：%s，原因：%s", zp, result)
+			continue
+		last = result
+	return last
+
+
+async def unzip_path(
+	path: str | Path,
+	*,
+	password: str = "",
+	dest: str | Path | None = None,
+	nested: bool = False,
+	delete: bool = False,
+) -> Path | str:
+	"""异步智能解压：zip 文件则解压它，目录则解压其下所有 zip。"""
+	path_p = Path(path)
+	if await asyncio.to_thread(zf.is_zipfile, path_p):
+		return await unzip_file(
+			path_p, password=password, dest=dest, nested=nested, delete=delete
+		)
+	if path_p.is_dir():
+		return await unzip_folder(
+			path_p, password=password, dest=dest, nested=nested, delete=delete
+		)
+	logger.warning("%s 非 zip 文件，亦非含有 zip 的目录", path_p)
 	return ""

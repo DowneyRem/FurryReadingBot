@@ -1,15 +1,16 @@
 from pathlib import Path
 
-from storage.file import download_json, read_json, save_json, get_json
-from storage.list import ListManager
-from sources.linpx.urls import url_fav_user_data
+from infra.files import read_json_sync
+from infra.http import download_json_sync, get_json_sync
 from sources.linpx.config import HEADERS
+from sources.linpx.urls import url_fav_user_data
+from storage.authors import ListManager
 from utils.timer import timer
 
 
 def import_linpx_authors() -> None:
 	path = Path(__file__).parent.resolve() / "linpx.json"
-	data = read_json(path)
+	data = read_json_sync(path)
 	print(f"共获取 {len(data)} 个推荐作者")
 	
 	li = []
@@ -25,7 +26,7 @@ def import_linpx_authors() -> None:
 
 
 def import_linpx_authors_online() -> None:
-	data = get_json(url_fav_user_data(), headers=HEADERS)
+	data = get_json_sync(url_fav_user_data(), headers=HEADERS)
 	print(f"共获取 {len(data)} 个推荐作者")
 	
 	li = []
@@ -42,7 +43,7 @@ def import_linpx_authors_online() -> None:
 
 @timer
 def main():
-	# download_json(url_fav_user_data(), "linpx.json", headers = HEADERS)
+	# download_json_sync(url_fav_user_data(), "linpx.json", headers = HEADERS)
 	# import_linpx_authors()
 	# 或者直接在线导入：
 	import_linpx_authors_online()

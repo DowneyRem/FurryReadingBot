@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from storage.file_async import get_json
+from infra.http import get_json
 from sources.linpx.urls import url_novel_data, url_series_data, url_author_data
 from sources.linpx.config import HEADERS
 from utils.json import JsonDict

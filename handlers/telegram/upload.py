@@ -9,7 +9,7 @@ from typing import Iterable
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from storage.file_async import remove_file
+from infra.files import remove_file
 from storage.file_cache import FileCacheStore, get_default_cache
 
 

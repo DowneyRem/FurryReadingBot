@@ -11,6 +11,7 @@ from telegram.ext import (
 
 from handlers import *
 from config import *
+from infra.http import close_http
 
 logging.basicConfig(
 	format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -21,6 +22,11 @@ logger = logging.getLogger(__name__)
 
 async def error_handler(update: object, context) -> None:
 	logger.exception("更新处理出错: %s", context.error)
+
+
+async def post_shutdown(application: Application) -> None:
+	"""退出时关闭复用的 aiohttp 会话。"""
+	await close_http()
 	
 	
 def main() -> None:
@@ -44,6 +50,7 @@ def main() -> None:
 	
 	app.add_handler(CallbackQueryHandler(button_callback))
 	app.add_error_handler(error_handler)
+	app.post_shutdown(post_shutdown)
 	
 	logger.info("Bot 启动中……")
 	print("Bot 启动中……")

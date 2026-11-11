@@ -12,9 +12,8 @@ from sources.linpx.errors import LinpxParseError
 from sources.linpx.parse import json_to_novel, json_to_series, json_to_author
 from sources.linpx.config import NOVEL_PATTERN, SERIES_PATTERN, AUTHOR_PATTERN
 
-from storage.file import safe_filename
-from storage.file_async import save_text
-from storage.zip_async import zip_path
+from infra.archive import zip_path
+from infra.files import safe_filename, save_text
 from utils.timer import timer
 
 
