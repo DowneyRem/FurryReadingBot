@@ -8,6 +8,13 @@ from services.apply_service import (
 	ApplySubmission,
 	get_applications,
 )
+from services.blacklist_service import (
+	BlacklistDecision,
+	BlacklistRequest,
+	BlacklistReview,
+	BlacklistService,
+	MaterialSubmission,
+)
 from services.download_service import (
 	AuthorAccess,
 	DownloadArtifact,
@@ -47,6 +54,12 @@ __all__ = [
 	"ApplyService",
 	"ApplySubmission",
 	"get_applications",
+
+	"BlacklistDecision",
+	"BlacklistRequest",
+	"BlacklistReview",
+	"BlacklistService",
+	"MaterialSubmission",
 	
 	"AuthorAccess",
 	"DownloadArtifact",
