@@ -1,7 +1,7 @@
 """storage 装配：名单单例 + 各使用方的默认注入。
 
-背景见 `docs/06-未来架构.md` 第 3.2 节：不新建 `repositories/`，
-`storage/` 就是仓储层；名单由 `get_lists()` 提供进程内唯一实例。
+`storage/` 是唯一的持久化层：只有它读写 JSON，上层只调语义方法。
+名单由 `get_lists()` 提供进程内唯一实例，策略 / 申请 / 下载 / 审核四处共用。
 
 运行：.venv\\Scripts\\python.exe -m pytest test/test_storage_wiring.py -q
 """

@@ -1,6 +1,6 @@
 """JSON 文件存储基类：原子写、mtime 热加载、进程内锁、prune 钩子。
 
-四个业务仓储（authors / applications / file_cache / share_records）
+四个业务 Store（authors / applications / file_cache / share_records）
 只需要声明数据键、实现 ``_normalize``（必要时 ``_prune``），
 其余读写与并发细节全部复用这里。
 """
