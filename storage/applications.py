@@ -21,7 +21,7 @@ class ApplicationStore(JsonStore):
 
 	def __init__(self, path: Path | None = None) -> None:
 		if path is None:
-			path = Path(__file__).parent.parent.resolve() / "data" / "apply_authors.json"
+			path = Path(__file__).parent.parent.resolve() / "data" / "furry_request.json"
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:

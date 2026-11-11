@@ -5,7 +5,7 @@ files
 *.zip
 data/files_cache.json
 data/share_records.json
-data/apply_authors.json
+data/furry_request.json
 
 # Python
 __pycache__/

@@ -61,7 +61,7 @@ def make_service(
 	fetch_name: str = "作者",
 	fetch_calls: list[str] | None = None,
 ):
-	store = ApplicationStore(path=tmp_path / "apply_authors.json")
+	store = ApplicationStore(path=tmp_path / "furry_request.json")
 
 	async def fake_fetch(link: str) -> FakeAuthor:
 		if fetch_calls is not None:

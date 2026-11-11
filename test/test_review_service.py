@@ -32,7 +32,7 @@ class FailingFurryListManager(FakeListManager):
 
 
 def make_service(tmp_path, manager=None):
-	store = ApplicationStore(path=tmp_path / "apply_authors.json")
+	store = ApplicationStore(path=tmp_path / "furry_request.json")
 	manager = manager or FakeListManager()
 	service = ReviewService(applications=store, list_manager=manager)
 	return service, store, manager
