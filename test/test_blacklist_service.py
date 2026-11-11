@@ -54,7 +54,7 @@ class FailingListManager(FakeListManager):
 
 
 def make_service(tmp_path, manager=None):
-	store = BlacklistRequestStore(path=tmp_path / "blacklist_requests.json")
+	store = BlacklistRequestStore(path=tmp_path / "black_request.json")
 	manager = manager or FakeListManager()
 	service = BlacklistService(store, list_manager=manager)
 	return service, store, manager

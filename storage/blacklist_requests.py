@@ -38,7 +38,7 @@ class BlacklistRequestStore(JsonStore):
 		if path is None:
 			path = (
 				Path(__file__).parent.parent.resolve()
-				/ "data" / "blacklist_requests.json"
+				/ "data" / "black_request.json"
 			)
 		super().__init__(path)
 
