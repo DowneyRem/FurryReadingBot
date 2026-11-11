@@ -43,6 +43,12 @@ Copy-Item .env.example .env
 
 当前 `test/test_linpx.py` 已过期，运行时用 `--ignore` 排除：实测状态见 [01 文档](docs/01-功能清单与缺口.md) 第 1 节。
 
+## 代码风格
+
+- **缩进一律 Tab（Tab = 4 列）**：由 `.editorconfig` 约定（含 PyCharm 专有的 `ij_continuation_indent_size` / `ij_smart_tabs`），由 `test/test_style.py` 守门（空格缩进直接失败）；`.idea/` 不提交。说明见 [04 · 如何改代码](docs/04-如何改代码.md) 第 5.4 节。
+- 编码 UTF-8，行尾 LF（`core.autocrlf=true`，仓库内存 LF）。
+- `__pycache__/`、`*.py[cod]` 已在 `.gitignore`，无需手工清理。
+
 ## 目录
 
 ```text

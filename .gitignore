@@ -6,3 +6,8 @@ files
 data/files_cache.json
 data/share_records.json
 data/apply_authors.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache
