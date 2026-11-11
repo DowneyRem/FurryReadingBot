@@ -1,7 +1,7 @@
 """用户侧申请 callback：af（告知后果 + 二次确认）/ afy（提交申请）。
 
 业务规则在 services.apply_service，管理核验在 handlers.callbacks.review，
-公共 Telegram 工具在 handlers.callbacks.common。
+公共 Telegram 工具在 handlers.telegram。
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import reply, send_to_transit
+from handlers.telegram import reply, send_to_transit
 from keyboards import confirm_author_keyboard
 from services import ApplyInvalidLinkError, ApplyService
 

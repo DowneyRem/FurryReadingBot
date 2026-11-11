@@ -11,7 +11,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import reply
+from handlers.telegram import reply
 from services import ReviewDecision, ReviewResult, ReviewService
 from utils.json import JsonDict
 

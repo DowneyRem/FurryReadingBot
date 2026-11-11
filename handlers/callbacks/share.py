@@ -6,8 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import FURRY_READING
-from handlers.callbacks.common import reply
-from handlers.callbacks.upload import upload_file
+from handlers.telegram import reply, upload_file
 from services import ShareRequest, ShareService
 
 

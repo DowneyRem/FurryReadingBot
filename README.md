@@ -43,13 +43,14 @@ Copy-Item .env.example .env
 ## 目录
 
 ```text
-bot.py            # 入口
-handlers/         # 命令、消息、回调
-services/         # 下载 / 申请 / 审核 / 分享业务编排
-sources/          # Linpx 来源适配
-storage/          # 名单、申请、缓存、文件、zip
-utils/            # 通用工具
-data/             # 运行数据（部分 gitignore）
-files/novels/     # 下载临时目录（gitignore）
-test/             # pytest 用例
+bot.py             # 入口
+handlers/          # 命令、消息、回调
+handlers/telegram/ # 回复/上传/中转适配
+services/          # 下载 / 申请 / 审核 / 分享业务编排
+sources/           # Linpx 来源适配
+storage/           # 名单、申请、缓存、文件、zip
+utils/             # 通用工具
+data/              # 运行数据（部分 gitignore）
+files/novels/      # 下载临时目录（gitignore）
+test/              # pytest 用例
 ```

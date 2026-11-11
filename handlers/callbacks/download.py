@@ -7,8 +7,7 @@ import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import reply
-from handlers.callbacks.upload import upload_file
+from handlers.telegram import reply, upload_file
 from keyboards import down_series_keyboard, share_novel_keyboard
 from services import (
 	DownloadArtifact,

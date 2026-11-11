@@ -7,7 +7,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import reply
+from handlers.telegram import reply
 from handlers.callbacks.apply import apply_furry, apply_furry_confirm
 from handlers.callbacks.review import apply_approve, apply_blacklist, apply_reject
 from handlers.callbacks.download import download

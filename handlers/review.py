@@ -7,7 +7,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from handlers.callbacks.common import send_to_transit
+from handlers.telegram import send_to_transit
 from services import ApplyService
 
 
