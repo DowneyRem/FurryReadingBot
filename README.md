@@ -57,11 +57,12 @@ Copy-Item .env.example .env
 
 ```text
 FurryReadingBot/
-├─ bot.py                  # 入口：装配 Application，注册 5 个命令 / 2 个消息 / 1 个 callback
+├─ bot.py                  # 入口：装配 Application，注册 6 个命令 / 2 个消息 / 1 个 callback
 ├─ config.py               # 从 .env 读配置（频道、分享模式、冷却、缓存 TTL）
 ├─ keyboards.py            # 全部 InlineKeyboardMarkup（纯展示）
 ├─ handlers/               # 接入层：命令、私聊消息、图片
 │  ├─ start.py             #   /start /help /ping
+│  ├─ author.py            #   /black 申请下架：作者 ID / 主页链接 → 确认键盘
 │  ├─ download.py          #   /down 与私聊链接：解析 → 权限 → 出下载菜单
 │  ├─ review.py            #   /review 重推待审申请（仅中转频道管理员）
 │  ├─ media.py             #   私聊截图：作者下架材料
