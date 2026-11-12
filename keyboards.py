@@ -48,7 +48,7 @@ def review_black_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[
 			[
-				InlineKeyboardButton(text="🚫 拉黑", callback_data=f"ablock;{author_id}"),
+				InlineKeyboardButton(text="🈲 下架", callback_data=f"ablock;{author_id}"),
 				InlineKeyboardButton(text="❌ 拒绝", callback_data=f"abdeny;{author_id}"),
 				InlineKeyboardButton(text="🏡 主页", url=url_author(author_id)),
 			],

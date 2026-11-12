@@ -57,9 +57,9 @@ def takedown_notice(takedown: TakedownResult | None) -> str:
 	"""下架结果摘要；None 表示这次没执行下架，不占用回执篇幅。"""
 	if takedown is None:
 		return ""
-	if takedown.total == 0:
-		return "🗂 频道里没有该作者的历史分享"
-	lines = [f"🗑 已删除历史分享 {takedown.deleted} 条"]
+	# if takedown.total == 0:
+	# 	return "🔊 频道里没有该作者的历史分享"
+	lines = [f"🗑️ 已删除：{takedown.deleted} 条历史分享"]
 	if takedown.skipped:
 		lines.append(f"⚠️ {takedown.skipped} 条旧记录没有消息 ID，需手工处理")
 	if takedown.failed:
@@ -74,10 +74,10 @@ def review_receipt(
 	"""中转频道的核验回执。"""
 	text = []
 	if result.status == "approved":
-		text.append("#作者下架申请已拉黑")
-		text.append(f"🚫 已拉黑：{result.author_name}（#a{result.author_id}）")
+		text.append("🈲 #作者下架申请已通过")
+		text.append(f"🚫 已下架：{result.author_name}（#a{result.author_id}）")
 	else:
-		text.append("#作者下架申请已拒绝")
+		text.append("🈲 #作者下架申请已拒绝")
 		text.append(f"❌ 已拒绝：{result.author_name}（#a{result.author_id}）")
 
 	notice = takedown_notice(takedown)
@@ -85,8 +85,8 @@ def review_receipt(
 		text.append(notice)
 	record = result.record
 	if record is not None:
-		text.append(f"🈸 申请：{record.user_name}（#u{record.user_id}）")
-	text.append(f"👤 审核：{user.first_name} {user.last_name}（#u{user.id}）")
+		text.append(f"🈸 申请人：{record.user_name}（#u{record.user_id}）")
+	text.append(f"👤 审核人：{user.first_name} {user.last_name}（#u{user.id}）")
 	return "\n".join(text)
 
 
@@ -96,13 +96,13 @@ def applicant_text(
 	"""私聊通知申请人的文案。"""
 	message = []
 	if result.status == "approved":
-		message.extend(["✅ 你提交的小说下架申请已通过", ""])
+		message.extend(["✅ 你提交的下架小说申请已通过", ""])
 		message.append(f"作者：{result.author_name}（#a{result.author_id}）")
 		message.append(f"该作者已加入黑名单，之后不会再被下载或分享")
 		if takedown is not None and takedown.deleted:
 			message.append(f"频道中的历史分享已删除 {takedown.deleted} 条")
 	else:
-		message.extend(["❌ 你提交的小说下架申请未通过", ""])
+		message.extend(["❌ 你提交的下架小说申请未通过", ""])
 		message.append(f"作者：{result.author_name}（#a{result.author_id}）")
 		message.append(f"如有疑问，可以联系管理员")
 	return "\n".join(message)
@@ -166,7 +166,7 @@ async def request_blacklist_confirm(
 	if result.status == "pending_review":
 		await edit_or_reply(
 			update, context,
-			f"作者 {result.author_name} 的下架申请已在核验中\n请等待管理员处理。")
+			f"作者 {result.author_name}（#a{result.author_id}）的下架申请已在核验中\n请等待管理员处理。")
 		return
 
 	await edit_or_reply(
