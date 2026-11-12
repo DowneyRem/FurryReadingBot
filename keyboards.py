@@ -58,7 +58,8 @@ def review_black_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 def down_novel_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
-			InlineKeyboardButton(text="📄 下载本章 txt", callback_data=f"dn;{link}"),
+			InlineKeyboardButton(text="📄 下载本章", callback_data=f"dn;{link}"),
+			InlineKeyboardButton(text="👤 查看作者", callback_data=f"sa;{link}"),
 			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
 		]]
 	)
@@ -69,20 +70,27 @@ def down_novel_series_keyboard(link: str) -> InlineKeyboardMarkup:
 		[[
 			InlineKeyboardButton(text="📒 下载系列 txt", callback_data=f"dst;{link}"),
 			InlineKeyboardButton(text="📚 下载系列 zip", callback_data=f"dsz;{link}"),
+			InlineKeyboardButton(text="🤖 自动选择", callback_data=f"ds;{link}"),
 		], [
-			InlineKeyboardButton(text="📄 下载本章 txt", callback_data=f"dn;{link}"),
+			InlineKeyboardButton(text="📄 下载本章", callback_data=f"dn;{link}"),
+			InlineKeyboardButton(text="👤 查看作者", callback_data=f"sa;{link}"),
 			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
 		]]
 	)
 
 
 def down_series_keyboard(link: str, auto: bool = True) -> InlineKeyboardMarkup:
-	buttons = []
+	buttons1 = [
+		InlineKeyboardButton(text="📒 下载系列 txt", callback_data=f"dst;{link}"),
+		InlineKeyboardButton(text="📚 下载系列 zip", callback_data=f"dsz;{link}")
+	]
 	if auto:
-		buttons.append(InlineKeyboardButton(text="🤖 自动选择", callback_data=f"ds;{link}"))
-	buttons.append(InlineKeyboardButton(text="📒 下载系列 txt", callback_data=f"dst;{link}"))
-	buttons.append(InlineKeyboardButton(text="📚 下载系列 zip", callback_data=f"dsz;{link}"))
-	return InlineKeyboardMarkup([buttons])
+		buttons1.append(InlineKeyboardButton(text="🤖 自动选择", callback_data=f"ds;{link}"))
+	buttons2 = [
+		InlineKeyboardButton(text="👤 查看作者", callback_data=f"sa;{link}"),
+	    InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore")
+	]
+	return InlineKeyboardMarkup([buttons1, buttons2])
 
 
 def down_author_keyboard(author_url: str, is_furry: bool=True) -> InlineKeyboardMarkup:
