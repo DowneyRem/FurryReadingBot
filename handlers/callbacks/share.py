@@ -104,15 +104,7 @@ async def share_private(
 
 async def share_reject(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
-		**kwargs) -> None:
-	query = update.callback_query
-	if query is not None:
-		await query.edit_message_reply_markup(reply_markup=None)
-
-
-async def share_reject(
-		update: Update, context: ContextTypes.DEFAULT_TYPE,
-		**kwargs) -> None:
+		*, data: str) -> None:
 	query = update.callback_query
 	if query is not None:
 		await query.edit_message_reply_markup(reply_markup=None)
