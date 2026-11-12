@@ -22,7 +22,7 @@ from services import (
 	BlacklistService,
 	DownloadService,
 )
-from storage.blacklist_requests import BlacklistRequestStore
+from storage.black_request import BlacklistRequestStore
 from utils.links import get_id
 
 

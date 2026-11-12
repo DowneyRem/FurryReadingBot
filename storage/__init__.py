@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from storage.author_list import ListManager, get_lists
-from storage.blacklist_requests import (
+from storage.black_request import (
 	BlacklistRequestStore,
 	get_blacklist_requests,
 )

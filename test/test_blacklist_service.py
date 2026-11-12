@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from services.blacklist_service import BlacklistService
-from storage.blacklist_requests import BlacklistRequestStore
+from storage.black_request import BlacklistRequestStore
 
 
 AUTHOR_ID = "42"

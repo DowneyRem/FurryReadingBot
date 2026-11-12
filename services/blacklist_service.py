@@ -15,7 +15,7 @@ from typing import Literal
 
 from policy.author import AuthorPolicy
 from storage import ListManager, get_lists
-from storage.blacklist_requests import (
+from storage.black_request import (
 	BlacklistRequestStore,
 	get_blacklist_requests,
 )

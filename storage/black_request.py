@@ -24,7 +24,7 @@ from utils.time import parse_iso, utc_now, utc_now_iso
 class BlacklistRequestStore(JsonStore):
 	"""作者下架申请记录，key 为 author_id。"""
 
-	DATA_KEY = "requests"
+	DATA_KEY = "black_request"
 
 	STATUS_MATERIAL = "pending_material"
 	STATUS_REVIEW = "pending_review"
