@@ -17,6 +17,7 @@ from handlers.callbacks.blacklist import (
 	request_blacklist_confirm,
 	review_blacklist,
 	review_receipt,
+	takedown_notice,
 )
 from policy.admin import AdminDecision
 from services.blacklist_service import (
@@ -24,6 +25,7 @@ from services.blacklist_service import (
 	BlacklistReview,
 	MaterialSubmission,
 )
+from services.takedown_service import TakedownResult
 from utils.json import JsonDict
 
 
@@ -99,7 +101,13 @@ async def _no_name() -> str:
 	return ""
 
 
-def patch_handler(monkeypatch, *, service=None, admin=True):
+def patch_handler(
+		monkeypatch, *,
+		service=None,
+		admin: bool = True,
+		takedown: TakedownResult | None = None,
+		takedown_error: Exception | None = None,
+):
 	service = service or FakeService()
 	monkeypatch.setattr(blacklist_handler, "BlacklistService", lambda: service)
 	monkeypatch.setattr(
@@ -109,6 +117,7 @@ def patch_handler(monkeypatch, *, service=None, admin=True):
 	replies: list[tuple[str, object]] = []
 	closed: list[str] = []
 	notified: list[tuple[JsonDict, str]] = []
+	takedowns: list[str] = []
 
 	async def fake_edit(update, context, text, *, reply_markup=None):
 		replies.append((text, reply_markup))
@@ -119,10 +128,19 @@ def patch_handler(monkeypatch, *, service=None, admin=True):
 	async def fake_notify(context, record, text):
 		notified.append((record, text))
 
+	async def fake_takedown(context, author_id):
+		takedowns.append(str(author_id))
+		if takedown_error is not None:
+			raise takedown_error
+		if takedown is not None:
+			return takedown
+		return TakedownResult(str(author_id), deleted=2)
+
 	monkeypatch.setattr(blacklist_handler, "edit_or_reply", fake_edit)
 	monkeypatch.setattr(blacklist_handler, "close_transit_message", fake_close)
 	monkeypatch.setattr(blacklist_handler, "notify_applicant", fake_notify)
-	return service, replies, closed, notified
+	monkeypatch.setattr(blacklist_handler, "takedown_author", fake_takedown)
+	return service, replies, closed, notified, takedowns
 
 
 def test_material_notice_contains_requirements() -> None:
@@ -142,8 +160,28 @@ def test_receipt_and_applicant_text() -> None:
 	assert "未通过" in applicant_text(rejected)
 
 
+def test_takedown_notice_variants() -> None:
+	assert takedown_notice(None) == ""
+	assert "没有该作者的历史分享" in takedown_notice(TakedownResult("42"))
+
+	partial = TakedownResult("42", deleted=2, skipped=1, failed=3)
+	notice = takedown_notice(partial)
+	assert "已删除历史分享 2 条" in notice
+	assert "1 条旧记录没有消息 ID" in notice
+	assert "3 条删除失败" in notice
+
+
+def test_receipt_reports_takedown() -> None:
+	approved = BlacklistReview("approved", "42", "作者", RECORD)
+	takedown = TakedownResult("42", deleted=2)
+
+	assert "已删除历史分享 2 条" in review_receipt(
+		approved, FakeUser(), takedown)
+	assert "历史分享已删除 2 条" in applicant_text(approved, takedown)
+
+
 def test_request_blacklist_shows_confirm(monkeypatch) -> None:
-	_, replies, _, _ = patch_handler(monkeypatch)
+	_, replies, _, _, _ = patch_handler(monkeypatch)
 
 	run(request_blacklist(
 		FakeUpdate(), FakeContext(), data=f"ab;{AUTHOR_URL}"))
@@ -157,7 +195,7 @@ def test_request_blacklist_shows_confirm(monkeypatch) -> None:
 
 
 def test_request_blacklist_bad_link(monkeypatch) -> None:
-	_, replies, _, _ = patch_handler(monkeypatch)
+	_, replies, _, _, _ = patch_handler(monkeypatch)
 
 	run(request_blacklist(FakeUpdate(), FakeContext(), data="ab;"))
 
@@ -165,7 +203,7 @@ def test_request_blacklist_bad_link(monkeypatch) -> None:
 
 
 def test_confirm_needs_material(monkeypatch) -> None:
-	service, replies, _, _ = patch_handler(
+	service, replies, _, _, _ = patch_handler(
 		monkeypatch,
 		service=FakeService(
 			request=BlacklistRequest("needs_material", "42", "作者")))
@@ -180,7 +218,7 @@ def test_confirm_needs_material(monkeypatch) -> None:
 
 
 def test_confirm_pending_review(monkeypatch) -> None:
-	_, replies, _, _ = patch_handler(
+	_, replies, _, _, _ = patch_handler(
 		monkeypatch,
 		service=FakeService(
 			request=BlacklistRequest("pending_review", "42", "作者")))
@@ -192,7 +230,7 @@ def test_confirm_pending_review(monkeypatch) -> None:
 
 
 def test_confirm_already_blacklisted(monkeypatch) -> None:
-	_, replies, _, _ = patch_handler(
+	_, replies, _, _, _ = patch_handler(
 		monkeypatch,
 		service=FakeService(
 			request=BlacklistRequest("already_blacklisted", "42", "作者")))
@@ -203,7 +241,8 @@ def test_confirm_already_blacklisted(monkeypatch) -> None:
 	assert "已停止分享" in replies[-1][0]
 
 def test_review_requires_admin(monkeypatch) -> None:
-	service, _, closed, notified = patch_handler(monkeypatch, admin=False)
+	service, _, closed, notified, takedowns = patch_handler(
+		monkeypatch, admin=False)
 
 	run(review_blacklist(
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
@@ -211,10 +250,11 @@ def test_review_requires_admin(monkeypatch) -> None:
 	assert service.calls == []
 	assert "仅中转频道管理员" in closed[0]
 	assert notified == []
+	assert takedowns == []
 
 
 def test_review_approve(monkeypatch) -> None:
-	service, _, closed, notified = patch_handler(
+	service, _, closed, notified, takedowns = patch_handler(
 		monkeypatch,
 		service=FakeService(
 			review=BlacklistReview("approved", "42", "作者", RECORD)))
@@ -223,13 +263,62 @@ def test_review_approve(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
 
 	assert service.calls == [("review", "42", "approve")]
+	# 拉黑后下架该作者在频道里的历史分享
+	assert takedowns == ["42"]
 	assert "已拉黑" in closed[0]
+	assert "已删除历史分享 2 条" in closed[0]
 	assert len(notified) == 1
 	assert "已通过" in notified[0][1]
+	assert "历史分享已删除 2 条" in notified[0][1]
+
+
+def test_review_approve_without_history(monkeypatch) -> None:
+	_, _, closed, _, _ = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			review=BlacklistReview("approved", "42", "作者", RECORD)),
+		takedown=TakedownResult("42"))
+
+	run(review_blacklist(
+		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
+
+	assert "频道里没有该作者的历史分享" in closed[0]
+
+
+def test_review_approve_reports_takedown_failures(monkeypatch) -> None:
+	_, _, closed, _, _ = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			review=BlacklistReview("approved", "42", "作者", RECORD)),
+		takedown=TakedownResult("42", deleted=1, skipped=1, failed=1))
+
+	run(review_blacklist(
+		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
+
+	assert "已删除历史分享 1 条" in closed[0]
+	assert "没有消息 ID" in closed[0]
+	assert "删除失败，记录已保留可重试" in closed[0]
+
+
+def test_review_approve_keeps_result_when_takedown_raises(monkeypatch) -> None:
+	"""下架抛异常不影响拉黑结果与申请人通知。"""
+	_, _, closed, notified, takedowns = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			review=BlacklistReview("approved", "42", "作者", RECORD)),
+		takedown_error=RuntimeError("delete failed"))
+
+	run(review_blacklist(
+		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
+
+	assert takedowns == ["42"]
+	assert "已拉黑" in closed[0]
+	assert "已删除历史分享" not in closed[0]
+	assert len(notified) == 1
 
 
 def test_review_reject(monkeypatch) -> None:
-	service, _, closed, notified = patch_handler(
+	service, _, closed, notified, takedowns = patch_handler(
 		monkeypatch,
 		service=FakeService(
 			review=BlacklistReview("rejected", "42", "作者", RECORD)))
@@ -238,18 +327,21 @@ def test_review_reject(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="abdeny;42", decision="reject"))
 
 	assert service.calls == [("review", "42", "reject")]
+	# 拒绝不进名单，也不动频道里的历史分享
+	assert takedowns == []
 	assert "作者下架申请已拒绝" in closed[0]
 	assert "未通过" in notified[0][1]
 
 
 def test_review_missing_and_already_processed(monkeypatch) -> None:
-	_, _, closed, notified = patch_handler(
+	_, _, closed, notified, takedowns = patch_handler(
 		monkeypatch, service=FakeService(review=BlacklistReview("missing", "42")))
 	run(review_blacklist(
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
 	assert "申请记录不存在" in closed[0]
+	assert takedowns == []
 
-	_, _, closed, notified = patch_handler(
+	_, _, closed, notified, takedowns = patch_handler(
 		monkeypatch,
 		service=FakeService(
 			review=BlacklistReview("already_processed", "42", "作者", RECORD)))
@@ -257,6 +349,7 @@ def test_review_missing_and_already_processed(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
 	assert "该申请已处理" in closed[0]
 	assert notified == []
+	assert takedowns == []
 
 
 def patch_media(monkeypatch, *, submission, sent=True):
