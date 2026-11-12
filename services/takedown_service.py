@@ -18,8 +18,7 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from services.share_service import get_share_records
-from storage.share_records import ShareRecordStore
+from storage.share_records import ShareRecordStore, get_share_records
 
 
 logger = logging.getLogger(__name__)

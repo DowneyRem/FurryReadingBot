@@ -122,3 +122,15 @@ class FurryRequestStore(JsonStore):
 		self._maybe_reload()
 		with self._lock:
 			return JsonDict(dict(self._items))
+
+
+_default_store: FurryRequestStore | None = None
+
+
+def get_furry_requests() -> FurryRequestStore:
+	"""进程内共享的兽人作者申请记录：申请与核验共用同一份数据。"""
+	global _default_store
+	if _default_store is None:
+		_default_store = FurryRequestStore()
+	return _default_store
+

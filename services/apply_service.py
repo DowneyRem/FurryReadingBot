@@ -15,7 +15,7 @@ from typing import Awaitable, Callable, Literal
 from sources import fetch as sources_fetch
 from policy.author import AuthorPolicy
 from storage import ListManager, get_lists
-from storage.furry_request import FurryRequestStore
+from storage.furry_request import FurryRequestStore, get_furry_requests
 from utils.json import JsonDict
 from utils.links import get_id
 
@@ -62,17 +62,6 @@ class ApplySubmission:
 
 
 TransitCallback = Callable[[JsonDict], Awaitable[bool]]
-
-
-_furry_requests: FurryRequestStore | None = None
-
-
-def get_furry_requests() -> FurryRequestStore:
-	"""申请记录是进程级单例，申请与核验共用同一份数据。"""
-	global _furry_requests
-	if _furry_requests is None:
-		_furry_requests = FurryRequestStore()
-	return _furry_requests
 
 
 class ApplyService:

@@ -23,7 +23,7 @@ from sources.base import Author, Novel, NovelSource, Series
 from infra.files import remove_file
 from policy.author import AuthorPolicy
 from storage import ListManager, get_lists
-from storage.file_cache import FileCacheStore, get_default_cache
+from storage.file_cache import FileCacheStore, get_file_cache
 from utils.json import JsonDict
 from utils.links import get_id, get_url
 
@@ -152,7 +152,7 @@ class DownloadService:
 	@property
 	def cache(self) -> FileCacheStore:
 		if self._cache is None:
-			self._cache = get_default_cache()
+			self._cache = get_file_cache()
 		return self._cache
 
 

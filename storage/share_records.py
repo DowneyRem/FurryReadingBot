@@ -377,3 +377,17 @@ class ShareRecordStore(JsonStore):
 			self._persist()
 			return True
 
+
+
+_default_store: ShareRecordStore | None = None
+
+
+def get_share_records() -> ShareRecordStore:
+	"""进程内共享的分享记录；冷却天数由 config 控制。"""
+	global _default_store
+	if _default_store is None:
+		from config import SHARE_COOLDOWN_DAYS
+
+		_default_store = ShareRecordStore(cooldown_days=SHARE_COOLDOWN_DAYS)
+	return _default_store
+

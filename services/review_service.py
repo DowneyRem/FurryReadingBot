@@ -11,9 +11,8 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
-from services.apply_service import get_furry_requests
 from storage import ListManager, get_lists
-from storage.furry_request import FurryRequestStore
+from storage.furry_request import FurryRequestStore, get_furry_requests
 from utils.json import JsonDict
 
 

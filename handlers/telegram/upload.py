@@ -11,7 +11,7 @@ from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from infra.files import remove_file
-from storage.file_cache import FileCacheStore, get_default_cache
+from storage.file_cache import FileCacheStore, get_file_cache
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class SentDocument:
 
 def get_cache() -> FileCacheStore:
 	"""兼容旧调用方：返回共享的 file_id 缓存。"""
-	return get_default_cache()
+	return get_file_cache()
 
 
 async def upload_file(

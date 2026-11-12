@@ -15,13 +15,12 @@ from typing import Awaitable, Callable, Literal, Mapping
 from config import (
 	FURRY_NOVELS,
 	FURRY_READING,
-	SHARE_COOLDOWN_DAYS,
 	SHARE_MODE,
 	SHARE_SCORE_THRESHOLD,
 	TEST_CHANNEL,
 )
-from storage.file_cache import FileCacheStore, get_default_cache
-from storage.share_records import ShareRecordStore
+from storage.file_cache import FileCacheStore, get_file_cache
+from storage.share_records import ShareRecordStore, get_share_records
 from utils.json import JsonDict
 
 
@@ -76,16 +75,8 @@ ShareUploadCallback = Callable[
 ]
 
 
-_share_records: ShareRecordStore | None = None
 # 正在发送中的作品 key，避免并发点击造成重复分享
 _inflight: set[str] = set()
-
-
-def get_share_records() -> ShareRecordStore:
-	global _share_records
-	if _share_records is None:
-		_share_records = ShareRecordStore(cooldown_days=SHARE_COOLDOWN_DAYS)
-	return _share_records
 
 
 def _message_id(delivered: Mapping[int | str, int], chat_id: int | str) -> int:
@@ -119,7 +110,7 @@ class ShareService:
 	@property
 	def cache(self) -> FileCacheStore:
 		if self._cache is None:
-			self._cache = get_default_cache()
+			self._cache = get_file_cache()
 		return self._cache
 
 

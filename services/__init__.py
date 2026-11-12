@@ -6,7 +6,6 @@ from services.apply_service import (
 	ApplyInvalidLinkError,
 	ApplyService,
 	ApplySubmission,
-	get_furry_requests,
 )
 from services.blacklist_service import (
 	BlacklistDecision,
@@ -39,7 +38,6 @@ from services.share_service import (
 	ShareResult,
 	ShareService,
 	ShareStatus,
-	get_share_records,
 )
 from services.takedown_service import (
 	TakedownDelete,
@@ -53,7 +51,6 @@ __all__ = [
 	"ApplyInvalidLinkError",
 	"ApplyService",
 	"ApplySubmission",
-	"get_furry_requests",
 
 	"BlacklistDecision",
 	"BlacklistRequest",
@@ -82,7 +79,6 @@ __all__ = [
 	"ShareResult",
 	"ShareService",
 	"ShareStatus",
-	"get_share_records",
 
 	"TakedownDelete",
 	"TakedownResult",

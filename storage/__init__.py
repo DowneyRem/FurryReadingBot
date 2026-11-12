@@ -15,10 +15,16 @@ from storage.black_request import (
 	BlackRequestStore,
 	get_black_requests,
 )
+from storage.furry_request import (
+	FurryRequestStore,
+	get_furry_requests,
+)
 
 __all__ = [
 	"BlackRequestStore",
+	"FurryRequestStore",
 	"ListManager",
 	"get_black_requests",
+	"get_furry_requests",
 	"get_lists",
 ]
