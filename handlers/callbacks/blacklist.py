@@ -1,4 +1,4 @@
-"""作者侧下架申请 callback：ab（告知后果 + 确认）/ aby（受理，回材料清单）/ abn（取消）。
+"""作者侧下架申请 callback：ab（告知后果 + 确认）/ aby（受理，回材料清单）/ ba（返回）。
 
 管理侧核验：rby（拉黑）/ rbn（拒绝）。
 业务规则在 services.blacklist_service；本模块只负责 Telegram 展示、

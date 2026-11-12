@@ -18,7 +18,7 @@ from handlers.callbacks.blacklist import (
 from handlers.callbacks.review import apply_approve, apply_reject
 from handlers.callbacks.download import download
 from handlers.callbacks.share import share_private, share_public, share_reject
-from handlers.callbacks.author import back_author, see_author
+from handlers.callbacks.author import back_to_author
 
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,8 @@ HANDLERS = {
 	"dst": download,
 	"dsz": download,
 	"dan": download,
-	# 查看作者，sa -> dan;
-	"sa": see_author,
-	"ba": back_author,
+	# 查看作者 / 确认页「↩️ 返回」共用：ba -> back_to_author
+	"ba": back_to_author,
 	# 申请兽人作者：af 告知后果，afy 确认提交
 	"af": apply_furry,
 	"afy": apply_furry_confirm,
