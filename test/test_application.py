@@ -126,8 +126,8 @@ def test_file_layout(tmp_path) -> None:
 
 	raw = json.loads(path.read_text(encoding="utf-8"))
 	assert raw["updated_at"]
-	assert raw["furrylist"]["1"]["author_name"] == "单条"
-	assert raw["furrylist"]["1"]["status"] == ApplicationStore.STATUS_PENDING
+	assert raw["furry_request"]["1"]["author_name"] == "单条"
+	assert raw["furry_request"]["1"]["status"] == ApplicationStore.STATUS_PENDING
 
 
 if __name__ == "__main__":

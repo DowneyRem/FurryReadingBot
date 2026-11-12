@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class JsonStore:
 	"""单个 JSON 文件的最小存储骨架。"""
 
-	# 业务数据在 JSON 顶层的键名，例如 "authors" / "furrylist" / "blacklist"
+	# 业务数据在 JSON 顶层的键名，例如 "authors" / "furry_request"
 	DATA_KEY = "items"
 
 	def __init__(self, path: str | Path, *, data_key: str | None = None) -> None:
