@@ -1,4 +1,5 @@
-from handlers.start import start, help_cmd, ping, black
+from handlers.start import start, help_cmd, ping
+from handlers.author import black
 from handlers.download import download
 from handlers.media import on_photo
 from handlers.review import review
