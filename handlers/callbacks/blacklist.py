@@ -2,7 +2,8 @@
 
 管理侧核验：ablock（拉黑）/ abdeny（拒绝）。
 业务规则在 services.blacklist_service；本模块只负责 Telegram 展示、
-删中转卡片和私聊通知。核验通过只更新名单，不删除历史分享。
+删中转卡片和私聊通知。核验通过 = 更新名单 + 下架频道里的历史分享
+（删除通过 `handlers.telegram.takedown · takedown_author` 注入）。
 """
 
 from __future__ import annotations
@@ -14,13 +15,14 @@ from telegram.ext import ContextTypes
 
 from handlers.callbacks.apply import edit_or_reply
 from handlers.callbacks.review import close_transit_message, notify_applicant
-from handlers.telegram import transit_admin_policy
+from handlers.telegram import takedown_author, transit_admin_policy
 from keyboards import confirm_black_keyboard
 from services import (
 	BlacklistDecision,
 	BlacklistReview,
 	BlacklistService,
 	DownloadService,
+	TakedownResult,
 )
 from storage.black_request import BlackRequestStore
 from utils.links import get_id
@@ -51,7 +53,24 @@ def material_notice(author_name: str, author_id: str) -> str:
 	])
 
 
-def review_receipt(result: BlacklistReview, user) -> str:
+def takedown_notice(takedown: TakedownResult | None) -> str:
+	"""下架结果摘要；None 表示这次没执行下架，不占用回执篇幅。"""
+	if takedown is None:
+		return ""
+	if takedown.total == 0:
+		return "🗂 频道里没有该作者的历史分享"
+	lines = [f"🗑 已删除历史分享 {takedown.deleted} 条"]
+	if takedown.skipped:
+		lines.append(f"⚠️ {takedown.skipped} 条旧记录没有消息 ID，需手工处理")
+	if takedown.failed:
+		lines.append(f"❌ {takedown.failed} 条删除失败，记录已保留可重试")
+	return "\n".join(lines)
+
+
+def review_receipt(
+		result: BlacklistReview,
+		user,
+		takedown: TakedownResult | None = None) -> str:
 	"""中转频道的核验回执。"""
 	text = []
 	if result.status == "approved":
@@ -61,6 +80,9 @@ def review_receipt(result: BlacklistReview, user) -> str:
 		text.append("#作者下架申请已拒绝")
 		text.append(f"❌ 已拒绝：{result.author_name}（#a{result.author_id}）")
 
+	notice = takedown_notice(takedown)
+	if notice:
+		text.append(notice)
 	record = result.record
 	if record is not None:
 		text.append(f"🈸 申请：{record.user_name}（#u{record.user_id}）")
@@ -68,13 +90,17 @@ def review_receipt(result: BlacklistReview, user) -> str:
 	return "\n".join(text)
 
 
-def applicant_text(result: BlacklistReview) -> str:
+def applicant_text(
+		result: BlacklistReview,
+		takedown: TakedownResult | None = None) -> str:
 	"""私聊通知申请人的文案。"""
 	message = []
 	if result.status == "approved":
 		message.extend(["✅ 你提交的小说下架申请已通过", ""])
 		message.append(f"作者：{result.author_name}（#a{result.author_id}）")
 		message.append(f"该作者已加入黑名单，之后不会再被下载或分享")
+		if takedown is not None and takedown.deleted:
+			message.append(f"频道中的历史分享已删除 {takedown.deleted} 条")
 	else:
 		message.extend(["❌ 你提交的小说下架申请未通过", ""])
 		message.append(f"作者：{result.author_name}（#a{result.author_id}）")
@@ -147,6 +173,21 @@ async def request_blacklist_confirm(
 		update, context, material_notice(result.author_name, author_id))
 
 
+async def _takedown(
+		context: ContextTypes.DEFAULT_TYPE,
+		author_id: str) -> TakedownResult | None:
+	"""拉黑后下架频道里的历史分享；删除失败只记日志，不影响拉黑结果。"""
+	try:
+		result = await takedown_author(context, author_id)
+	except Exception:
+		logger.warning("下架历史分享失败 author=%s", author_id, exc_info=True)
+		return None
+	logger.info(
+		"历史分享下架完成 author=%s deleted=%s skipped=%s failed=%s",
+		author_id, result.deleted, result.skipped, result.failed)
+	return result
+
+
 async def review_blacklist(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str, decision: BlacklistDecision) -> None:
@@ -180,9 +221,16 @@ async def review_blacklist(
 			f"该申请已处理：{result.author_name}（#a{author_id}）")
 		return
 
-	await close_transit_message(update, context, review_receipt(result, user))
+	# 拉黑成功后再下架：名单已写盘，删除失败不回头改状态
+	takedown = None
+	if result.status == "approved":
+		takedown = await _takedown(context, author_id)
+
+	await close_transit_message(
+		update, context, review_receipt(result, user, takedown))
 	if result.record is not None:
-		await notify_applicant(context, result.record, applicant_text(result))
+		await notify_applicant(
+			context, result.record, applicant_text(result, takedown))
 
 
 async def blacklist_approve(

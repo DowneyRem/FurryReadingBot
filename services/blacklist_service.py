@@ -3,8 +3,9 @@
 Telegram 相关部分留在 handlers：
   - 本模块不 import telegram；
   - 送审卡片、删卡片、私聊通知都由 handler 做；
-  - 核验通过只更新名单（黑名单 + 移出兽人名单），**不删除历史分享**：
-    下架能力已经写好（`services/takedown_service.py`），按产品决定暂不接入。
+  - 核验通过只更新名单（黑名单 + 移出兽人名单）；频道里的历史分享由 handler
+    在通过后调 `handlers.telegram.takedown · takedown_author` 下架
+    （`services/takedown_service.py`），本模块不碰删除。
 """
 
 from __future__ import annotations
