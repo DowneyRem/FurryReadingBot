@@ -19,6 +19,8 @@ from handlers.callbacks.blacklist import (
 	review_receipt,
 	takedown_notice,
 )
+from handlers.telegram.transit import blacklist_caption
+from keyboards import review_black_keyboard
 from policy.admin import AdminDecision
 from services.blacklist_service import (
 	BlacklistRequest,
@@ -152,21 +154,28 @@ def test_material_notice_contains_requirements() -> None:
 
 def test_receipt_and_applicant_text() -> None:
 	approved = BlacklistReview("approved", "42", "作者", RECORD)
-	assert "已拉黑" in review_receipt(approved, FakeUser())
+	text = review_receipt(approved, FakeUser())
+	assert "🈲 #作者下架申请已通过" in text
+	assert "🚫 已下架：作者（#a42）" in text
+	assert "🈸 申请人：Alice（#u7）" in text
+	assert "👤 审核人：Admin User（#u9）" in text
 	assert "已通过" in applicant_text(approved)
 
 	rejected = BlacklistReview("rejected", "42", "作者", RECORD)
-	assert "作者下架申请已拒绝" in review_receipt(rejected, FakeUser())
+	text = review_receipt(rejected, FakeUser())
+	assert "🈲 #作者下架申请已拒绝" in text
+	assert "❌ 已拒绝：作者（#a42）" in text
 	assert "未通过" in applicant_text(rejected)
 
 
 def test_takedown_notice_variants() -> None:
 	assert takedown_notice(None) == ""
-	assert "没有该作者的历史分享" in takedown_notice(TakedownResult("42"))
+	# total 为 0 时仍保留一行「已删除：0 条」，回执始终带下架结果
+	assert "已删除：0 条历史分享" in takedown_notice(TakedownResult("42"))
 
 	partial = TakedownResult("42", deleted=2, skipped=1, failed=3)
 	notice = takedown_notice(partial)
-	assert "已删除历史分享 2 条" in notice
+	assert "已删除：2 条历史分享" in notice
 	assert "1 条旧记录没有消息 ID" in notice
 	assert "3 条删除失败" in notice
 
@@ -175,9 +184,33 @@ def test_receipt_reports_takedown() -> None:
 	approved = BlacklistReview("approved", "42", "作者", RECORD)
 	takedown = TakedownResult("42", deleted=2)
 
-	assert "已删除历史分享 2 条" in review_receipt(
+	assert "已删除：2 条历史分享" in review_receipt(
 		approved, FakeUser(), takedown)
 	assert "历史分享已删除 2 条" in applicant_text(approved, takedown)
+
+
+def test_blacklist_card_uses_takedown_wording() -> None:
+	record = JsonDict(
+		author_id="42", author_name="作者", author_url=AUTHOR_URL,
+		user_id="7", user_name="Alice", count=2)
+
+	text = blacklist_caption(record)
+	assert "🈲 #作者下架申请" in text
+	assert "👤 作者名称：作者（#a42）" in text
+	assert f"🏡 主页链接：{AUTHOR_URL}" in text
+	assert "🈸 申请用户：Alice（#u7）" in text
+	assert "🔢 申请次数：2" in text
+	assert "再决定是否下架" in text
+
+	buttons = [
+		button
+		for row in review_black_keyboard("42").inline_keyboard
+		for button in row
+	]
+	assert [button.text for button in buttons] == [
+		"🈲 下架", "❌ 拒绝", "🏡 主页"]
+	assert [button.callback_data for button in buttons[:2]] == [
+		"ablock;42", "abdeny;42"]
 
 
 def test_request_blacklist_shows_confirm(monkeypatch) -> None:
@@ -263,10 +296,11 @@ def test_review_approve(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
 
 	assert service.calls == [("review", "42", "approve")]
-	# 拉黑后下架该作者在频道里的历史分享
+	# 核验通过后下架该作者在频道里的历史分享
 	assert takedowns == ["42"]
-	assert "已拉黑" in closed[0]
-	assert "已删除历史分享 2 条" in closed[0]
+	assert "🈲 #作者下架申请已通过" in closed[0]
+	assert "🚫 已下架：作者（#a42）" in closed[0]
+	assert "已删除：2 条历史分享" in closed[0]
 	assert len(notified) == 1
 	assert "已通过" in notified[0][1]
 	assert "历史分享已删除 2 条" in notified[0][1]
@@ -282,7 +316,7 @@ def test_review_approve_without_history(monkeypatch) -> None:
 	run(review_blacklist(
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
 
-	assert "频道里没有该作者的历史分享" in closed[0]
+	assert "已删除：0 条历史分享" in closed[0]
 
 
 def test_review_approve_reports_takedown_failures(monkeypatch) -> None:
@@ -295,13 +329,13 @@ def test_review_approve_reports_takedown_failures(monkeypatch) -> None:
 	run(review_blacklist(
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
 
-	assert "已删除历史分享 1 条" in closed[0]
+	assert "已删除：1 条历史分享" in closed[0]
 	assert "没有消息 ID" in closed[0]
 	assert "删除失败，记录已保留可重试" in closed[0]
 
 
 def test_review_approve_keeps_result_when_takedown_raises(monkeypatch) -> None:
-	"""下架抛异常不影响拉黑结果与申请人通知。"""
+	"""下架抛异常不影响核验结果与申请人通知。"""
 	_, _, closed, notified, takedowns = patch_handler(
 		monkeypatch,
 		service=FakeService(
@@ -312,8 +346,8 @@ def test_review_approve_keeps_result_when_takedown_raises(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="ablock;42", decision="approve"))
 
 	assert takedowns == ["42"]
-	assert "已拉黑" in closed[0]
-	assert "已删除历史分享" not in closed[0]
+	assert "🚫 已下架：作者（#a42）" in closed[0]
+	assert "已删除" not in closed[0]
 	assert len(notified) == 1
 
 
@@ -329,7 +363,7 @@ def test_review_reject(monkeypatch) -> None:
 	assert service.calls == [("review", "42", "reject")]
 	# 拒绝不进名单，也不动频道里的历史分享
 	assert takedowns == []
-	assert "作者下架申请已拒绝" in closed[0]
+	assert "🈲 #作者下架申请已拒绝" in closed[0]
 	assert "未通过" in notified[0][1]
 
 

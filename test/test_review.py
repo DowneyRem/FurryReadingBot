@@ -14,6 +14,7 @@ from handlers.callbacks.review import (
 	_receipt_text,
 	review_application,
 )
+from handlers.telegram.transit import transit_author_caption
 from policy.admin import AdminDecision
 from services.review_service import ReviewResult
 from utils.json import JsonDict
@@ -117,10 +118,24 @@ def test_receipt_text_approved() -> None:
 		ReviewResult("approved", "42", "作者", "pending", RECORD),
 		FakeUser(),
 	)
-	assert "#兽人作者申请已通过" in text
-	assert "✅ 通过" in text
-	assert "🈸 申请" in text
-	assert "👤 审核" in text
+	assert "🐺 #兽人作者申请已通过" in text
+	assert "✅ 通过：作者（#a42）" in text
+	assert "🈸 申请：Alice（#u1）" in text
+	assert "👤 审核：Admin User" in text
+
+
+def test_transit_author_caption_uses_author_metadata() -> None:
+	record = JsonDict(
+		author_id="42", author_name="作者",
+		link="https://linpx.ink/pixiv/user/42",
+		user_id="1", user_name="Alice", count=2)
+
+	text = transit_author_caption(record)
+	assert "🐺 #兽人作者申请" in text
+	assert "👤 作者名称：作者（#a42）" in text
+	assert "🏡 主页链接：https://linpx.ink/pixiv/user/42" in text
+	assert "🈸 申请用户：Alice（#u1）" in text
+	assert "🔢 申请次数：2" in text
 
 
 def test_review_application_approved(monkeypatch) -> None:
