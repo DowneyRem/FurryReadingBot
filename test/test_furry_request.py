@@ -1,7 +1,7 @@
 """FurryRequestStore：申请记录持久化、累计、状态流转。
 
 运行（在项目根目录）:
-	python -m pytest test/test_application.py -v
+	python -m pytest test/test_furry_request.py -v
 """
 
 from __future__ import annotations
@@ -131,4 +131,4 @@ def test_file_layout(tmp_path) -> None:
 
 
 if __name__ == "__main__":
-	print("请使用 pytest 运行：python -m pytest test/test_application.py -v")
+	print("请使用 pytest 运行：python -m pytest test/test_furry_request.py -v")
