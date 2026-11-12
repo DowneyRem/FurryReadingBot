@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from storage.applications import ApplicationStore
+from storage.furry_request import ApplicationStore
 
 
 def _store(tmp_path) -> ApplicationStore:

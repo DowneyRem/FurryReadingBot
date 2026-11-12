@@ -13,7 +13,7 @@ from utils.time import utc_now_iso
 class ApplicationStore(JsonStore):
 	"""待审核的「申请加入兽人作者名单」记录，key 为 author_id。"""
 
-	DATA_KEY = "applications"
+	DATA_KEY = "furry_request"
 
 	STATUS_PENDING = "pending"
 	STATUS_APPROVED = "approved"

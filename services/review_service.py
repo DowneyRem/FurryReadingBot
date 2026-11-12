@@ -13,7 +13,7 @@ from typing import Literal
 
 from services.apply_service import get_applications
 from storage import ListManager, get_lists
-from storage.applications import ApplicationStore
+from storage.furry_request import ApplicationStore
 from utils.json import JsonDict
 
 

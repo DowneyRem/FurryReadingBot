@@ -15,7 +15,7 @@ from typing import Awaitable, Callable, Literal
 from sources import fetch as sources_fetch
 from policy.author import AuthorPolicy
 from storage import ListManager, get_lists
-from storage.applications import ApplicationStore
+from storage.furry_request import ApplicationStore
 from utils.json import JsonDict
 from utils.links import get_id
 
