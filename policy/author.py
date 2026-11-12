@@ -29,15 +29,29 @@ AuthorStatus = Literal["blacklisted", "furry", "unknown"]
 
 @dataclass(frozen=True)
 class AuthorDecision:
-	"""一个作者在名单中的位置，以及由此推导出的两个动作许可。"""
+	"""一个作者在名单中的位置，以及由状态推导出的动作许可。
+
+	`is_*` 是状态判断（展示层分支用），`can_*` 是动作许可（业务链用）；
+	当前两组一一对应，改判定规则时两边都会跟着变。
+	"""
 
 	status: AuthorStatus
 	author_id: str
 	author_name: str
 
 	@property
+	def is_blacklisted(self) -> bool:
+		"""状态判断：展示层据此不给任何申请入口。"""
+		return self.status == "blacklisted"
+
+	@property
+	def is_furry(self) -> bool:
+		"""状态判断：展示层据此决定回作者页还是申请页。"""
+		return self.status == "furry"
+
+	@property
 	def can_download(self) -> bool:
-		"""只有兽人作者名单允许下载。"""
+		"""动作许可：只有兽人作者名单允许下载（等价于 `is_furry`）。"""
 		return self.status == "furry"
 
 	@property
