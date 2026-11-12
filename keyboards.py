@@ -17,7 +17,7 @@ def confirm_furry_keyboard(author_url: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(text="✅ 确认", callback_data=f"afy;{author_url}"),
-			InlineKeyboardButton(text="↩️ 取消", callback_data=f"afn;{author_url}"),
+			InlineKeyboardButton(text="↩️ 取消", callback_data=f"ba;{author_url}"),
 		]]
 	)
 
@@ -26,7 +26,7 @@ def confirm_black_keyboard(author_url: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(text="✅ 确认", callback_data=f"aby;{author_url}"),
-			InlineKeyboardButton(text="↩️ 取消", callback_data=f"abn;{author_url}"),
+			InlineKeyboardButton(text="↩️ 取消", callback_data=f"ba;{author_url}"),
 		]]
 	)
 
@@ -84,12 +84,12 @@ def down_series_keyboard(link: str, auto: bool = True) -> InlineKeyboardMarkup:
 		InlineKeyboardButton(text="📒 下载系列 txt", callback_data=f"dst;{link}"),
 		InlineKeyboardButton(text="📚 下载系列 zip", callback_data=f"dsz;{link}")
 	]
-	if auto:
-		buttons1.append(InlineKeyboardButton(text="🤖 自动选择", callback_data=f"ds;{link}"))
 	buttons2 = [
 		InlineKeyboardButton(text="👤 查看作者", callback_data=f"sa;{link}"),
 	    InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore")
 	]
+	if auto:
+		buttons1.append(InlineKeyboardButton(text="🤖 自动选择", callback_data=f"ds;{link}"))
 	return InlineKeyboardMarkup([buttons1, buttons2])
 
 

@@ -18,7 +18,7 @@ from handlers.callbacks.blacklist import (
 from handlers.callbacks.review import apply_approve, apply_reject
 from handlers.callbacks.download import download
 from handlers.callbacks.share import share_private, share_public, share_reject
-from handlers.callbacks.author import see_author
+from handlers.callbacks.author import back_author, see_author
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 # 只删消息、不进业务的 action
 CANCEL_ACTIONS = {
 	"ignore",
-	"afn",
-	"abn",
 }
 
 # action -> handler：keyboards.py 产出的 action 必须在这里或 CANCEL_ACTIONS 中
