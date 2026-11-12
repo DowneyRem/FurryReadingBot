@@ -16,8 +16,8 @@ from typing import Literal
 from policy.author import AuthorPolicy
 from storage import ListManager, get_lists
 from storage.black_request import (
-	BlacklistRequestStore,
-	get_blacklist_requests,
+	BlackRequestStore,
+	get_black_requests,
 )
 from utils.json import JsonDict
 
@@ -63,7 +63,7 @@ class BlacklistService:
 
 	def __init__(
 		self,
-		requests: BlacklistRequestStore | None = None,
+		requests: BlackRequestStore | None = None,
 		*,
 		list_manager: ListManager | None = None,
 		policy: AuthorPolicy | None = None,
@@ -74,9 +74,9 @@ class BlacklistService:
 
 
 	@property
-	def requests(self) -> BlacklistRequestStore:
+	def requests(self) -> BlackRequestStore:
 		if self._requests is None:
-			self._requests = get_blacklist_requests()
+			self._requests = get_black_requests()
 		return self._requests
 
 

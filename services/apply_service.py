@@ -15,7 +15,7 @@ from typing import Awaitable, Callable, Literal
 from sources import fetch as sources_fetch
 from policy.author import AuthorPolicy
 from storage import ListManager, get_lists
-from storage.furry_request import ApplicationStore
+from storage.furry_request import FurryRequestStore
 from utils.json import JsonDict
 from utils.links import get_id
 
@@ -64,15 +64,15 @@ class ApplySubmission:
 TransitCallback = Callable[[JsonDict], Awaitable[bool]]
 
 
-_applications: ApplicationStore | None = None
+_furry_requests: FurryRequestStore | None = None
 
 
-def get_applications() -> ApplicationStore:
+def get_furry_requests() -> FurryRequestStore:
 	"""申请记录是进程级单例，申请与核验共用同一份数据。"""
-	global _applications
-	if _applications is None:
-		_applications = ApplicationStore()
-	return _applications
+	global _furry_requests
+	if _furry_requests is None:
+		_furry_requests = FurryRequestStore()
+	return _furry_requests
 
 
 class ApplyService:
@@ -80,23 +80,23 @@ class ApplyService:
 
 	def __init__(
 		self,
-		applications: ApplicationStore | None = None,
+		furry_requests: FurryRequestStore | None = None,
 		*,
 		list_manager: ListManager | None = None,
 		policy: AuthorPolicy | None = None,
 		fetch_fn: Callable[[str], Awaitable[object]] | None = None,
 	) -> None:
-		self._applications = applications
+		self._furry_requests = furry_requests
 		self._list_manager = list_manager
 		self._policy = policy
 		self._fetch = fetch_fn or sources_fetch
 
 
 	@property
-	def applications(self) -> ApplicationStore:
-		if self._applications is None:
-			self._applications = get_applications()
-		return self._applications
+	def furry_requests(self) -> FurryRequestStore:
+		if self._furry_requests is None:
+			self._furry_requests = get_furry_requests()
+		return self._furry_requests
 
 
 	@property
@@ -116,8 +116,8 @@ class ApplyService:
 	def pending_records(self) -> list[JsonDict]:
 		"""返回所有待审核申请，供 `/review` 重推使用。"""
 		return [
-			record for record in self.applications.records().values()
-			if str(record.status or "") == ApplicationStore.STATUS_PENDING
+			record for record in self.furry_requests.records().values()
+			if str(record.status or "") == FurryRequestStore.STATUS_PENDING
 		]
 
 
@@ -128,8 +128,8 @@ class ApplyService:
 		if blocked is not None:
 			return blocked
 
-		record = self.applications.get(author_id)
-		if record and str(record.status or "") == ApplicationStore.STATUS_PENDING:
+		record = self.furry_requests.get(author_id)
+		if record and str(record.status or "") == FurryRequestStore.STATUS_PENDING:
 			return ApplyInspection(
 				status="pending",
 				author_id=author_id,
@@ -168,8 +168,8 @@ class ApplyService:
 			)
 
 		# inspect 与 submit 之间可能被其他用户抢先提交，再确认一次
-		record = self.applications.get(inspection.author_id)
-		if record and str(record.status or "") == ApplicationStore.STATUS_PENDING:
+		record = self.furry_requests.get(inspection.author_id)
+		if record and str(record.status or "") == FurryRequestStore.STATUS_PENDING:
 			return ApplySubmission(
 				status="pending",
 				author_id=inspection.author_id,
@@ -178,7 +178,7 @@ class ApplyService:
 				record=record,
 			)
 
-		record = self.applications.submit(
+		record = self.furry_requests.submit(
 			inspection.author_id,
 			author_name=inspection.author_name,
 			link=link,

@@ -11,9 +11,9 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
-from services.apply_service import get_applications
+from services.apply_service import get_furry_requests
 from storage import ListManager, get_lists
-from storage.furry_request import ApplicationStore
+from storage.furry_request import FurryRequestStore
 from utils.json import JsonDict
 
 
@@ -41,19 +41,19 @@ class ReviewService:
 
 	def __init__(
 		self,
-		applications: ApplicationStore | None = None,
+		furry_requests: FurryRequestStore | None = None,
 		*,
 		list_manager: ListManager | None = None,
 	) -> None:
-		self._applications = applications
+		self._furry_requests = furry_requests
 		self._list_manager = list_manager
 
 
 	@property
-	def applications(self) -> ApplicationStore:
-		if self._applications is None:
-			self._applications = get_applications()
-		return self._applications
+	def furry_requests(self) -> FurryRequestStore:
+		if self._furry_requests is None:
+			self._furry_requests = get_furry_requests()
+		return self._furry_requests
 
 
 	@property
@@ -79,13 +79,13 @@ class ReviewService:
 		if decision not in ("approve", "reject"):
 			raise ValueError(f"未知审核决定：{decision}")
 
-		current = self.applications.get(author_id)
+		current = self.furry_requests.get(author_id)
 		if current is None:
 			return ReviewResult("missing", author_id)
 
 		previous = str(current.status or "")
 		name = str(current.author_name or author_id)
-		if previous != ApplicationStore.STATUS_PENDING:
+		if previous != FurryRequestStore.STATUS_PENDING:
 			return ReviewResult(
 				status="already_processed",
 				author_id=author_id,
@@ -95,9 +95,9 @@ class ReviewService:
 			)
 
 		if decision == "approve":
-			if not self.applications.set_status(
-				author_id, ApplicationStore.STATUS_APPROVED,
-				expected=ApplicationStore.STATUS_PENDING,
+			if not self.furry_requests.set_status(
+				author_id, FurryRequestStore.STATUS_APPROVED,
+				expected=FurryRequestStore.STATUS_PENDING,
 			):
 				return self._already_processed(author_id, current)
 
@@ -105,14 +105,14 @@ class ReviewService:
 				self.list_manager.add_furrylist(
 					author_id, name=name, note="兽人作者申请通过")
 			except Exception:
-				self._rollback(author_id, ApplicationStore.STATUS_APPROVED)
+				self._rollback(author_id, FurryRequestStore.STATUS_APPROVED)
 				raise
 			result = self._updated(
 				author_id, "approved", previous, current)
 		else:
-			if not self.applications.set_status(
-				author_id, ApplicationStore.STATUS_REJECTED,
-				expected=ApplicationStore.STATUS_PENDING,
+			if not self.furry_requests.set_status(
+				author_id, FurryRequestStore.STATUS_REJECTED,
+				expected=FurryRequestStore.STATUS_PENDING,
 			):
 				return self._already_processed(author_id, current)
 
@@ -133,7 +133,7 @@ class ReviewService:
 		previous: str,
 		fallback: JsonDict,
 	) -> ReviewResult:
-		record = self.applications.get(author_id) or fallback
+		record = self.furry_requests.get(author_id) or fallback
 		return ReviewResult(
 			status=status,
 			author_id=author_id,
@@ -145,7 +145,7 @@ class ReviewService:
 
 	def _already_processed(
 		self, author_id: str, fallback: JsonDict) -> ReviewResult:
-		current = self.applications.get(author_id) or fallback
+		current = self.furry_requests.get(author_id) or fallback
 		return ReviewResult(
 			status="already_processed",
 			author_id=author_id,
@@ -158,8 +158,8 @@ class ReviewService:
 	def _rollback(self, author_id: str, from_status: str) -> None:
 		"""名单更新失败时，把申请状态退回 pending，便于重新审核。"""
 		try:
-			self.applications.set_status(
-				author_id, ApplicationStore.STATUS_PENDING,
+			self.furry_requests.set_status(
+				author_id, FurryRequestStore.STATUS_PENDING,
 				expected=from_status)
 		except Exception:
 			logger.exception("申请 %s 状态回滚失败", author_id)

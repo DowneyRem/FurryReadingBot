@@ -6,7 +6,7 @@ from services.apply_service import (
 	ApplyInvalidLinkError,
 	ApplyService,
 	ApplySubmission,
-	get_applications,
+	get_furry_requests,
 )
 from services.blacklist_service import (
 	BlacklistDecision,
@@ -53,7 +53,7 @@ __all__ = [
 	"ApplyInvalidLinkError",
 	"ApplyService",
 	"ApplySubmission",
-	"get_applications",
+	"get_furry_requests",
 
 	"BlacklistDecision",
 	"BlacklistRequest",

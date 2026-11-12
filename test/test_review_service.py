@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from services.review_service import ReviewService
-from storage.furry_request import ApplicationStore
+from storage.furry_request import FurryRequestStore
 
 
 AUTHOR_ID = "42"
@@ -32,13 +32,13 @@ class FailingFurryListManager(FakeListManager):
 
 
 def make_service(tmp_path, manager=None):
-	store = ApplicationStore(path=tmp_path / "furry_request.json")
+	store = FurryRequestStore(path=tmp_path / "furry_request.json")
 	manager = manager or FakeListManager()
-	service = ReviewService(applications=store, list_manager=manager)
+	service = ReviewService(furry_requests=store, list_manager=manager)
 	return service, store, manager
 
 
-def submit(store: ApplicationStore, *, author_name: str = "作者") -> None:
+def submit(store: FurryRequestStore, *, author_name: str = "作者") -> None:
 	store.submit(
 		AUTHOR_ID,
 		author_name=author_name,
@@ -56,15 +56,15 @@ def test_approve_updates_status_and_furrylist(tmp_path) -> None:
 		AUTHOR_ID, "approve", reviewer_id=9, reviewer_name="Admin")
 
 	assert result.status == "approved"
-	assert result.previous_status == ApplicationStore.STATUS_PENDING
+	assert result.previous_status == FurryRequestStore.STATUS_PENDING
 	assert result.author_name == "作者"
 	assert result.record is not None
-	assert result.record.status == ApplicationStore.STATUS_APPROVED
+	assert result.record.status == FurryRequestStore.STATUS_APPROVED
 	assert AUTHOR_ID in manager.furry
 	assert manager.calls == [
 		("furry", AUTHOR_ID, "作者", "兽人作者申请通过"),
 	]
-	assert store.get(AUTHOR_ID).status == ApplicationStore.STATUS_APPROVED
+	assert store.get(AUTHOR_ID).status == FurryRequestStore.STATUS_APPROVED
 
 
 def test_reject_updates_status_without_list(tmp_path) -> None:
@@ -75,9 +75,9 @@ def test_reject_updates_status_without_list(tmp_path) -> None:
 
 	assert result.status == "rejected"
 	assert result.record is not None
-	assert result.record.status == ApplicationStore.STATUS_REJECTED
+	assert result.record.status == FurryRequestStore.STATUS_REJECTED
 	assert manager.calls == []
-	assert store.get(AUTHOR_ID).status == ApplicationStore.STATUS_REJECTED
+	assert store.get(AUTHOR_ID).status == FurryRequestStore.STATUS_REJECTED
 
 
 def test_blacklist_is_not_a_review_decision(tmp_path) -> None:
@@ -89,7 +89,7 @@ def test_blacklist_is_not_a_review_decision(tmp_path) -> None:
 		service.review(AUTHOR_ID, "blacklist")  # type: ignore[arg-type]
 
 	assert manager.calls == []
-	assert store.get(AUTHOR_ID).status == ApplicationStore.STATUS_PENDING
+	assert store.get(AUTHOR_ID).status == FurryRequestStore.STATUS_PENDING
 
 
 def test_missing_record(tmp_path) -> None:
@@ -107,12 +107,12 @@ def test_missing_record(tmp_path) -> None:
 def test_already_processed_does_nothing(tmp_path) -> None:
 	service, store, manager = make_service(tmp_path)
 	submit(store)
-	store.set_status(AUTHOR_ID, ApplicationStore.STATUS_APPROVED)
+	store.set_status(AUTHOR_ID, FurryRequestStore.STATUS_APPROVED)
 
 	result = service.review(AUTHOR_ID, "approve")
 
 	assert result.status == "already_processed"
-	assert result.previous_status == ApplicationStore.STATUS_APPROVED
+	assert result.previous_status == FurryRequestStore.STATUS_APPROVED
 	assert result.record is not None
 	assert manager.calls == []
 
@@ -140,7 +140,7 @@ def test_approve_rolls_back_status_when_list_fails(tmp_path) -> None:
 
 	record = store.get(AUTHOR_ID)
 	assert record is not None
-	assert record.status == ApplicationStore.STATUS_PENDING
+	assert record.status == FurryRequestStore.STATUS_PENDING
 	assert manager.furry == set()
 
 

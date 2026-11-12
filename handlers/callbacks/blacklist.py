@@ -22,7 +22,7 @@ from services import (
 	BlacklistService,
 	DownloadService,
 )
-from storage.black_request import BlacklistRequestStore
+from storage.black_request import BlackRequestStore
 from utils.links import get_id
 
 
@@ -47,7 +47,7 @@ def material_notice(author_name: str, author_id: str) -> str:
 		"1. Pixiv 后台「作品管理」或「投稿一览」截图",
 		"2. 截图里能看到该账号与至少一个作品标题",
 		"",
-		f"请在 {BlacklistRequestStore.MATERIAL_TTL_MINUTES} 分钟内发送；管理员核验后会私聊通知结果。",
+		f"请在 {BlackRequestStore.MATERIAL_TTL_MINUTES} 分钟内发送；管理员核验后会私聊通知结果。",
 	])
 
 

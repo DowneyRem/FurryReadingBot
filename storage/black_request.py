@@ -21,7 +21,7 @@ from utils.json import JsonDict
 from utils.time import parse_iso, utc_now, utc_now_iso
 
 
-class BlacklistRequestStore(JsonStore):
+class BlackRequestStore(JsonStore):
 	"""作者下架申请记录，key 为 author_id。"""
 
 	DATA_KEY = "black_request"
@@ -174,12 +174,12 @@ class BlacklistRequestStore(JsonStore):
 			return JsonDict(dict(self._items))
 
 
-_default_requests: BlacklistRequestStore | None = None
+_default_store: BlackRequestStore | None = None
 
 
-def get_blacklist_requests() -> BlacklistRequestStore:
+def get_black_requests() -> BlackRequestStore:
 	"""进程内共享的作者下架申请记录。"""
-	global _default_requests
-	if _default_requests is None:
-		_default_requests = BlacklistRequestStore()
-	return _default_requests
+	global _default_store
+	if _default_store is None:
+		_default_store = BlackRequestStore()
+	return _default_store

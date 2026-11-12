@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from services.blacklist_service import BlacklistService
-from storage.black_request import BlacklistRequestStore
+from storage.black_request import BlackRequestStore
 
 
 AUTHOR_ID = "42"
@@ -54,7 +54,7 @@ class FailingListManager(FakeListManager):
 
 
 def make_service(tmp_path, manager=None):
-	store = BlacklistRequestStore(path=tmp_path / "black_request.json")
+	store = BlackRequestStore(path=tmp_path / "black_request.json")
 	manager = manager or FakeListManager()
 	service = BlacklistService(store, list_manager=manager)
 	return service, store, manager
@@ -70,7 +70,7 @@ def test_request_needs_material(tmp_path) -> None:
 	assert result.status == "needs_material"
 	record = store.get(AUTHOR_ID)
 	assert record is not None
-	assert record.status == BlacklistRequestStore.STATUS_MATERIAL
+	assert record.status == BlackRequestStore.STATUS_MATERIAL
 	assert record.author_url == AUTHOR_URL
 	assert record.author_name == "作者"
 	assert record.user_id == "7"
@@ -95,7 +95,7 @@ def test_request_again_reopens_material(tmp_path) -> None:
 	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
 
 	record = store.get(AUTHOR_ID)
-	assert record.status == BlacklistRequestStore.STATUS_MATERIAL
+	assert record.status == BlackRequestStore.STATUS_MATERIAL
 	assert record.count == 2
 
 
@@ -107,7 +107,7 @@ def test_request_pending_review_does_not_reopen(tmp_path) -> None:
 	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
 
 	assert result.status == "pending_review"
-	assert store.get(AUTHOR_ID).status == BlacklistRequestStore.STATUS_REVIEW
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_REVIEW
 	assert store.get(AUTHOR_ID).count == 1
 
 
@@ -128,7 +128,7 @@ def test_submit_material_marks_review(tmp_path) -> None:
 
 	assert result.status == "submitted"
 	record = store.get(AUTHOR_ID)
-	assert record.status == BlacklistRequestStore.STATUS_REVIEW
+	assert record.status == BlackRequestStore.STATUS_REVIEW
 	assert record.photo_file_id == "PHOTO"
 
 
@@ -149,7 +149,7 @@ def test_submit_material_expired(tmp_path) -> None:
 	result = service.submit_material(7, "PHOTO")
 
 	assert result.status == "expired"
-	assert store.get(AUTHOR_ID).status == BlacklistRequestStore.STATUS_MATERIAL
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_MATERIAL
 
 
 def test_review_approve_blacklists_and_unlists(tmp_path) -> None:
@@ -167,7 +167,7 @@ def test_review_approve_blacklists_and_unlists(tmp_path) -> None:
 		("black", AUTHOR_ID, "兽人42", "作者本人申请下架"),
 		("unfurry", AUTHOR_ID),
 	]
-	assert store.get(AUTHOR_ID).status == BlacklistRequestStore.STATUS_APPROVED
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_APPROVED
 
 
 def test_review_reject_keeps_lists(tmp_path) -> None:
@@ -180,7 +180,7 @@ def test_review_reject_keeps_lists(tmp_path) -> None:
 	assert result.status == "rejected"
 	assert manager.calls == []
 	assert AUTHOR_ID not in manager.black
-	assert store.get(AUTHOR_ID).status == BlacklistRequestStore.STATUS_REJECTED
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_REJECTED
 
 
 def test_review_missing_or_already_processed(tmp_path) -> None:
@@ -204,7 +204,7 @@ def test_review_rolls_back_when_list_write_fails(tmp_path) -> None:
 	with pytest.raises(RuntimeError):
 		service.review(AUTHOR_ID, "approve")
 
-	assert store.get(AUTHOR_ID).status == BlacklistRequestStore.STATUS_REVIEW
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_REVIEW
 	assert AUTHOR_ID not in manager.black
 
 

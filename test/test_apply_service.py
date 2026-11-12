@@ -16,7 +16,7 @@ from services.apply_service import (
 	ApplyService,
 	ApplyInvalidLinkError,
 )
-from storage.furry_request import ApplicationStore
+from storage.furry_request import FurryRequestStore
 
 
 AUTHOR_LINK = "https://linpx.ink/pixiv/user/42"
@@ -61,7 +61,7 @@ def make_service(
 	fetch_name: str = "作者",
 	fetch_calls: list[str] | None = None,
 ):
-	store = ApplicationStore(path=tmp_path / "furry_request.json")
+	store = FurryRequestStore(path=tmp_path / "furry_request.json")
 
 	async def fake_fetch(link: str) -> FakeAuthor:
 		if fetch_calls is not None:
@@ -69,7 +69,7 @@ def make_service(
 		return FakeAuthor(fetch_name)
 
 	service = ApplyService(
-		applications=store,
+		furry_requests=store,
 		list_manager=FakeListManager(black=black, furry=furry),
 		fetch_fn=fake_fetch,
 	)
@@ -153,7 +153,7 @@ def test_submit_creates_record_and_sends_transit(tmp_path) -> None:
 
 	record = store.get("42")
 	assert record is not None
-	assert record.status == ApplicationStore.STATUS_PENDING
+	assert record.status == FurryRequestStore.STATUS_PENDING
 	assert record.user_id == "42"
 	assert record.user_name == "Alice"
 
@@ -242,4 +242,4 @@ def test_pending_records(tmp_path) -> None:
 
 	assert len(records) == 1
 	assert records[0].author_id == "42"
-	assert records[0].status == ApplicationStore.STATUS_PENDING
+	assert records[0].status == FurryRequestStore.STATUS_PENDING

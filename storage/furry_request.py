@@ -10,7 +10,7 @@ from utils.json import JsonDict
 from utils.time import utc_now_iso
 
 
-class ApplicationStore(JsonStore):
+class FurryRequestStore(JsonStore):
 	"""待审核的「申请加入兽人作者名单」记录，key 为 author_id。"""
 
 	DATA_KEY = "furry_request"
