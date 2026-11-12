@@ -63,21 +63,21 @@ class BlacklistService:
 
 	def __init__(
 		self,
-		requests: BlackRequestStore | None = None,
+		black_requests: BlackRequestStore | None = None,
 		*,
 		list_manager: ListManager | None = None,
 		policy: AuthorPolicy | None = None,
 	) -> None:
-		self._requests = requests
+		self._black_requests = black_requests
 		self._list_manager = list_manager
 		self._policy = policy
 
 
 	@property
-	def requests(self) -> BlackRequestStore:
-		if self._requests is None:
-			self._requests = get_black_requests()
-		return self._requests
+	def black_requests(self) -> BlackRequestStore:
+		if self._black_requests is None:
+			self._black_requests = get_black_requests()
+		return self._black_requests
 
 
 	@property
@@ -112,12 +112,12 @@ class BlacklistService:
 		if decision.status == "blacklisted":
 			return BlacklistRequest("already_blacklisted", key, decision.author_name)
 
-		existing = self.requests.get(key)
-		if existing is not None and existing.status == self.requests.STATUS_REVIEW:
+		existing = self.black_requests.get(key)
+		if existing is not None and existing.status == BlackRequestStore.STATUS_REVIEW:
 			name = str(existing.author_name or decision.author_name)
 			return BlacklistRequest("pending_review", key, name, existing)
 
-		record = self.requests.open(
+		record = self.black_requests.open(
 			key,
 			author_name=author_name or decision.author_name,
 			author_url=author_url,
@@ -135,17 +135,17 @@ class BlacklistService:
 		photo_file_id: str,
 	) -> MaterialSubmission:
 		"""把用户发来的截图挂到他的「等截图」申请上。"""
-		record = self.requests.pending_material_for_user(user_id)
+		record = self.black_requests.pending_material_for_user(user_id)
 		if record is None:
 			return MaterialSubmission("no_request")
-		if self.requests.is_stale(record):
+		if self.black_requests.is_stale(record):
 			return MaterialSubmission("expired", record)
-		if not self.requests.attach_photo(record.author_id, photo_file_id):
+		if not self.black_requests.attach_photo(record.author_id, photo_file_id):
 			return MaterialSubmission("no_request", record)
 		logger.info(
 			"作者下架材料已提交 author=%s user=%s",
 			record.author_id, user_id)
-		return MaterialSubmission("submitted", self.requests.get(record.author_id))
+		return MaterialSubmission("submitted", self.black_requests.get(record.author_id))
 
 
 	def review(self, author_id: str | int, decision: BlacklistDecision) -> BlacklistReview:
@@ -154,25 +154,25 @@ class BlacklistService:
 			raise ValueError(f"未知核验决定：{decision}")
 
 		key = str(author_id or "").strip()
-		record = self.requests.get(key) if key else None
+		record = self.black_requests.get(key) if key else None
 		if record is None:
 			return BlacklistReview("missing", key)
 
 		name = str(record.author_name or key)
-		status = self.requests.STATUS_REVIEW
+		status = BlackRequestStore.STATUS_REVIEW
 		if record.status != status:
 			return BlacklistReview("already_processed", key, name, record)
 
 		if decision == "reject":
-			if not self.requests.set_status(
-				key, self.requests.STATUS_REJECTED, expected=status):
+			if not self.black_requests.set_status(
+				key, BlackRequestStore.STATUS_REJECTED, expected=status):
 				return self._already_processed(key, record)
 			logger.info("作者下架申请被拒绝 author=%s", key)
 			return BlacklistReview(
-				"rejected", key, name, self.requests.get(key) or record)
+				"rejected", key, name, self.black_requests.get(key) or record)
 
-		if not self.requests.set_status(
-			key, self.requests.STATUS_APPROVED, expected=status):
+		if not self.black_requests.set_status(
+			key, BlackRequestStore.STATUS_APPROVED, expected=status):
 			return self._already_processed(key, record)
 
 		try:
@@ -181,18 +181,18 @@ class BlacklistService:
 			self.list_manager.remove_furrylist(key)
 		except Exception:
 			# 名单写失败：把申请退回待核验，便于重试
-			self.requests.set_status(
-				key, self.requests.STATUS_REVIEW,
-				expected=self.requests.STATUS_APPROVED)
+			self.black_requests.set_status(
+				key, BlackRequestStore.STATUS_REVIEW,
+				expected=BlackRequestStore.STATUS_APPROVED)
 			raise
 
 		logger.info("作者下架申请已通过 author=%s", key)
 		return BlacklistReview(
-			"approved", key, name, self.requests.get(key) or record)
+			"approved", key, name, self.black_requests.get(key) or record)
 
 
 	def _already_processed(self, key: str, fallback: JsonDict) -> BlacklistReview:
-		current = self.requests.get(key) or fallback
+		current = self.black_requests.get(key) or fallback
 		return BlacklistReview(
 			"already_processed",
 			key,
