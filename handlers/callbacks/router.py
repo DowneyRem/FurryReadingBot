@@ -22,6 +22,39 @@ from handlers.callbacks.share import share_private, share_public, share_reject
 
 logger = logging.getLogger(__name__)
 
+# 只删消息、不进业务的 action
+CANCEL_ACTIONS = {
+	"ignore",
+	"afn",
+	"abn",
+}
+
+# action -> handler：keyboards.py 产出的 action 必须在这里或 CANCEL_ACTIONS 中
+HANDLERS = {
+	# 下载
+	"dn": download,
+	"ds": download,
+	"dst": download,
+	"dsz": download,
+	"dan": download,
+	# 申请兽人作者：af 告知后果，afy 确认提交
+	"af": apply_furry,
+	"afy": apply_furry_confirm,
+	# 作者申请下架：ab 告知后果，aby 受理并回材料清单
+	"ab": request_blacklist,
+	"aby": request_blacklist_confirm,
+	# 中转频道核验兽人作者申请：rfy 通过，rfn 拒绝
+	"rfy": apply_approve,
+	"rfn": apply_reject,
+	# 中转频道核验作者下架申请：rby 拉黑，rbn 拒绝
+	"rby": blacklist_approve,
+	"rbn": blacklist_reject,
+	# 分享
+	"snp": share_public,
+	"sna": share_private,
+	"snn": share_reject,
+}
+
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	query = update.callback_query
@@ -37,45 +70,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	data = query.data
 	action, _, rest = data.partition(";")
 
-	if action in {
-		"ignore",
-		"not_furry",
-		"nfa",
-		"afn",
-		"abn",
-	}:
+	if action in CANCEL_ACTIONS:
 		try:
 			await query.delete_message()
 		except Exception:
 			pass
 		return
 
-	handlers = {
-		# 下载
-		"dn": download,
-		"ds": download,
-		"dst": download,
-		"dsz": download,
-		"dan": download,
-		# 申请兽人作者：af 告知后果，afy 确认提交
-		"af": apply_furry,
-		"afy": apply_furry_confirm,
-		# 作者申请下架：ab 告知后果，aby 受理并回材料清单
-		"ab": request_blacklist,
-		"aby": request_blacklist_confirm,
-		# 中转频道核验：afa 通过，afr 拒绝；拉黑不走核验入口（见 docs/02 第 4 节）
-		"afa": apply_approve,
-		"afr": apply_reject,
-		# 中转频道核验作者下架申请：ablock 拉黑，abdeny 拒绝
-		"ablock": blacklist_approve,
-		"abdeny": blacklist_reject,
-		# 分享
-		"snp": share_public,
-		"sna": share_private,
-		"snn": share_reject,
-	}
-
-	handler = handlers.get(action)
+	handler = HANDLERS.get(action)
 	if handler is None:
 		await reply(update, context, "暂不支持该操作。")
 		return
