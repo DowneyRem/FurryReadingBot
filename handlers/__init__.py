@@ -1,12 +1,13 @@
 from handlers.start import start, help_cmd, ping
-from handlers.author import black
+from handlers.author import black, furry
 from handlers.download import download
 from handlers.media import on_photo
 from handlers.review import review
 from handlers.callbacks import button_callback
 
 __all__ = [
-	"start", "help_cmd", "ping", "black",
+	"start", "help_cmd", "ping",
+	"black", "furry",
 	"download",
 	"on_photo",
 	"review",
