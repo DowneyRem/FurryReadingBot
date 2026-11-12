@@ -56,15 +56,61 @@ Copy-Item .env.example .env
 ## 目录
 
 ```text
-bot.py             # 入口
-handlers/          # 命令、消息、回调
-handlers/telegram/ # 回复/上传/中转适配
-services/          # 下载 / 申请 / 审核 / 分享业务编排
-policy/            # 名单判定（黑名单 / 兽人作者名单）
-sources/           # Linpx 来源适配
-storage/           # 名单、申请、缓存、文件、zip
-utils/             # 通用工具
-data/              # 运行数据（部分 gitignore）
-files/novels/      # 下载临时目录（gitignore）
-test/              # pytest 用例
+FurryReadingBot/
+├─ bot.py                  # 入口：装配 Application，注册 5 个命令 / 2 个消息 / 1 个 callback
+├─ config.py               # 从 .env 读配置（频道、分享模式、冷却、缓存 TTL）
+├─ keyboards.py            # 全部 InlineKeyboardMarkup（纯展示）
+├─ handlers/               # 接入层：命令、私聊消息、图片
+│  ├─ start.py             #   /start /help /ping
+│  ├─ download.py          #   /down 与私聊链接：解析 → 权限 → 出下载菜单
+│  ├─ review.py            #   /review 重推待审申请（仅中转频道管理员）
+│  ├─ media.py             #   私聊截图：作者下架材料
+│  ├─ callbacks/           #   callback_data 分发与各业务展示
+│  │  ├─ router.py         #     action → handler 字典分发
+│  │  ├─ download.py       #     dn / ds / dst / dsz / dan
+│  │  ├─ apply.py          #     af / afy
+│  │  ├─ review.py         #     afa / afr
+│  │  ├─ blacklist.py      #     ab / aby / ablock / abdeny
+│  │  └─ share.py          #     snp / sna / snn
+│  └─ telegram/            #   Telegram 适配：reply / upload / transit / membership / takedown
+├─ services/               # 应用层：用例编排，不 import telegram
+│  ├─ download_service.py  #   链接检查、权限、缓存、抓取、保存、上传
+│  ├─ apply_service.py     #   申请校验、重复待审拦截、送中转频道
+│  ├─ review_service.py    #   审核状态 + 名单 + 幂等回滚
+│  ├─ blacklist_service.py #   下架受理 / 材料提交 / 核验
+│  ├─ share_service.py     #   冷却、并发保护、频道分流、分享记录
+│  └─ takedown_service.py  #   按作者删除频道历史分享
+├─ policy/                 # 规则层：只回答「能不能」，不读写业务数据
+│  ├─ author.py            #   黑名单 / 兽人作者名单 → 能否下载、能否申请
+│  └─ admin.py             #   按中转频道成员身份判定管理员
+├─ sources/                # 领域层：来源适配
+│  ├─ base.py              #   Novel / Series / Author / NovelSource
+│  ├─ __init__.py          #   _SOURCES 注册表 + fetch / save / resolve_link
+│  ├─ format.py utils.py   #   文本排版、系列合并/分包判断
+│  ├─ linpx/               #   Linpx 客户端 / 解析 / URL / 错误（唯一可用来源）
+│  └─ pixiv/               #   仅 URL 工具，未接入
+├─ storage/                # 存储层：全仓唯一读写 JSON 的地方
+│  ├─ json_store.py        #   原子写 + mtime 热加载 + 进程锁 + prune
+│  ├─ author_list.py       #   三份名单 + get_lists() 进程内单例
+│  ├─ furry_request.py     #   兽人作者申请记录
+│  ├─ black_request.py     #   作者下架申请记录
+│  ├─ file_cache.py        #   Telegram file_id 缓存（TTL）
+│  └─ share_records.py     #   分享记录 / 冷却 / message_id
+├─ infra/                  # 基础设施：http / files / archive（zip）
+├─ utils/                  # 通用工具：json / json_merge / links / time / timer
+├─ data/                   # 运行数据 JSON（部分 gitignore）+ 导入推荐作者脚本
+├─ files/novels/           # 下载临时目录（gitignore，上传后删除）
+├─ scripts/                # 运维脚本：合并冲突 JSON、三端数据同步
+├─ docs/                   # 01~06 设计 / 流程 / 改代码文档
+└─ test/                   # pytest 用例（当前 173 passed）
 ```
+
+分层依赖（单向）：
+
+```text
+handlers → services → policy / sources → storage / infra / utils
+```
+
+- `services/` 及以下**不 import telegram**，上传 / 删除 / 送审都通过参数注入。
+- 只有 `storage/` 读写 JSON；只有 `infra/` 碰文件与网络。
+- 新增来源：实现 `NovelSource` + 在 `sources/__init__.py` 的 `_SOURCES` 注册一行。
