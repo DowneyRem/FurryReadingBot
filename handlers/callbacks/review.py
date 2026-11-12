@@ -1,4 +1,4 @@
-"""管理侧核验 callback：afa（通过）/ afr（拒绝）。
+"""管理侧核验 callback：rfy（通过）/ rfn（拒绝）。
 
 审核状态与名单更新在 services.review_service；
 本模块只负责中转消息、审核回执和私聊通知。
@@ -98,7 +98,7 @@ def _receipt_text(result: ReviewResult, user) -> str:
 async def review_application(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str, decision: ReviewDecision) -> None:
-	"""afa / afr：核验申请并更新名单。"""
+	"""rfy / rfn：核验申请并更新名单。"""
 	author_id = _author_id_from_data(data)
 	user = update.effective_user
 	if user is None:
@@ -145,11 +145,11 @@ async def review_application(
 
 async def apply_approve(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
-	"""afa：核验通过，加入兽人作者名单。"""
+	"""rfy：核验通过，加入兽人作者名单。"""
 	await review_application(update, context, data=data, decision="approve")
 
 
 async def apply_reject(update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
-	"""afr：核验不通过，拒绝申请。"""
+	"""rfn：核验不通过，拒绝申请。"""
 	await review_application(update, context, data=data, decision="reject")

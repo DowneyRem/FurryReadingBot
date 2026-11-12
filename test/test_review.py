@@ -145,7 +145,7 @@ def test_review_application_approved(monkeypatch) -> None:
 	)
 
 	run(review_application(
-		FakeUpdate(), FakeContext(), data="afa;42", decision="approve"))
+		FakeUpdate(), FakeContext(), data="rfy;42", decision="approve"))
 
 	assert service.called is not None
 	assert service.called["author_id"] == "42"
@@ -165,7 +165,7 @@ def test_review_application_passes_decision_through(monkeypatch) -> None:
 		)
 
 		run(review_application(
-			FakeUpdate(), FakeContext(), data="afr;42", decision=decision))
+			FakeUpdate(), FakeContext(), data="rfn;42", decision=decision))
 
 		assert service.called is not None
 		assert service.called["decision"] == decision
@@ -177,7 +177,7 @@ def test_review_application_missing(monkeypatch) -> None:
 		monkeypatch, ReviewResult("missing", "404"))
 
 	run(review_application(
-		FakeUpdate(), FakeContext(), data="afa;404", decision="approve"))
+		FakeUpdate(), FakeContext(), data="rfy;404", decision="approve"))
 
 	assert "申请记录不存在" in closed[0]
 	assert notified == []
@@ -191,7 +191,7 @@ def test_review_application_already_processed(monkeypatch) -> None:
 	)
 
 	run(review_application(
-		FakeUpdate(), FakeContext(), data="afa;42", decision="approve"))
+		FakeUpdate(), FakeContext(), data="rfy;42", decision="approve"))
 
 	assert "该申请已处理" in closed[0]
 	assert notified == []
@@ -205,7 +205,7 @@ def test_review_application_requires_admin(monkeypatch) -> None:
 	)
 
 	run(review_application(
-		FakeUpdate(), FakeContext(), data="afa;42", decision="approve"))
+		FakeUpdate(), FakeContext(), data="rfy;42", decision="approve"))
 
 	assert service.called is None
 	assert "仅中转频道管理员" in closed[0]
@@ -217,7 +217,7 @@ def test_review_application_invalid_data(monkeypatch) -> None:
 		monkeypatch, ReviewResult("missing", ""))
 
 	run(review_application(
-		FakeUpdate(), FakeContext(), data="afa", decision="approve"))
+		FakeUpdate(), FakeContext(), data="rfy", decision="approve"))
 
 	assert "申请参数不完整" in closed[0]
 
@@ -231,6 +231,6 @@ def test_review_keyboard_has_no_blacklist_button() -> None:
 		for row in review_furry_keyboard("42").inline_keyboard
 		for button in row
 	]
-	assert "afa;42" in buttons
-	assert "afr;42" in buttons
+	assert "rfy;42" in buttons
+	assert "rfn;42" in buttons
 	assert "afb;42" not in buttons

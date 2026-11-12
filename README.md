@@ -70,8 +70,8 @@ FurryReadingBot/
 │  │  ├─ router.py         #     action → handler 字典分发
 │  │  ├─ download.py       #     dn / ds / dst / dsz / dan
 │  │  ├─ apply.py          #     af / afy
-│  │  ├─ review.py         #     afa / afr
-│  │  ├─ blacklist.py      #     ab / aby / ablock / abdeny
+│  │  ├─ review.py         #     rfy / rfn
+│  │  ├─ blacklist.py      #     ab / aby / rby / rbn
 │  │  └─ share.py          #     snp / sna / snn
 │  └─ telegram/            #   Telegram 适配：reply / upload / transit / membership / takedown
 ├─ services/               # 应用层：用例编排，不 import telegram

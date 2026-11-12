@@ -1,6 +1,6 @@
 """作者侧下架申请 callback：ab（告知后果 + 确认）/ aby（受理，回材料清单）/ abn（取消）。
 
-管理侧核验：ablock（拉黑）/ abdeny（拒绝）。
+管理侧核验：rby（拉黑）/ rbn（拒绝）。
 业务规则在 services.blacklist_service；本模块只负责 Telegram 展示、
 删中转卡片和私聊通知。核验通过 = 更新名单 + 下架频道里的历史分享
 （删除通过 `handlers.telegram.takedown · takedown_author` 注入）。
@@ -191,7 +191,7 @@ async def _takedown(
 async def review_blacklist(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str, decision: BlacklistDecision) -> None:
-	"""ablock / abdeny：中转频道管理员核验下架申请。"""
+	"""rby / rbn：中转频道管理员核验下架申请。"""
 	author_id = _link_from_data(data)
 	user = update.effective_user
 	if user is None:
@@ -236,12 +236,12 @@ async def review_blacklist(
 async def blacklist_approve(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
-	"""ablock：核验通过，加入黑名单。"""
+	"""rby：核验通过，加入黑名单。"""
 	await review_blacklist(update, context, data=data, decision="approve")
 
 
 async def blacklist_reject(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str) -> None:
-	"""abdeny：核验不通过，拒绝下架申请。"""
+	"""rbn：核验不通过，拒绝下架申请。"""
 	await review_blacklist(update, context, data=data, decision="reject")

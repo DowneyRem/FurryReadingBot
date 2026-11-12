@@ -35,8 +35,8 @@ def review_furry_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[
 			[
-				InlineKeyboardButton(text="✅ 通过", callback_data=f"afa;{author_id}"),
-				InlineKeyboardButton(text="❌ 拒绝", callback_data=f"afr;{author_id}"),
+				InlineKeyboardButton(text="✅ 通过", callback_data=f"rfy;{author_id}"),
+				InlineKeyboardButton(text="❌ 拒绝", callback_data=f"rfn;{author_id}"),
 				InlineKeyboardButton(text="🏡 主页", url=url_author(author_id)),
 			],
 		]
@@ -44,12 +44,11 @@ def review_furry_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 
 
 def review_black_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
-	"""中转频道里「作者申请下架」的核验键盘。"""
 	return InlineKeyboardMarkup(
 		[
 			[
-				InlineKeyboardButton(text="🈲 下架", callback_data=f"ablock;{author_id}"),
-				InlineKeyboardButton(text="❌ 拒绝", callback_data=f"abdeny;{author_id}"),
+				InlineKeyboardButton(text="🈲 下架", callback_data=f"rby;{author_id}"),
+				InlineKeyboardButton(text="❌ 拒绝", callback_data=f"rbn;{author_id}"),
 				InlineKeyboardButton(text="🏡 主页", url=url_author(author_id)),
 			],
 		]
