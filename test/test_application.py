@@ -121,13 +121,13 @@ def test_remove(tmp_path) -> None:
 
 
 def test_file_layout(tmp_path) -> None:
-	path = tmp_path / "applications.json"
+	path = tmp_path / "furry_request.json"
 	ApplicationStore(path=path).submit("1", author_name="单条")
 
 	raw = json.loads(path.read_text(encoding="utf-8"))
 	assert raw["updated_at"]
-	assert raw["applications"]["1"]["author_name"] == "单条"
-	assert raw["applications"]["1"]["status"] == ApplicationStore.STATUS_PENDING
+	assert raw["furrylist"]["1"]["author_name"] == "单条"
+	assert raw["furrylist"]["1"]["status"] == ApplicationStore.STATUS_PENDING
 
 
 if __name__ == "__main__":

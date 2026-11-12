@@ -1,6 +1,6 @@
 """JSON 文件存储基类：原子写、mtime 热加载、进程内锁、prune 钩子。
 
-四个业务 Store（authors / applications / file_cache / share_records）
+各业务 Store（authors / furry_request / black_request / file_cache / share_records）
 只需要声明数据键、实现 ``_normalize``（必要时 ``_prune``），
 其余读写与并发细节全部复用这里。
 """
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class JsonStore:
 	"""单个 JSON 文件的最小存储骨架。"""
 
-	# 业务数据在 JSON 顶层的键名，例如 "authors" / "applications"
+	# 业务数据在 JSON 顶层的键名，例如 "authors" / "furrylist" / "blacklist"
 	DATA_KEY = "items"
 
 	def __init__(self, path: str | Path, *, data_key: str | None = None) -> None:

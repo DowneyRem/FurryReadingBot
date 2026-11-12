@@ -138,7 +138,7 @@ def test_receipt_and_applicant_text() -> None:
 	assert "已通过" in applicant_text(approved)
 
 	rejected = BlacklistReview("rejected", "42", "作者", RECORD)
-	assert "拒绝下架申请" in review_receipt(rejected, FakeUser())
+	assert "作者下架申请已拒绝" in review_receipt(rejected, FakeUser())
 	assert "未通过" in applicant_text(rejected)
 
 
@@ -238,7 +238,7 @@ def test_review_reject(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="abdeny;42", decision="reject"))
 
 	assert service.calls == [("review", "42", "reject")]
-	assert "拒绝下架申请" in closed[0]
+	assert "作者下架申请已拒绝" in closed[0]
 	assert "未通过" in notified[0][1]
 
 

@@ -6,6 +6,7 @@ files
 data/files_cache.json
 data/share_records.json
 data/furry_request.json
+data/black_request.json
 
 # Python
 __pycache__/

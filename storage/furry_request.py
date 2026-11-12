@@ -1,4 +1,4 @@
-"""兽人作者白名单申请记录：JSON 文件存储，支持热加载。"""
+"""兽人作者名单申请记录：JSON 文件存储，支持热加载。"""
 
 from __future__ import annotations
 

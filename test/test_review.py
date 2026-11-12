@@ -109,7 +109,7 @@ def test_receipt_text_rejected() -> None:
 		ReviewResult("rejected", "42", "作者", "pending", RECORD),
 		FakeUser(),
 	)
-	assert "🈲 拒绝" in text
+	assert "❌ 拒绝" in text
 
 
 def test_receipt_text_approved() -> None:
@@ -117,7 +117,7 @@ def test_receipt_text_approved() -> None:
 		ReviewResult("approved", "42", "作者", "pending", RECORD),
 		FakeUser(),
 	)
-	assert "#兽人作者申请已完成" in text
+	assert "#兽人作者申请已通过" in text
 	assert "✅ 通过" in text
 	assert "🈸 申请" in text
 	assert "👤 审核" in text

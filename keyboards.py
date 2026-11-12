@@ -7,8 +7,8 @@ def apply_author_keyboard(author_url: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
 			InlineKeyboardButton(text="✅ 申请兽人作者", callback_data=f"af;{author_url}"),
-	        InlineKeyboardButton(text="🈲 申请下架", callback_data=f"ab;{author_url}"),
-	        InlineKeyboardButton(text="🗑️ 取消", callback_data="ignore")
+			InlineKeyboardButton(text="🈲 申请下架", callback_data=f"ab;{author_url}"),
+			InlineKeyboardButton(text="🗑️ 取消", callback_data="ignore")
 		]]
 	)
 
