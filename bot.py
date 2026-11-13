@@ -12,6 +12,7 @@ from telegram.ext import (
 from handlers import *
 from config import *
 from infra.http import close_http
+from services.packaging import clear_work_root
 
 logging.basicConfig(
 	format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -32,8 +33,10 @@ async def post_shutdown(application: Application) -> None:
 
 
 def main() -> None:
-	if not BOT_TOKEN:
-		raise SystemExit("请设置环境变量 BOT_TOKEN，或在 .env 中写入 BOT_TOKEN=...")
+	errors = config_errors()
+	if errors:
+		raise SystemExit("配置有误，请检查 .env：\n- " + "\n- ".join(errors))
+	clear_work_root()
 
 	# 构建应用（v20+ 的核心对象）
 	# concurrent_updates：update 并行处理；用 config 里的有界值，不用 True（True = 256 路）
