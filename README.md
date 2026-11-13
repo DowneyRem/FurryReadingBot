@@ -144,12 +144,12 @@ handlers  →  services  →  policy / sources  →  storage / infra / utils
 .venv\Scripts\python.exe -m pytest test -q
 ```
 
-当前基线（2026-11-13）：**209 项 → 206 passed / 3 skipped**，全绿。
+当前基线（2026-11-13）：**220 项 → 217 passed / 3 skipped**，全绿。
 
 | 跑法 | 命令 | 结果 |
 |---|---|---|
-| 全量 | `pytest test -q` | 206 passed / 3 skipped |
-| 跳过真实 API 用例 | `pytest test -q --ignore=test/test_linpx.py` | 198 passed |
+| 全量 | `pytest test -q` | 217 passed / 3 skipped |
+| 跳过真实 API 用例 | `pytest test -q --ignore=test/test_linpx.py` | 209 passed |
 | 只跑真实 Linpx API | `$env:LINPX_LIVE="1"` 后 `pytest test/test_linpx.py -q` | 11 passed（3 条真实 API 用例解封） |
 
 测试不需要真实 Bot Token。代码风格由 `test/test_style.py` 守门：**`.py` 一律 Tab 缩进（Tab = 4 列）**，行首缩进出现空格即失败；其余约定见 [07 §6~§7](docs/07-配置与部署.md)。
