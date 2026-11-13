@@ -70,6 +70,11 @@ async def download(
 	except DownloadUnsupportedActionError:
 		await reply(update, context, "暂不支持该下载操作。")
 		return
+	except OSError:
+		# 落盘失败（磁盘满 / 无权限 / 路径被占）：infra 已经带 traceback 记了日志，
+		# 这里只回一句中文，不把 WinError / 服务器路径甩给用户
+		await reply(update, context, "生成文件失败（磁盘或权限问题），请稍后重试。")
+		return
 
 	if outcome.format_choice_link:
 		await choose_series_format(
