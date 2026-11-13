@@ -149,7 +149,8 @@ def test_submit_material_expired(tmp_path) -> None:
 	result = service.submit_material(7, "PHOTO")
 
 	assert result.status == "expired"
-	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_MATERIAL
+	# 只提示一次：之后同一用户再发图按普通图片忽略
+	assert service.submit_material(7, "PHOTO").status == "no_request"
 
 
 def test_review_approve_blacklists_and_unlists(tmp_path) -> None:
@@ -215,3 +216,24 @@ def test_unknown_decision_raises(tmp_path) -> None:
 
 	with pytest.raises(ValueError):
 		service.review(AUTHOR_ID, "unknown")  # type: ignore[arg-type]
+
+
+def test_retry_takedown_only_for_blacklisted(tmp_path) -> None:
+	service, _store, manager = make_service(tmp_path)
+	assert service.can_retry_takedown(AUTHOR_ID) is False
+
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	service.submit_material(7, "PHOTO")
+	service.review(AUTHOR_ID, "approve")
+
+	assert service.can_retry_takedown(AUTHOR_ID) is True
+	assert service.review(AUTHOR_ID, "approve").status == "already_processed"
+
+def test_pending_review_records_for_resend(tmp_path) -> None:
+	service, _store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	assert service.pending_review_records() == []
+
+	service.submit_material(7, "PHOTO")
+
+	assert [r.author_id for r in service.pending_review_records()] == [AUTHOR_ID]

@@ -74,14 +74,14 @@ class TakedownService:
 		rows = self.records.by_author(key)
 		deleted = skipped = 0
 		errors: list[str] = []
+		done: list = []
 
 		for row in rows:
 			chat_id = str(row.chat_id or "")
 			message_id = int(row.message_id or 0)
 			if not chat_id or message_id <= 0:
 				# 没有句柄：删不掉，只能清记录
-				self.records.remove_message(
-					key, row.kind, row.item_id, chat_id, message_id)
+				done.append(row)
 				skipped += 1
 				continue
 			try:
@@ -92,13 +92,15 @@ class TakedownService:
 					key, chat_id, message_id, exc_info=True)
 				errors.append(f"{chat_id}/{message_id}: {exc}")
 				continue
-			self.records.remove_message(
-				key, row.kind, row.item_id, chat_id, message_id)
+			done.append(row)
 			deleted += 1
 
+		# 删完统一写一次记录：全部成功直接删作者节点，否则只移除已处理的消息
 		failed = len(errors)
 		if failed == 0:
 			self.records.drop_author(key)
+		else:
+			self.records.remove_messages(key, done)
 		logger.info(
 			"下架完成 author=%s deleted=%s skipped=%s failed=%s",
 			key, deleted, skipped, failed)

@@ -138,6 +138,16 @@ class BlackRequestStore(JsonStore):
 			self._persist()
 			return True
 
+	def discard_material(self, author_id: str | int) -> None:
+		"""作废一条仍在「等截图」的申请（截图超时后调用）。"""
+		with self._lock:
+			self._maybe_reload()
+			key = self.make_key(author_id)
+			record = self._items.get(key)
+			if record and record.status == self.STATUS_MATERIAL:
+				del self._items[key]
+				self._persist()
+
 	def pending_material_for_user(self, user_id: str | int | None) -> JsonDict | None:
 		"""该用户最近一条「等截图」的申请（不判断是否过期）。"""
 		key = str(user_id or "")

@@ -125,6 +125,13 @@ async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 			f"作者 {result.author_name}（#a{result.author_id}）的申请已在审核中，请勿重复提交")
 		return
 
+	if not result.transit_sent:
+		await edit_or_reply(
+			update, context,
+			f"申请已记录：{result.author_name}（#a{result.author_id}）\n"
+			"但暂时没能送到管理员那里，管理员重新推送后会继续核验")
+		return
+
 	message = [
 		f"✅ 已提交兽人作者申请：", "",
 		f"{result.author_name}（#a{result.author_id}）",

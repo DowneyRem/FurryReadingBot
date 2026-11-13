@@ -14,9 +14,13 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.callbacks.apply import edit_or_reply
-from handlers.callbacks.review import close_transit_message, notify_applicant
-from handlers.telegram import takedown_author, transit_admin_policy
-from keyboards import confirm_black_keyboard
+from handlers.callbacks.review import (
+	close_transit_message,
+	ensure_transit_admin,
+	notify_applicant,
+)
+from handlers.telegram import takedown_author
+from keyboards import confirm_black_keyboard, retry_takedown_keyboard
 from services import (
 	BlacklistDecision,
 	BlacklistReview,
@@ -64,7 +68,7 @@ def takedown_notice(takedown: TakedownResult | None) -> str:
 	if takedown.skipped:
 		lines.append(f"⚠️ {takedown.skipped} 条旧记录没有消息 ID，需手工处理")
 	if takedown.failed:
-		lines.append(f"❌ {takedown.failed} 条删除失败，记录已保留可重试")
+		lines.append(f"❌ {takedown.failed} 条删除失败，可点「重试删除」")
 	return "\n".join(lines)
 
 
@@ -176,13 +180,13 @@ async def request_blacklist_confirm(
 
 async def _takedown(
 		context: ContextTypes.DEFAULT_TYPE,
-		author_id: str) -> TakedownResult | None:
-	"""拉黑后下架频道里的历史分享；删除失败只记日志，不影响拉黑结果。"""
+		author_id: str) -> TakedownResult:
+	"""拉黑后下架频道里的历史分享；整体出错时按全部失败计，回执上给重试入口。"""
 	try:
 		result = await takedown_author(context, author_id)
-	except Exception:
+	except Exception as exc:
 		logger.warning("下架历史分享失败 author=%s", author_id, exc_info=True)
-		return None
+		return TakedownResult(author_id, failed=1, errors=(str(exc),))
 	logger.info(
 		"历史分享下架完成 author=%s deleted=%s skipped=%s failed=%s",
 		author_id, result.deleted, result.skipped, result.failed)
@@ -195,16 +199,7 @@ async def review_blacklist(
 	"""rby / rbn：中转频道管理员核验下架申请。"""
 	author_id = _link_from_data(data)
 	user = update.effective_user
-	if user is None:
-		return
-
-	admin = await transit_admin_policy(context.bot).check(user.id)
-	if not admin.allowed:
-		logger.warning(
-			"非管理员尝试核验下架申请 author=%s user=%s",
-			author_id or "-", user.id)
-		await close_transit_message(
-			update, context, "仅中转频道管理员可以核验申请")
+	if not await ensure_transit_admin(update, context, data.partition(";")[0]):
 		return
 
 	if not author_id:
@@ -222,16 +217,43 @@ async def review_blacklist(
 			f"该申请已处理：{result.author_name}（#a{author_id}）")
 		return
 
-	# 拉黑成功后再下架：名单已写盘，删除失败不回头改状态
+	# 拉黑成功后再下架：名单已写盘，删除失败不回头改状态，回执上可重试
 	takedown = None
 	if result.status == "approved":
 		takedown = await _takedown(context, author_id)
 
+	retry = retry_takedown_keyboard(author_id) if takedown and takedown.failed else None
 	await close_transit_message(
-		update, context, review_receipt(result, user, takedown))
+		update, context, review_receipt(result, user, takedown), reply_markup=retry)
 	if result.record is not None:
 		await notify_applicant(
 			context, result.record, applicant_text(result, takedown))
+
+
+async def retry_takedown(
+		update: Update, context: ContextTypes.DEFAULT_TYPE,
+		*, data: str) -> None:
+	"""rbt：重跑历史分享删除（删除可重放）；作者已不在黑名单时不删。"""
+	author_id = _link_from_data(data)
+	user = update.effective_user
+	if not await ensure_transit_admin(update, context, "rbt"):
+		return
+	if not author_id:
+		await close_transit_message(update, context, "参数不完整")
+		return
+	if not BlacklistService().can_retry_takedown(author_id):
+		await close_transit_message(
+			update, context, f"作者（#a{author_id}）已不在黑名单，未执行删除")
+		return
+
+	takedown = await _takedown(context, author_id)
+	text = "\n".join([
+		f"🈲 #作者下架重试删除（#a{author_id}）",
+		takedown_notice(takedown),
+		f"👤 操作人：{user.first_name} {user.last_name}（#u{user.id}）",
+	])
+	retry = retry_takedown_keyboard(author_id) if takedown.failed else None
+	await close_transit_message(update, context, text, reply_markup=retry)
 
 
 async def blacklist_approve(

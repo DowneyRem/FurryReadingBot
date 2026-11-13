@@ -99,6 +99,18 @@ class FakeService:
 		return self.review_result
 
 
+class Closed(list):
+	"""中转频道回执文本；markups 记录每条回执挂的按钮。"""
+
+	def __init__(self) -> None:
+		super().__init__()
+		self.markups: list = []
+
+
+def retry_data(markup) -> list[str]:
+	return [b.callback_data for row in markup.inline_keyboard for b in row]
+
+
 async def _no_name() -> str:
 	return ""
 
@@ -112,20 +124,24 @@ def patch_handler(
 ):
 	service = service or FakeService()
 	monkeypatch.setattr(blacklist_handler, "BlacklistService", lambda: service)
-	monkeypatch.setattr(
-		blacklist_handler, "transit_admin_policy", lambda bot: FakeAdmin(admin))
+
+	async def fake_ensure_admin(update, context, action):
+		return admin
+
+	monkeypatch.setattr(blacklist_handler, "ensure_transit_admin", fake_ensure_admin)
 	monkeypatch.setattr(
 		blacklist_handler, "_author_name", lambda link: _no_name())
 	replies: list[tuple[str, object]] = []
-	closed: list[str] = []
+	closed = Closed()
 	notified: list[tuple[JsonDict, str]] = []
 	takedowns: list[str] = []
 
 	async def fake_edit(update, context, text, *, reply_markup=None):
 		replies.append((text, reply_markup))
 
-	async def fake_close(update, context, text):
+	async def fake_close(update, context, text, *, reply_markup=None):
 		closed.append(text)
+		closed.markups.append(reply_markup)
 
 	async def fake_notify(context, record, text):
 		notified.append((record, text))
@@ -281,7 +297,7 @@ def test_review_requires_admin(monkeypatch) -> None:
 		FakeUpdate(), FakeContext(), data="rby;42", decision="approve"))
 
 	assert service.calls == []
-	assert "仅中转频道管理员" in closed[0]
+	assert closed == []
 	assert notified == []
 	assert takedowns == []
 
@@ -331,7 +347,8 @@ def test_review_approve_reports_takedown_failures(monkeypatch) -> None:
 
 	assert "已删除：1 条历史分享" in closed[0]
 	assert "没有消息 ID" in closed[0]
-	assert "删除失败，记录已保留可重试" in closed[0]
+	assert "1 条删除失败" in closed[0]
+	assert retry_data(closed.markups[0]) == ["rbt;42"]
 
 
 def test_review_approve_keeps_result_when_takedown_raises(monkeypatch) -> None:
@@ -347,9 +364,35 @@ def test_review_approve_keeps_result_when_takedown_raises(monkeypatch) -> None:
 
 	assert takedowns == ["42"]
 	assert "🚫 已下架：作者（#a42）" in closed[0]
-	assert "已删除" not in closed[0]
+	assert "删除失败" in closed[0]
+	assert retry_data(closed.markups[0]) == ["rbt;42"]
 	assert len(notified) == 1
 
+
+def test_retry_takedown_reruns_for_blacklisted_author(monkeypatch) -> None:
+	"""回执上的「重试删除」：作者仍在黑名单才重跑删除，不再私聊申请人。"""
+	service = FakeService()
+	service.can_retry_takedown = lambda author_id: True
+	_, _, closed, notified, takedowns = patch_handler(monkeypatch, service=service)
+
+	run(blacklist_handler.retry_takedown(FakeUpdate(), FakeContext(), data="rbt;42"))
+
+	assert takedowns == ["42"]
+	assert "重试删除" in closed[0]
+	assert closed.markups[0] is None
+	assert notified == []
+
+
+def test_retry_takedown_skips_unblacklisted_author(monkeypatch) -> None:
+	"""作者已被移出黑名单：旧回执上的按钮不能再删他的历史分享。"""
+	service = FakeService()
+	service.can_retry_takedown = lambda author_id: False
+	_, _, closed, _, takedowns = patch_handler(monkeypatch, service=service)
+
+	run(blacklist_handler.retry_takedown(FakeUpdate(), FakeContext(), data="rbt;42"))
+
+	assert takedowns == []
+	assert "已不在黑名单" in closed[0]
 
 def test_review_reject(monkeypatch) -> None:
 	service, _, closed, notified, takedowns = patch_handler(

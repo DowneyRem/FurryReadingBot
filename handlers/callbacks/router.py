@@ -14,6 +14,7 @@ from handlers.callbacks.blacklist import (
 	blacklist_reject,
 	request_blacklist,
 	request_blacklist_confirm,
+	retry_takedown,
 )
 from handlers.callbacks.review import apply_approve, apply_reject
 from handlers.callbacks.download import download
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 CANCEL_ACTIONS = {
 	"ignore",
 }
+
+# 中转频道核验按钮：handler 自己 answer，非管理员要弹窗提示且不能动卡片
+REVIEW_ACTIONS = {"rfy", "rfn", "rby", "rbn", "rbt"}
 
 # action -> handler：keyboards.py 产出的 action 必须在这里或 CANCEL_ACTIONS 中
 HANDLERS = {
@@ -51,6 +55,8 @@ HANDLERS = {
 	# 中转频道核验作者下架申请：rby 拉黑，rbn 拒绝
 	"rby": blacklist_approve,
 	"rbn": blacklist_reject,
+	# 下架回执上的「重试删除」
+	"rbt": retry_takedown,
 	# 分享
 	"snp": share_public,
 	"sna": share_private,
@@ -63,14 +69,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	if query is None or not query.data:
 		return
 
-	await query.answer()
-	# try:
-	# 	await query.edit_message_reply_markup(reply_markup=None)
-	# except Exception:
-	# 	pass
-
 	data = query.data
 	action, _, rest = data.partition(";")
+	if action not in REVIEW_ACTIONS:
+		await query.answer()
 
 	if action in CANCEL_ACTIONS:
 		try:
