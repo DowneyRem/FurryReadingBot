@@ -19,7 +19,9 @@ from config import (
 	SHARE_SCORE_THRESHOLD,
 	TEST_CHANNEL,
 )
-from sources import work_url
+from policy.author import AuthorPolicy
+from sources import fetch as sources_fetch, work_url
+from sources.base import Author, Novel, Series
 from storage.file_cache import FileCacheStore, get_file_cache
 from storage.share_records import ShareRecordStore, get_share_records
 from utils.json import JsonDict
@@ -28,7 +30,7 @@ from utils.json import JsonDict
 logger = logging.getLogger(__name__)
 
 ShareStatus = Literal[
-	"shared", "inflight", "cooldown", "cache_missing", "no_channel",
+	"shared", "inflight", "cooldown", "cache_missing", "no_channel", "forbidden",
 ]
 
 
@@ -70,6 +72,9 @@ class ShareResult:
 	remaining_seconds: float = 0.0
 	channels: tuple[str, ...] = ()
 	artifact: ShareArtifact | None = None
+	# forbidden 时给展示层用
+	author_status: str = ""
+	author_name: str = ""
 
 
 # 上传适配器：返回本次实际投递成功的 {chat_id: message_id}
@@ -101,8 +106,12 @@ class ShareService:
 		support_text: str | None = None,
 		mode: str | None = None,
 		score_threshold: float | None = None,
+		policy: AuthorPolicy | None = None,
+		fetch_fn: Callable[[str], Awaitable[Novel | Series | Author]] | None = None,
 	) -> None:
 		self._cache = cache
+		self._policy = policy
+		self._fetch = fetch_fn or sources_fetch
 		self._records = records
 		self._channels = channels
 		self._support_text = support_text
@@ -122,6 +131,13 @@ class ShareService:
 		if self._records is None:
 			self._records = get_share_records()
 		return self._records
+
+
+	@property
+	def policy(self) -> AuthorPolicy:
+		if self._policy is None:
+			self._policy = AuthorPolicy()
+		return self._policy
 
 
 	@property
@@ -182,8 +198,23 @@ class ShareService:
 		if not cached:
 			return ShareResult("cache_missing", channels=channels)
 
+		# 下载时把 target_link 写进了缓存；老数据没有就按 kind + item_id 拼
+		link = str(cached.link or "") or work_url(request.kind, request.item_id)
 		author_id = str(request.author_id or cached.author_id or "")
 		author_name = str(request.author_name or cached.author_name or "")
+		if not author_id:
+			# 老缓存没记作者：补拉一次，权限判定与下架回溯都要靠作者 id
+			item = await self._fetch(link)
+			author_id, author_name = str(item.author_id), str(item.author_name)
+
+		decision = self.policy.check(author_id, author_name)
+		if not decision.can_download:
+			return ShareResult(
+				"forbidden",
+				channels=channels,
+				author_status=decision.status,
+				author_name=decision.author_name,
+			)
 
 		remaining = self.records.remaining(
 			author_id, request.kind, request.item_id)
@@ -198,8 +229,6 @@ class ShareService:
 			return ShareResult("no_channel")
 
 		caption = self._build_caption(request, cached)
-		# 下载时把 target_link 写进了缓存；老数据没有就按 kind + item_id 拼
-		link = str(cached.link or "") or work_url(request.kind, request.item_id)
 		artifact = ShareArtifact(
 			kind=request.kind,
 			item_id=request.item_id,

@@ -14,6 +14,7 @@ import pytest
 
 from services.download_service import (
 	DownloadArtifact,
+	DownloadForbiddenError,
 	DownloadService,
 	FormatChoice,
 	DownloadInvalidLinkError,
@@ -138,7 +139,7 @@ def make_service(
 		save_fn=fake_save,
 		resolve_link_fn=fake_resolve,
 		resolve_source_fn=(lambda link: FakeSource(kind)) if source else (lambda link: None),
-		list_manager=list_manager or FakeListManager(),
+		list_manager=list_manager or FakeListManager(furry={"42"}),
 	)
 	return service, cache
 
@@ -194,7 +195,7 @@ def test_check_access_furry_and_needs_apply(tmp_path) -> None:
 	offer = run(service.inspect_text(NOVEL_LINK))
 	assert service.check_access(offer).status == "allowed"
 
-	other, _ = make_service(tmp_path)
+	other, _ = make_service(tmp_path, list_manager=FakeListManager())
 	assert other.check_access(offer).status == "needs_apply"
 
 
@@ -202,7 +203,7 @@ def test_prepare_uses_cache_without_fetch(tmp_path) -> None:
 	service, cache = make_service(tmp_path)
 	cache.set(
 		"novel:18012577:txt", "FILE_ID",
-		file_name="cached.txt", caption="缓存说明")
+		file_name="cached.txt", caption="缓存说明", author_id="42")
 	fetch_calls: list[str] = []
 	save_calls: list[tuple[str, str]] = []
 	service, _ = make_service(
@@ -368,7 +369,7 @@ def test_same_link_prepare_is_serialized(tmp_path) -> None:
 		save_fn=fake_save,
 		resolve_link_fn=fake_resolve,
 		resolve_source_fn=lambda link: FakeSource("series"),
-		list_manager=FakeListManager(),
+		list_manager=FakeListManager(furry={"42"}),
 	)
 
 	async def main():
@@ -417,7 +418,7 @@ def test_different_links_are_not_serialized(tmp_path) -> None:
 			save_fn=fake_save,
 			resolve_link_fn=fake_resolve,
 			resolve_source_fn=lambda link: FakeSource("series"),
-			list_manager=FakeListManager(),
+			list_manager=FakeListManager(furry={"42"}),
 		)
 		return await asyncio.gather(
 			service.prepare("dst", SERIES_LINK),
@@ -458,7 +459,7 @@ def test_deliver_same_link_uploads_once(tmp_path) -> None:
 		save_fn=fake_save,
 		resolve_link_fn=fake_resolve,
 		resolve_source_fn=lambda link: FakeSource("novel"),
-		list_manager=FakeListManager(),
+		list_manager=FakeListManager(furry={"42"}),
 	)
 
 	async def upload(artifact: DownloadArtifact) -> None:
@@ -468,6 +469,7 @@ def test_deliver_same_link_uploads_once(tmp_path) -> None:
 			artifact.cache_key,
 			"FILE_ID",
 			file_name=artifact.filename or "out.txt",
+			author_id=artifact.author_id,
 		)
 		await asyncio.sleep(0.01)
 
@@ -486,3 +488,21 @@ def test_deliver_same_link_uploads_once(tmp_path) -> None:
 	assert sum(1 for artifact in uploads if artifact.from_cache) == 1
 	cached = [artifact for artifact in uploads if artifact.from_cache][0]
 	assert cached.file_id == "FILE_ID"
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_deliver_refused_after_author_blacklisted(tmp_path, cached) -> None:
+	"""菜单发出后作者被拉黑：旧的下载按钮（无论是否命中缓存）都不能再拿到文件。"""
+	service, cache = make_service(
+		tmp_path, list_manager=FakeListManager(black={"42"}))
+	if cached:
+		cache.set("novel:18012577:txt", "FILE_ID", file_name="a.txt", author_id="42")
+	uploads: list = []
+
+	async def upload(artifact) -> None:
+		uploads.append(artifact)
+
+	with pytest.raises(DownloadForbiddenError):
+		run(service.deliver("dn", NOVEL_LINK, upload=upload))
+	assert uploads == []
+	assert not (tmp_path / "out.txt").exists()

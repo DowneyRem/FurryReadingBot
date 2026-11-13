@@ -83,6 +83,9 @@ def _receipt_text(result: ReviewResult, user) -> str:
 	if result.status == "approved":
 		text.append(f"🐺 #兽人作者申请已通过")
 		text.append(f"✅ 通过：{result.author_name}（#a{result.author_id}）")
+	elif result.status == "blacklisted":
+		text.append(f"🐺 #兽人作者申请已拒绝（作者已在黑名单）")
+		text.append(f"❌ 拒绝：{result.author_name}（#a{result.author_id}）")
 	else:
 		text.append(f"🐺 #兽人作者申请已拒绝")
 		text.append(f"❌ 拒绝：{result.author_name}（#a{result.author_id}）")

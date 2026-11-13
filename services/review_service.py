@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 ReviewDecision = Literal["approve", "reject"]
 ReviewStatus = Literal[
 	"approved", "rejected", "missing", "already_processed",
+	# 通过时作者已在黑名单：申请按拒绝结案
+	"blacklisted",
 ]
 
 
@@ -93,7 +95,14 @@ class ReviewService:
 				record=current,
 			)
 
-		if decision == "approve":
+		if decision == "approve" and self.list_manager.is_blacklisted(author_id):
+			if not self.furry_requests.set_status(
+				author_id, FurryRequestStore.STATUS_REJECTED,
+				expected=FurryRequestStore.STATUS_PENDING,
+			):
+				return self._already_processed(author_id, current)
+			result = self._updated(author_id, "blacklisted", previous, current)
+		elif decision == "approve":
 			if not self.furry_requests.set_status(
 				author_id, FurryRequestStore.STATUS_APPROVED,
 				expected=FurryRequestStore.STATUS_PENDING,
@@ -128,7 +137,7 @@ class ReviewService:
 	def _updated(
 		self,
 		author_id: str,
-		status: Literal["approved", "rejected"],
+		status: Literal["approved", "rejected", "blacklisted"],
 		previous: str,
 		fallback: JsonDict,
 	) -> ReviewResult:

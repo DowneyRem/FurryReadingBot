@@ -11,6 +11,7 @@ from handlers.telegram import reply, upload_file
 from keyboards import down_series_keyboard, share_novel_keyboard
 from services import (
 	DownloadArtifact,
+	DownloadForbiddenError,
 	DownloadService,
 	DownloadInvalidLinkError,
 	DownloadUnsupportedActionError,
@@ -28,6 +29,12 @@ async def choose_series_format(
 		await query.edit_message_text(text, reply_markup=markup)
 	else:
 		await reply(update, context, text, reply_markup=markup, delete_after=0)
+
+
+def forbidden_text(status: str, author_name: str) -> str:
+	if status == "blacklisted":
+		return f"作者 {author_name} 已禁止通过本 Bot 下载与分享"
+	return f"作者 {author_name} 不在兽人作者名单中，暂不能下载与分享"
 
 
 async def download(
@@ -74,6 +81,9 @@ async def download(
 		# 落盘失败（磁盘满 / 无权限 / 路径被占）：infra 已经带 traceback 记了日志，
 		# 这里只回一句中文，不把 WinError / 服务器路径甩给用户
 		await reply(update, context, "生成文件失败（磁盘或权限问题），请稍后重试。")
+		return
+	except DownloadForbiddenError as e:
+		await reply(update, context, forbidden_text(e.access.status, e.access.author_name))
 		return
 
 	if outcome.format_choice_link:

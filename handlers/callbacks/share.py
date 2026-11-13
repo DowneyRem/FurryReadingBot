@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from keyboards import import_to_legado_keyboard
+from handlers.callbacks.download import forbidden_text
 from handlers.telegram import reply, upload_file
 from services import ShareRequest, ShareResult, ShareService
 
@@ -77,6 +78,9 @@ async def share(
 		return None
 	if result.status == "cache_missing":
 		await reply(update, context, "缓存已失效，请重新下载后再分享")
+		return None
+	if result.status == "forbidden":
+		await reply(update, context, forbidden_text(result.author_status, result.author_name))
 		return None
 	if result.status == "no_channel":
 		await reply(update, context, "未配置分享频道")
