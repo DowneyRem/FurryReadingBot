@@ -4,10 +4,26 @@ from pathlib import Path
 
 from sources.base import Author, Novel, NovelSource, Series
 from sources.linpx import LinpxSource
+from sources.linpx.urls import url_author, url_novel, url_series
 
 _SOURCES: list[NovelSource] = [
 	LinpxSource(),
 ]
+
+
+def work_url(kind: str, item_id: str | int) -> str:
+	"""按作品类型拼出 Linpx 作品链接。
+
+	分享链路只拿到 `kind;item_id`（callback_data 里没有链接），
+	file_id 缓存里又没存 link 的老数据靠这里兜底。
+	"""
+	if not item_id:
+		return ""
+	if kind == "series":
+		return url_series(item_id)
+	if kind == "author":
+		return url_author(item_id)
+	return url_novel(item_id)
 
 
 def resolve_source(link: str) -> NovelSource | None:

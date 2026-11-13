@@ -19,6 +19,7 @@ from config import (
 	SHARE_SCORE_THRESHOLD,
 	TEST_CHANNEL,
 )
+from sources import work_url
 from storage.file_cache import FileCacheStore, get_file_cache
 from storage.share_records import ShareRecordStore, get_share_records
 from utils.json import JsonDict
@@ -57,6 +58,8 @@ class ShareArtifact:
 	channels: tuple[str, ...]
 	caption: str
 	public: bool
+	# 作品链接：分享到频道后「添加本文至书架」按钮要用
+	link: str = ""
 
 
 @dataclass(frozen=True)
@@ -195,6 +198,8 @@ class ShareService:
 			return ShareResult("no_channel")
 
 		caption = self._build_caption(request, cached)
+		# 下载时把 target_link 写进了缓存；老数据没有就按 kind + item_id 拼
+		link = str(cached.link or "") or work_url(request.kind, request.item_id)
 		artifact = ShareArtifact(
 			kind=request.kind,
 			item_id=request.item_id,
@@ -205,6 +210,7 @@ class ShareService:
 			channels=channels,
 			caption=caption,
 			public=request.public,
+			link=link,
 		)
 
 		_inflight.add(share_key)

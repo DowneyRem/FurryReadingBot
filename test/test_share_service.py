@@ -30,6 +30,7 @@ def make_service(
 		support="频道",
 		author_id="456",
 		author_name="作者A",
+		link="",
 ):
 	cache = FileCacheStore(
 		path=tmp_path / "files_cache.json", default_ttl_days=1)
@@ -45,6 +46,7 @@ def make_service(
 	cache.set(
 		"novel:1:txt", "FILE_ID",
 		file_name="a.txt", caption="标题\n作者：A",
+		link=link,
 		author_id=author_id, author_name=author_name,
 	)
 	return service, cache, records
@@ -96,6 +98,42 @@ def test_share_success(tmp_path) -> None:
 	assert work.share_count == 1
 	assert records.by_author("456")[0].message_id == 903
 	assert records.by_author("456")[0].user_name == "Alice"
+
+
+def test_artifact_link_comes_from_cache(tmp_path) -> None:
+	"""下载时写进缓存的 target_link 会带进分享产物，供「添加本文至书架」使用。"""
+	service, _cache, _records = make_service(
+		tmp_path, link="https://linpx.ink/pixiv/novel/1")
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.artifact is not None
+	assert result.artifact.link == "https://linpx.ink/pixiv/novel/1"
+	assert seen[0].link == "https://linpx.ink/pixiv/novel/1"
+
+
+def test_artifact_link_falls_back_to_work_url(tmp_path) -> None:
+	"""老缓存没存 link：按 kind + item_id 拼作品链接，按钮照样能用。"""
+	service, _cache, _records = make_service(tmp_path)
+
+	result = run(service.share(request(), upload=uploader()))
+
+	assert result.artifact is not None
+	assert result.artifact.link == "https://linpx.ink/pixiv/novel/1"
+
+
+def test_series_artifact_link_uses_series_url(tmp_path) -> None:
+	service, cache, _records = make_service(tmp_path)
+	cache.set(
+		FileCacheStore.make_key("series", "9", "txt"), "FILE_ID",
+		author_id="456", author_name="作者A")
+
+	result = run(service.share(
+		request(kind="series", item_id="9"), upload=uploader()))
+
+	assert result.artifact is not None
+	assert result.artifact.link == "https://linpx.ink/pixiv/series/9"
 
 
 def test_share_writes_one_message_per_channel(tmp_path) -> None:
