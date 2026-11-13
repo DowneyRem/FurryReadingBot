@@ -82,7 +82,7 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	novels = list(data.novels or [])
 	
 	for novel in novels:
-		tags.extend(novel.tags)
+		tags.extend(novel.tags or [])
 	tags = list(set(tags))
 	novel_ids = [novel.id for novel in novels]
 	novel_titles = [novel.title for novel in novels]
@@ -128,11 +128,11 @@ def json_to_author(data: dict | JsonDict) -> Author:
 	author_url = url_author(author_id)
 	author_name = data.name
 	
-	tags = [item.tag for item in data.tags if item.time >= 3]
+	tags = [item.tag for item in (data.tags or []) if (item.time or 0) >= 3]
 	comment = data.comment
 	image_url = data.imageUrl
-	novel_ids = data.novels
-	series_ids = [item.id for item in data.series]
+	novel_ids = list(data.novels or [])
+	series_ids = [item.id for item in (data.series or [])]
 	
 	return Author(
 		novel_id=novel_id,

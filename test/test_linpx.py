@@ -16,9 +16,11 @@ import pytest
 
 from sources import fetch, resolve_source
 from sources.linpx import LinpxSource
+from infra.http import HttpError
+from sources.linpx import client
 from sources.linpx.client import get_novel
 from sources.linpx.config import NOVEL_PATTERN
-from sources.linpx.errors import LinpxNotFoundError
+from sources.linpx.errors import LinpxNetworkError, LinpxNotFoundError
 from sources.linpx.parse import json_to_novel
 from sources.utils import get_id
 
@@ -95,6 +97,25 @@ def test_json_to_novel_error() -> None:
 	with pytest.raises(LinpxNotFoundError):
 		json_to_novel({})
 
+
+
+def _failing_get_json(status):
+	async def fake(url, headers=None):
+		raise HttpError(url, status)
+	return fake
+
+
+def test_missing_work_reports_not_found(monkeypatch) -> None:
+	monkeypatch.setattr(client, "get_json", _failing_get_json(404))
+	with pytest.raises(LinpxNotFoundError):
+		run(LinpxSource().fetch_novel(SAMPLE_LINPX))
+
+
+@pytest.mark.parametrize("status", [None, 500])
+def test_transient_failure_reports_network_error(monkeypatch, status) -> None:
+	monkeypatch.setattr(client, "get_json", _failing_get_json(status))
+	with pytest.raises(LinpxNetworkError):
+		run(LinpxSource().fetch_novel(SAMPLE_LINPX))
 
 @live
 def test_client_get_novel() -> None:
