@@ -1,151 +1,130 @@
-"""Linpx 单篇：解析 + 真实 API 拉取。
+"""Linpx 源：链接解析 / 数据转换单测；真实 API 用例默认跳过。
 
 运行（在项目根目录）:
-	PYTHONPATH=. python test/test_linpx.py
-或:
-	PYTHONPATH=. python -m pytest test/test_linpx.py -v
+	.venv\\Scripts\\python.exe -m pytest test/test_linpx.py -q
+
+需要真实网络时先设环境变量：
+	$env:LINPX_LIVE = "1"
 """
 
 from __future__ import annotations
 
 import asyncio
-import sys
-from pathlib import Path
+import os
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-	sys.path.insert(0, str(ROOT))
-
-from sources import fetch_novel, resolve_source
-from sources.linpx import LinpxSource, parse
+from sources import fetch, resolve_source
+from sources.linpx import LinpxSource
 from sources.linpx.client import get_novel
+from sources.linpx.config import NOVEL_PATTERN
+from sources.linpx.errors import LinpxNotFoundError
+from sources.linpx.parse import json_to_novel
+from sources.utils import get_id
 
 
 SAMPLE_ID = "18012577"
 SAMPLE_LINPX = f"https://linpx.ink/pixiv/novel/{SAMPLE_ID}"
 SAMPLE_PN = f"https://linpx.ink/pn/{SAMPLE_ID}"
-SAMPLE_PIXIV = f"https://www.pixiv.net/novel/show.php?id={SAMPLE_ID}"
+
+LIVE = os.getenv("LINPX_LIVE") == "1"
+live = pytest.mark.skipif(not LIVE, reason="需要真实 Linpx API：LINPX_LIVE=1")
 
 
-class TestParse:
-	def test_extract_linpx_url(self):
-		assert parse.get_novel_id(SAMPLE_LINPX) == SAMPLE_ID
-
-	def test_extract_pn_url(self):
-		assert parse.get_novel_id(SAMPLE_PN) == SAMPLE_ID
-
-	def test_extract_pixiv_url(self):
-		assert parse.get_novel_id(SAMPLE_PIXIV) == SAMPLE_ID
-
-	def test_extract_plain_id(self):
-		assert parse.get_novel_id(SAMPLE_ID) == SAMPLE_ID
-
-	def test_extract_in_sentence(self):
-		text = f"请下载这篇 {SAMPLE_LINPX} 谢谢"
-		assert parse.get_novel_id(text) == SAMPLE_ID
-
-	def test_extract_invalid(self):
-		assert parse.get_novel_id("hello world") is None
-		assert parse.get_novel_id("") is None
-
-	def test_can_handle(self):
-		src = LinpxSource()
-		assert src.can_handle(SAMPLE_LINPX) is True
-		assert src.can_handle(SAMPLE_PN) is True
-		assert src.can_handle(SAMPLE_PIXIV) is True
-		assert src.can_handle(SAMPLE_ID) is True
-		assert src.can_handle("不是链接") is False
-
-	def test_json_to_novel_minimal(self):
-		data = {
-			"id": 123,
-			"title": "测试标题",
-			"userId": 456,
-			"userName": "测试作者",
-			"content": "正文内容",
-			"tags": ["兽人", "原创"],
-			"desc": "简介",
-			"series": {"id": 789, "title": "系列名"},
-		}
-		novel = parse.json_to_novel(data)
-		assert novel.id == "123"
-		assert novel.title == "测试标题"
-		assert novel.author_id == "456"
-		assert novel.author_name == "测试作者"
-		assert novel.content == "正文内容"
-		assert novel.tags == ["兽人", "原创"]
-		assert novel.series_id == "789"
-		assert novel.series_title == "系列名"
-		assert novel.source == "linpx"
-
-	def test_json_to_novel_error(self):
-		with pytest.raises(ValueError):
-			parse.json_to_novel({"error": True})
-		with pytest.raises(ValueError):
-			parse.json_to_novel({})
+def run(coro):
+	return asyncio.run(coro)
 
 
-class TestLinpxLive:
-	@pytest.mark.asyncio
-	async def test_client_get_novel(self):
-		data = await get_novel(SAMPLE_ID)
-		assert data.get("error") in (None, False)
-		assert str(data.get("id")) == SAMPLE_ID
-		assert data.get("title")
-		assert data.get("content")
-		assert data.get("userId")
-		assert data.get("userName")
-
-	@pytest.mark.asyncio
-	async def test_fetch_via_source(self):
-		src = LinpxSource()
-		novel = await src.fetch(SAMPLE_LINPX)
-		assert novel.id == SAMPLE_ID
-		assert novel.title
-		assert novel.author_id
-		assert novel.author_name
-		assert len(novel.content) > 0
-		assert novel.source == "linpx"
-		print(
-			f"\n[live] title={novel.title!r} "
-			f"author={novel.author_name}({novel.author_id}) "
-			f"tags={novel.tags[:5]} content_len={len(novel.content)}"
-		)
-
-	@pytest.mark.asyncio
-	async def test_fetch_via_registry(self):
-		assert resolve_source(SAMPLE_PN) is not None
-		novel = await fetch_novel(SAMPLE_PN)
-		assert novel.id == SAMPLE_ID
-		assert novel.content
-
-	@pytest.mark.asyncio
-	async def test_fetch_plain_id(self):
-		novel = await fetch_novel(SAMPLE_ID)
-		assert novel.id == SAMPLE_ID
+def test_extract_linpx_url() -> None:
+	assert get_id(SAMPLE_LINPX, NOVEL_PATTERN) == SAMPLE_ID
 
 
-def _run_manual():
-	async def main():
-		print("=== parse ===")
-		for s in [SAMPLE_LINPX, SAMPLE_PN, SAMPLE_PIXIV, SAMPLE_ID]:
-			print(f"  {s!r} -> {parse.get_novel_id(s)}")
+def test_extract_pn_url() -> None:
+	assert get_id(SAMPLE_PN, NOVEL_PATTERN) == SAMPLE_ID
 
-		print("=== live fetch ===")
-		novel = await fetch_novel(SAMPLE_LINPX)
-		print(f"  id: {novel.id}")
-		print(f"  title: {novel.title}")
-		print(f"  author: {novel.author_name} ({novel.author_id})")
-		print(f"  tags: {novel.tags}")
-		print(f"  series: {novel.series_id} {novel.series_title}")
-		print(f"  content_len: {len(novel.content)}")
-		print(f"  content preview: {novel.content[:120]!r}...")
-		print("OK")
 
-	asyncio.run(main())
+def test_extract_in_sentence() -> None:
+	assert get_id(f"请下载这篇 {SAMPLE_LINPX} 谢谢", NOVEL_PATTERN) == SAMPLE_ID
+
+
+def test_extract_invalid() -> None:
+	assert get_id("hello world", NOVEL_PATTERN) is None
+	assert get_id("", NOVEL_PATTERN) is None
+
+
+def test_can_handle() -> None:
+	src = LinpxSource()
+	assert src.can_handle(SAMPLE_LINPX) is True
+	assert src.can_handle(SAMPLE_PN) is True
+	assert src.can_handle(f"https://linpx.ink/pixiv/user/{SAMPLE_ID}") is True
+	assert src.can_handle(SAMPLE_ID) is False  # 纯数字 ID 不是链接，先归一化再进来
+	assert src.can_handle("不是链接") is False
+
+
+def test_resolve_source() -> None:
+	assert isinstance(resolve_source(SAMPLE_LINPX), LinpxSource)
+	assert resolve_source("https://example.com/novel/1") is None
+
+
+def test_json_to_novel_minimal() -> None:
+	data = {
+		"id": 123,
+		"title": "测试标题",
+		"userId": 456,
+		"userName": "测试作者",
+		"content": "正文内容",
+		"tags": ["兽人", "原创"],
+		"desc": "简介",
+		"series": {"id": 789, "title": "系列名"},
+	}
+	novel = json_to_novel(data)
+	assert str(novel.id) == "123"
+	assert novel.title == "测试标题"
+	assert str(novel.author_id) == "456"
+	assert novel.author_name == "测试作者"
+	assert novel.content == "正文内容"
+	assert novel.tags == ["兽人", "原创"]
+	assert str(novel.series_id) == "789"
+	assert novel.series_title == "系列名"
+	assert novel.source == "Linpx"
+
+
+def test_json_to_novel_error() -> None:
+	with pytest.raises(LinpxNotFoundError):
+		json_to_novel({"error": True})
+	with pytest.raises(LinpxNotFoundError):
+		json_to_novel({})
+
+
+@live
+def test_client_get_novel() -> None:
+	data = run(get_novel(SAMPLE_ID))
+	assert data.get("error") in (None, False)
+	assert str(data.get("id")) == SAMPLE_ID
+	assert data.get("title")
+	assert data.get("content")
+	assert data.get("userId")
+	assert data.get("userName")
+
+
+@live
+def test_fetch_via_source() -> None:
+	novel = run(LinpxSource().fetch_novel(SAMPLE_LINPX))
+	assert str(novel.id) == SAMPLE_ID
+	assert novel.title
+	assert novel.author_id
+	assert novel.author_name
+	assert len(novel.content) > 0
+	assert novel.source == "Linpx"
+
+
+@live
+def test_fetch_via_registry() -> None:
+	assert resolve_source(SAMPLE_PN) is not None
+	novel = run(fetch(SAMPLE_PN))
+	assert str(novel.id) == SAMPLE_ID
+	assert novel.content
 
 
 if __name__ == "__main__":
-	_run_manual()
+	print("请使用 pytest 运行：python -m pytest test/test_linpx.py -q")

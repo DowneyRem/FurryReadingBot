@@ -147,7 +147,7 @@ def patch_handler(
 
 def test_material_notice_contains_requirements() -> None:
 	text = material_notice("作者", "42")
-	assert "已受理" in text
+	assert "Pixiv 后台数据" in text
 	assert "截图" in text
 	assert "30 分钟" in text
 
@@ -246,7 +246,7 @@ def test_confirm_needs_material(monkeypatch) -> None:
 
 	assert service.calls[0][0] == "request"
 	assert service.calls[0][1] == "42"
-	assert "已受理" in replies[-1][0]
+	assert "Pixiv 后台数据" in replies[-1][0]
 	assert "30 分钟" in replies[-1][0]
 
 

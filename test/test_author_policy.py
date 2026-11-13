@@ -32,6 +32,8 @@ def test_blacklisted_denies_download_and_apply(tmp_path) -> None:
 	assert decision.status == "blacklisted"
 	assert decision.can_download is False
 	assert decision.can_apply is False
+	assert decision.is_blacklisted is True
+	assert decision.is_furry is False
 
 
 def test_furry_allows_download_without_apply(tmp_path) -> None:
@@ -42,6 +44,8 @@ def test_furry_allows_download_without_apply(tmp_path) -> None:
 	assert decision.status == "furry"
 	assert decision.can_download is True
 	assert decision.can_apply is False
+	assert decision.is_blacklisted is False
+	assert decision.is_furry is True
 
 
 def test_unknown_denies_download_but_allows_apply(tmp_path) -> None:
@@ -52,6 +56,8 @@ def test_unknown_denies_download_but_allows_apply(tmp_path) -> None:
 	assert decision.status == "unknown"
 	assert decision.can_download is False
 	assert decision.can_apply is True
+	assert decision.is_blacklisted is False
+	assert decision.is_furry is False
 
 
 def test_blacklist_wins_over_furry(tmp_path) -> None:
