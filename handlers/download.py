@@ -1,3 +1,5 @@
+import logging
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -16,6 +18,8 @@ from services import (
 )
 from sources.linpx.errors import LinpxError
 
+logger = logging.getLogger(__name__)
+
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	message = update.effective_message
@@ -32,10 +36,11 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		await message.reply_text("暂不支持该链接，请发送 Linpx 小说、系列或作者链接。")
 		return
 	except LinpxError as e:
-		await message.reply_text(f"发生 Linpx 错误\n{e}")
+		await message.reply_text(str(e))
 		return
-	except Exception as e:
-		await message.reply_text(f"发生未知错误\n{e}")
+	except Exception:
+		logger.exception("检查下载链接失败 text=%s", message.text)
+		await message.reply_text("获取作品信息失败，请稍后重试。")
 		return
 
 	access = service.check_access(offer)
