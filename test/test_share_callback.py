@@ -15,6 +15,7 @@ import asyncio
 
 from handlers.callbacks import share as share_handler
 from handlers.telegram import SentDocument
+from policy.author import AuthorPolicy
 from services.share_service import ShareService
 from storage.file_cache import FileCacheStore
 from storage.share_records import ShareRecordStore
@@ -40,6 +41,21 @@ class FakeUpdate:
 	callback_query = FakeQuery()
 
 
+class FurryLists:
+	"""名单替身：所有作者都在兽人作者名单。"""
+
+	class furrylist:
+		@staticmethod
+		def get_name(author_id) -> str:
+			return ""
+
+	def is_blacklisted(self, author_id) -> bool:
+		return False
+
+	def is_furryauthor(self, author_id) -> bool:
+		return True
+
+
 def patch_handler(monkeypatch, tmp_path, *, link=""):
 	"""把 service / 上传 / 回复都换成可观测的替身。"""
 	cache = FileCacheStore(
@@ -54,6 +70,7 @@ def patch_handler(monkeypatch, tmp_path, *, link=""):
 			path=tmp_path / "share_records.json", cooldown_days=1),
 		channels=("channel",),
 		support_text="频道",
+		policy=AuthorPolicy(FurryLists()),
 	)
 	monkeypatch.setattr(share_handler, "ShareService", lambda: service)
 

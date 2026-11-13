@@ -52,6 +52,14 @@ class DownloadUnsupportedActionError(DownloadError):
 	"""callback 动作不在下载白名单里。"""
 
 
+class DownloadForbiddenError(DownloadError):
+	"""按当前名单该作者不能下载（例如菜单发出后作者被拉黑）。"""
+
+	def __init__(self, access: "AuthorAccess") -> None:
+		self.access = access
+		super().__init__(f"作者 {access.author_name} 当前不可下载：{access.status}")
+
+
 @dataclass(frozen=True)
 class DownloadOffer:
 	"""链接检查结果：handler 据此渲染作品信息和下载按钮。"""
@@ -241,7 +249,11 @@ class DownloadService:
 
 	def check_access(self, offer: DownloadOffer) -> AuthorAccess:
 		"""按当前名单判断该作者能否下载（规则见 `policy.author`）。"""
-		decision = self.policy.check(offer.author_id, offer.author_name)
+		return self._access(offer.author_id, offer.author_name)
+
+
+	def _access(self, author_id: str, author_name: str) -> AuthorAccess:
+		decision = self.policy.check(author_id, author_name)
 		if decision.can_download:
 			return AuthorAccess("allowed", decision.author_id, decision.author_name)
 		if decision.status == "blacklisted":
@@ -294,6 +306,13 @@ class DownloadService:
 
 		if cached:
 			logger.info("命中缓存 %s %s", cache_key, cached.file_name)
+			author_id = str(cached.author_id or "")
+			author_name = str(cached.author_name or "")
+			if not author_id:
+				# 老缓存没记作者：拉一次元信息再判定，不能跳过权限
+				item = await self._fetch(target_link)
+				author_id, author_name = str(item.author_id), str(item.author_name)
+			self._ensure_allowed(author_id, author_name)
 			return DownloadArtifact(
 				kind=kind,
 				item_id=item_id,
@@ -305,11 +324,12 @@ class DownloadService:
 				filename=cached.file_name or None,
 				cleanup=False,
 				from_cache=True,
-				author_id=str(cached.author_id or ""),
-				author_name=str(cached.author_name or ""),
+				author_id=author_id,
+				author_name=author_name,
 			)
 
 		item = await self._fetch(target_link)
+		self._ensure_allowed(str(item.author_id), str(item.author_name))
 		caption = f"{str(item)}\n{item.url}"
 		path = Path(await self._save(target_link, file_type))
 
@@ -382,6 +402,13 @@ class DownloadService:
 			if artifact.cleanup and artifact.path is not None:
 				await self._discard(artifact.path)
 		return DownloadOutcome(artifact=artifact)
+
+
+	def _ensure_allowed(self, author_id: str, author_name: str) -> None:
+		"""每次真正交付前按当前名单复查，菜单展示时的判定可能已过期。"""
+		access = self._access(author_id, author_name)
+		if access.status != "allowed":
+			raise DownloadForbiddenError(access)
 
 
 	def _find_cached(self, kind: str, item_id: str) -> list[tuple[str, str, JsonDict]]:

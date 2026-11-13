@@ -13,6 +13,7 @@ import asyncio
 import pytest
 
 import services.share_service as share_service_module
+from policy.author import AuthorPolicy
 from services.share_service import ShareRequest, ShareService
 from storage.file_cache import FileCacheStore
 from storage.share_records import ShareRecordStore
@@ -22,9 +23,34 @@ def run(coro):
 	return asyncio.run(coro)
 
 
+class FakeList:
+	def get_name(self, author_id) -> str:
+		return ""
+
+
+class FakeLists:
+	"""名单替身：默认 456 在兽人作者名单。"""
+
+	def __init__(self, *, black=(), furry=("456",)) -> None:
+		self.black, self.furry = set(black), set(furry)
+		self.blacklist = self.furrylist = FakeList()
+
+	def is_blacklisted(self, author_id) -> bool:
+		return str(author_id) in self.black
+
+	def is_furryauthor(self, author_id) -> bool:
+		return str(author_id) in self.furry
+
+
+class FakeWork:
+	author_id = "456"
+	author_name = "作者A"
+
+
 def make_service(
 		tmp_path,
 		*,
+		lists=None,
 		channels=("channel",),
 		mode=None,
 		support="频道",
@@ -42,6 +68,8 @@ def make_service(
 		channels=channels,
 		support_text=support,
 		mode=mode,
+		policy=AuthorPolicy(lists or FakeLists()),
+		fetch_fn=fetch_work,
 	)
 	cache.set(
 		"novel:1:txt", "FILE_ID",
@@ -50,6 +78,10 @@ def make_service(
 		author_id=author_id, author_name=author_name,
 	)
 	return service, cache, records
+
+
+async def fetch_work(link: str) -> FakeWork:
+	return FakeWork()
 
 
 def request(**kwargs) -> ShareRequest:
@@ -200,8 +232,8 @@ def test_share_no_channel(tmp_path) -> None:
 	assert seen == []
 	assert records.by_author("456") == []
 
-def test_share_without_author_falls_back_to_placeholder(tmp_path) -> None:
-	"""缓存里没有 author_id 时记到 "-" 桶，冷却仍然生效。"""
+def test_share_without_author_fetches_author(tmp_path) -> None:
+	"""老缓存没有 author_id：补拉作者再判定与记录，下架才能找到这条分享。"""
 	service, _cache, records = make_service(
 		tmp_path, author_id="", author_name="")
 
@@ -210,7 +242,21 @@ def test_share_without_author_falls_back_to_placeholder(tmp_path) -> None:
 
 	assert first.status == "shared"
 	assert second.status == "cooldown"
-	assert records.by_author("-")[0].message_id == 903
+	assert records.by_author("456")[0].message_id == 903
+
+
+def test_share_refused_after_author_blacklisted(tmp_path) -> None:
+	"""下载后作者被拉黑：旧的分享按钮不能再发到频道。"""
+	service, _cache, records = make_service(
+		tmp_path, lists=FakeLists(black={"456"}))
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.status == "forbidden"
+	assert result.author_status == "blacklisted"
+	assert seen == []
+	assert records.by_author("456") == []
 
 
 def test_test_mode_uses_test_channel(monkeypatch, tmp_path) -> None:

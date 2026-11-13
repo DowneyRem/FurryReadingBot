@@ -17,9 +17,13 @@ AUTHOR_LINK = "https://linpx.ink/pixiv/user/42"
 
 
 class FakeListManager:
-	def __init__(self) -> None:
+	def __init__(self, *, black=()) -> None:
 		self.furry: set[str] = set()
+		self.black = set(black)
 		self.calls: list[tuple[str, str, str, str]] = []
+
+	def is_blacklisted(self, author_id) -> bool:
+		return str(author_id) in self.black
 
 	def add_furrylist(self, author_id, name: str = "", note: str = "") -> None:
 		self.calls.append(("furry", str(author_id), name, note))
@@ -150,3 +154,16 @@ def test_unknown_decision_raises(tmp_path) -> None:
 
 	with pytest.raises(ValueError):
 		service.review(AUTHOR_ID, "unknown")  # type: ignore[arg-type]
+
+
+def test_approve_blacklisted_author_rejects_request(tmp_path) -> None:
+	"""申请待审期间作者被拉黑：点通过也不能进兽人名单，申请按拒绝结案。"""
+	service, store, manager = make_service(
+		tmp_path, FakeListManager(black={AUTHOR_ID}))
+	submit(store)
+
+	result = service.review(AUTHOR_ID, "approve")
+
+	assert result.status == "blacklisted"
+	assert manager.calls == []
+	assert store.get(AUTHOR_ID).status == FurryRequestStore.STATUS_REJECTED
