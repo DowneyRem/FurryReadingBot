@@ -1,4 +1,4 @@
-"""HTTP 访问：aiohttp 按事件循环复用会话，requests 作为同步兜底。"""
+"""HTTP 访问：aiohttp 按事件循环复用会话；requests 只给独立脚本用。"""
 
 from __future__ import annotations
 
@@ -39,27 +39,50 @@ async def close_http() -> None:
 		await session.close()
 
 
-async def get_json(url: str, headers: dict | None = None) -> Any | None:
-	"""异步获取 JSON；失败返回 ``None``，调用方按空值处理。"""
-	try:
-		session = _get_session()
-		async with session.get(url, headers=headers) as resp:
-			resp.raise_for_status()
-			return await resp.json()
-	except Exception as e:
-		logger.error("异步请求 JSON 失败：%s，原因：%s", url, e)
-		return None
+class HttpError(Exception):
+	"""请求最终失败：status 为 None 表示没拿到响应（超时、连接失败）。"""
+
+	def __init__(self, url: str, status: int | None = None) -> None:
+		self.url = url
+		self.status = status
+		super().__init__(f"请求失败（{status or '无响应'}）：{url}")
 
 
-def get_json_sync(url: str, headers: dict | None = None) -> Any | None:
-	"""同步获取 JSON；失败返回 ``None``，供独立脚本使用。"""
-	try:
-		response = requests.get(url, headers=headers, timeout=SYNC_TIMEOUT)
-		response.raise_for_status()
-		return response.json()
-	except Exception as e:
-		logger.error("请求失败：%s，原因：%s", url, e)
-		return None
+RETRY_ATTEMPTS = 3
+RETRY_DELAY = 1.0
+
+
+def _is_retryable(status: int) -> bool:
+	return status == 429 or status >= 500
+
+
+async def get_json(url: str, headers: dict | None = None) -> Any:
+	"""异步获取 JSON；超时、连接失败、429 / 5xx 自动重试，最终失败抛 ``HttpError``。"""
+	status: int | None = None
+	for attempt in range(1, RETRY_ATTEMPTS + 1):
+		try:
+			session = _get_session()
+			async with session.get(url, headers=headers) as resp:
+				status = resp.status
+				if resp.status < 400:
+					return await resp.json()
+				if not _is_retryable(resp.status):
+					raise HttpError(url, resp.status)
+		except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+			status = None
+			logger.warning("请求 JSON 失败（第 %d 次）：%s，原因：%s", attempt, url, e)
+		else:
+			logger.warning("请求 JSON 失败（第 %d 次）：%s，状态：%s", attempt, url, status)
+		if attempt < RETRY_ATTEMPTS:
+			await asyncio.sleep(RETRY_DELAY * attempt)
+	raise HttpError(url, status)
+
+
+def get_json_sync(url: str, headers: dict | None = None) -> Any:
+	"""同步获取 JSON，供独立脚本使用；失败直接抛出。"""
+	response = requests.get(url, headers=headers, timeout=SYNC_TIMEOUT)
+	response.raise_for_status()
+	return response.json()
 
 
 async def download_json(
@@ -67,11 +90,9 @@ async def download_json(
 	file_name: str | Path,
 	*,
 	headers: dict | None = None,
-) -> Any | None:
+) -> Any:
 	"""下载 JSON 并保存到本地。"""
 	data = await get_json(url, headers=headers)
-	if data is None:
-		return None
 	await save_json(Path(file_name), data)
 	return data
 
@@ -81,10 +102,8 @@ def download_json_sync(
 	file_name: str | Path,
 	*,
 	headers: dict | None = None,
-) -> Any | None:
+) -> Any:
 	"""同步下载 JSON 并保存到本地。"""
 	data = get_json_sync(url, headers=headers)
-	if data is None:
-		return None
 	save_json_sync(Path(file_name), data)
 	return data
