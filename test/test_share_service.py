@@ -100,10 +100,10 @@ def request(**kwargs) -> ShareRequest:
 def uploader(*, message_id=903, seen=None):
 	"""上传适配器：每个频道返回一个 message_id。"""
 
-	async def upload(artifact) -> dict[int | str, int]:
+	async def upload(artifact, chat_id) -> int:
 		if seen is not None:
 			seen.append(artifact)
-		return {chat_id: message_id for chat_id in artifact.channels}
+		return message_id
 
 	return upload
 
@@ -293,15 +293,15 @@ def test_share_inflight(tmp_path) -> None:
 	gate = asyncio.Event()
 	uploads = []
 
-	async def blocking_upload(artifact):
+	async def blocking_upload(artifact, chat_id):
 		uploads.append(artifact)
 		started.set()
 		await gate.wait()
-		return {chat_id: 1 for chat_id in artifact.channels}
+		return 1
 
-	async def other_upload(artifact):
+	async def other_upload(artifact, chat_id):
 		uploads.append(artifact)
-		return {chat_id: 2 for chat_id in artifact.channels}
+		return 2
 
 	async def scenario():
 		task = asyncio.create_task(service.share(request(), upload=blocking_upload))
@@ -321,11 +321,12 @@ def test_share_inflight(tmp_path) -> None:
 def test_share_upload_failure_clears_inflight(tmp_path) -> None:
 	service, _cache, records = make_service(tmp_path)
 
-	async def failing_upload(artifact):
+	async def failing_upload(artifact, chat_id):
 		raise RuntimeError("boom")
 
-	with pytest.raises(RuntimeError):
-		run(service.share(request(), upload=failing_upload))
+	failed = run(service.share(request(), upload=failing_upload))
+	assert failed.status == "failed"
+	assert records.by_author("456") == []
 
 	seen: list = []
 	result = run(service.share(request(), upload=uploader(seen=seen)))
@@ -333,3 +334,55 @@ def test_share_upload_failure_clears_inflight(tmp_path) -> None:
 	assert result.status == "shared"
 	assert len(seen) == 1
 	assert records.work("456", "novel", "1").share_count == 1
+
+
+def test_partial_failure_records_delivered_channels(tmp_path) -> None:
+	"""一个频道失败：已发出的频道要记录并进入冷却，重试不能把它再发一遍。"""
+	service, _cache, records = make_service(
+		tmp_path, channels=("reading", "novels"))
+	sent_to: list[str] = []
+
+	async def flaky_upload(artifact, chat_id):
+		if chat_id == "novels":
+			raise RuntimeError("bot is not admin")
+		sent_to.append(chat_id)
+		return 77
+
+	first = run(service.share(request(), upload=flaky_upload))
+	retry = run(service.share(request(), upload=flaky_upload))
+
+	assert first.status == "shared"
+	assert first.channels == ("reading",)
+	assert first.failed_channels == ("novels",)
+	assert retry.status == "cooldown"
+	assert sent_to == ["reading"]
+	assert [m.message_id for m in records.by_author("456")] == [77]
+
+
+def test_share_inflight_while_fetching_author(tmp_path) -> None:
+	"""老缓存补拉作者期间连点：第二次必须被拦下，不能发两遍。"""
+	service, _cache, _records = make_service(
+		tmp_path, author_id="", author_name="")
+	started = asyncio.Event()
+	gate = asyncio.Event()
+
+	async def slow_fetch(link):
+		started.set()
+		await gate.wait()
+		return FakeWork()
+
+	service._fetch = slow_fetch
+	seen: list = []
+
+	async def scenario():
+		task = asyncio.create_task(service.share(request(), upload=uploader(seen=seen)))
+		await started.wait()
+		second = await service.share(request(), upload=uploader(seen=seen))
+		gate.set()
+		return await task, second
+
+	first, second = run(scenario())
+
+	assert first.status == "shared"
+	assert second.status == "inflight"
+	assert len(seen) == 1

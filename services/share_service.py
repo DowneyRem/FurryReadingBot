@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Literal, Mapping
+from typing import Awaitable, Callable, Literal
 
 from config import (
 	FURRY_NOVELS,
@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 ShareStatus = Literal[
 	"shared", "inflight", "cooldown", "cache_missing", "no_channel", "forbidden",
+	# 所有频道都发送失败
+	"failed",
 ]
 
 
@@ -71,27 +73,20 @@ class ShareResult:
 	share_count: int = 0
 	remaining_seconds: float = 0.0
 	channels: tuple[str, ...] = ()
+	# 发送失败的频道：部分成功时 status 仍为 shared
+	failed_channels: tuple[str, ...] = ()
 	artifact: ShareArtifact | None = None
 	# forbidden 时给展示层用
 	author_status: str = ""
 	author_name: str = ""
 
 
-# 上传适配器：返回本次实际投递成功的 {chat_id: message_id}
-ShareUploadCallback = Callable[
-	[ShareArtifact], Awaitable[Mapping[int | str, int]]
-]
+# 上传适配器：把产物发到一个频道，返回 message_id；失败抛异常
+ShareUploadCallback = Callable[[ShareArtifact, str], Awaitable[int]]
 
 
 # 正在发送中的作品 key，避免并发点击造成重复分享
 _inflight: set[str] = set()
-
-
-def _message_id(delivered: Mapping[int | str, int], chat_id: int | str) -> int:
-	"""取出某个频道的 message_id；没拿到就记 0（冷却照常生效，只是无法下架）。"""
-	if chat_id in delivered:
-		return int(delivered[chat_id] or 0)
-	return int(delivered.get(str(chat_id)) or 0)
 
 
 class ShareService:
@@ -185,12 +180,31 @@ class ShareService:
 		*,
 		upload: ShareUploadCallback,
 	) -> ShareResult:
-		"""校验并发 / 缓存 / 冷却 / 频道 -> 上传 -> 逐频道写分享记录。"""
+		"""校验并发 / 缓存 / 权限 / 冷却 / 频道 -> 逐频道发送 -> 记录发送成功的频道。
+
+		单个频道失败不影响其他频道；只要有一个频道成功，就记录并进入冷却，
+		避免用户重试时把已成功的频道再发一遍。
+		"""
 		share_key = ShareRecordStore.make_key(request.kind, request.item_id)
 		channels = self.channels(request.score)
 		if share_key in _inflight:
 			return ShareResult("inflight", channels=channels)
 
+		# 检查与发送之间有 await（补拉作者、上传），整段都要占住，避免连点重复发送
+		_inflight.add(share_key)
+		try:
+			return await self._share(request, share_key, channels, upload)
+		finally:
+			_inflight.discard(share_key)
+
+
+	async def _share(
+		self,
+		request: ShareRequest,
+		share_key: str,
+		channels: tuple[str, ...],
+		upload: ShareUploadCallback,
+	) -> ShareResult:
 		# 先查缓存：作者 id 记录在缓存里，冷却要按作者查
 		cache_key = FileCacheStore.make_key(
 			request.kind, request.item_id, request.file_type)
@@ -242,20 +256,19 @@ class ShareService:
 			link=link,
 		)
 
-		_inflight.add(share_key)
-		try:
-			sent = await upload(artifact)
-		except Exception:
-			logger.exception("分享失败 %s", share_key)
-			raise
-		finally:
-			_inflight.discard(share_key)
+		targets: list[tuple[str, int]] = []
+		failed: list[str] = []
+		for chat_id in channels:
+			try:
+				targets.append((chat_id, await upload(artifact, chat_id)))
+			except Exception:
+				logger.exception("分享到频道失败 %s chat=%s", share_key, chat_id)
+				failed.append(chat_id)
 
-		delivered = sent if isinstance(sent, Mapping) else {}
-		targets = [
-			(chat_id, _message_id(delivered, chat_id))
-			for chat_id in channels
-		]
+		if not targets:
+			return ShareResult(
+				"failed", channels=channels, failed_channels=tuple(failed))
+
 		title = (cached.caption or "").splitlines()[0] if cached.caption else ""
 		work = self.records.record(
 			author_id=author_id,
@@ -278,7 +291,8 @@ class ShareService:
 				for chat_id, message_id in targets
 			),
 			share_count=int(work.share_count or 0),
-			channels=channels,
+			channels=tuple(chat_id for chat_id, _ in targets),
+			failed_channels=tuple(failed),
 			artifact=artifact,
 		)
 

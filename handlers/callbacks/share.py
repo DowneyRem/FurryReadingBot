@@ -28,6 +28,13 @@ def format_channels(channels: tuple[str, ...]) -> str:
 	return "、".join(channels) if channels else "频道"
 
 
+def shared_text(result: ShareResult, *, public: bool) -> str:
+	text = f"已经{'公开' if public else '匿名'}分享至 {format_channels(result.channels)}"
+	if result.failed_channels:
+		text += f"\n{format_channels(result.failed_channels)} 发送失败"
+	return text
+
+
 async def share(
 		update: Update, context: ContextTypes.DEFAULT_TYPE,
 		*, data: str, public: bool) -> ShareResult | None:
@@ -51,21 +58,17 @@ async def share(
 		user_name=(user.first_name or "") if user else "",
 	)
 
-	async def send(artifact) -> dict[int | str, int]:
-		"""逐频道发送，回传 {chat_id: message_id}，供服务层写下架句柄。"""
+	async def send(artifact, chat_id: str) -> int:
+		"""发到一个频道，回传 message_id，供服务层写下架句柄。"""
 		sent = await upload_file(
 			update, context,
 			file_id=artifact.file_id,
 			filename=artifact.filename,
-			chat_id=artifact.channels,
+			chat_id=chat_id,
 			caption=artifact.caption,
-			cache_key=artifact.cache_key,
 			reply_markup=import_to_legado_keyboard(artifact.link),
 		)
-		return {
-			chat_id: document.message_id
-			for chat_id, document in sent.items()
-		}
+		return sent.message_id
 
 	result = await ShareService().share(request, upload=send)
 	if result.status == "inflight":
@@ -85,6 +88,9 @@ async def share(
 	if result.status == "no_channel":
 		await reply(update, context, "未配置分享频道")
 		return None
+	if result.status == "failed":
+		await reply(update, context, "分享失败，请稍后重试")
+		return None
 	return result
 
 
@@ -93,9 +99,7 @@ async def share_public(
 		*, data: str) -> None:
 	result = await share(update, context, data=data, public=True)
 	if result is not None:
-		await reply(
-			update, context,
-			f"已经公开分享至 {format_channels(result.channels)}")
+		await reply(update, context, shared_text(result, public=True))
 
 
 async def share_private(
@@ -103,9 +107,7 @@ async def share_private(
 		*, data: str) -> None:
 	result = await share(update, context, data=data, public=False)
 	if result is not None:
-		await reply(
-			update, context,
-			f"已经匿名分享至 {format_channels(result.channels)}")
+		await reply(update, context, shared_text(result, public=False))
 
 
 async def share_reject(

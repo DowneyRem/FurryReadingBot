@@ -52,9 +52,9 @@ async def download(
 	if query:
 		await query.edit_message_text("正在获取文件，请稍候……")
 
-	async def send(artifact: DownloadArtifact) -> None:
-		"""把 service 的产物交给 Telegram 上传适配器。"""
-		await upload_file(
+	async def send(artifact: DownloadArtifact) -> str:
+		"""把 service 的产物发给用户，回传 file_id 供服务层写缓存。"""
+		sent = await upload_file(
 			update, context,
 			path=artifact.path,
 			file_id=artifact.file_id,
@@ -62,12 +62,8 @@ async def download(
 			reply_markup=share_novel_keyboard(
 				artifact.kind, artifact.item_id, artifact.file_type),
 			caption=artifact.caption,
-			cache_key=artifact.cache_key,
-			link=artifact.target_link,
-			author_id=artifact.author_id,
-			author_name=artifact.author_name,
-			cleanup=False,
 		)
+		return sent.file_id
 
 	try:
 		outcome = await service.deliver(action, link, upload=send)
