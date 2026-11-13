@@ -17,11 +17,13 @@ logging.basicConfig(
 	format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 	level=logging.INFO,
 )
+# httpx 在 INFO 级别会打印带 BOT_TOKEN 的请求 URL
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
 async def error_handler(update: object, context) -> None:
-	logger.exception("更新处理出错: %s", context.error)
+	logger.error("更新处理出错: %s", context.error, exc_info=context.error)
 
 
 async def post_shutdown(application: Application) -> None:
