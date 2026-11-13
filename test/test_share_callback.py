@@ -78,10 +78,7 @@ def patch_handler(monkeypatch, tmp_path, *, link=""):
 
 	async def fake_upload(update, context, **kwargs):
 		uploads.append(kwargs)
-		return {
-			chat_id: SentDocument(file_id="FILE_ID", message_id=11)
-			for chat_id in kwargs["chat_id"]
-		}
+		return SentDocument(file_id="FILE_ID", message_id=11)
 
 	monkeypatch.setattr(share_handler, "upload_file", fake_upload)
 
@@ -110,7 +107,7 @@ def test_share_public_attaches_legado_keyboard(monkeypatch, tmp_path) -> None:
 		FakeUpdate(), object(), data="snp;novel;1;txt"))
 
 	assert len(uploads) == 1
-	assert uploads[0]["chat_id"] == ("channel",)
+	assert uploads[0]["chat_id"] == "channel"
 
 	urls = keyboard_urls(uploads[0]["reply_markup"])
 	assert any(

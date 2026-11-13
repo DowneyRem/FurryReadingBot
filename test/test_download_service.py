@@ -304,12 +304,13 @@ def test_unsupported_action_raises(tmp_path) -> None:
 		run(service.prepare("xx", NOVEL_LINK))
 
 
-def test_deliver_uploads_then_cleans_file(tmp_path) -> None:
-	service, _ = make_service(tmp_path)
+def test_deliver_uploads_then_caches_and_cleans_file(tmp_path) -> None:
+	service, cache = make_service(tmp_path)
 	seen: list[DownloadArtifact] = []
 
-	async def upload(artifact: DownloadArtifact) -> None:
+	async def upload(artifact: DownloadArtifact) -> str:
 		seen.append(artifact)
+		return "NEW_FILE_ID"
 
 	outcome = run(service.deliver("dn", NOVEL_LINK, upload=upload))
 
@@ -319,6 +320,9 @@ def test_deliver_uploads_then_cleans_file(tmp_path) -> None:
 	assert seen[0].path is not None
 	assert not seen[0].path.exists()
 	assert seen[0].cache_key == "novel:18012577:txt"
+	cached = cache.get_valid("novel:18012577:txt")
+	assert cached.file_id == "NEW_FILE_ID"
+	assert cached.author_id == "42"
 
 
 def test_deliver_cleans_file_when_upload_fails(tmp_path) -> None:
@@ -462,16 +466,11 @@ def test_deliver_same_link_uploads_once(tmp_path) -> None:
 		list_manager=FakeListManager(furry={"42"}),
 	)
 
-	async def upload(artifact: DownloadArtifact) -> None:
+	async def upload(artifact: DownloadArtifact) -> str:
 		uploads.append(artifact)
-		# 模拟 handlers/telegram/upload.py：上传成功后写 file_id 缓存
-		cache.set(
-			artifact.cache_key,
-			"FILE_ID",
-			file_name=artifact.filename or "out.txt",
-			author_id=artifact.author_id,
-		)
 		await asyncio.sleep(0.01)
+		# 新上传返回 file_id，由服务层写缓存
+		return "FILE_ID"
 
 	async def main():
 		return await asyncio.gather(

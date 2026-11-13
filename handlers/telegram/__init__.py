@@ -13,14 +13,13 @@ from handlers.telegram.transit import (
 	send_to_transit,
 	transit_author_caption,
 )
-from handlers.telegram.upload import SentDocument, get_cache, upload_file
+from handlers.telegram.upload import SentDocument, upload_file
 
 __all__ = [
 	"blacklist_caption",
 	"chat_target",
 	"clear_membership_cache",
 	"delete_message",
-	"get_cache",
 	"get_transit_member_status",
 	"reply",
 	"send_blacklist_card",

@@ -117,7 +117,8 @@ class DownloadOutcome:
 	format_choice_link: str | None = None
 
 
-UploadCallback = Callable[[DownloadArtifact], Awaitable[None]]
+# 上传适配器：发送产物并返回 Telegram 的 file_id
+UploadCallback = Callable[[DownloadArtifact], Awaitable[str]]
 
 
 # 同一个链接同一时刻只允许一个下载任务：每次打包都有独立工作目录，不会互相写坏文件；
@@ -377,7 +378,7 @@ class DownloadService:
 		*,
 		upload: UploadCallback,
 	) -> DownloadOutcome:
-		"""准备产物 -> 调用上传适配器 -> 清理本地文件。"""
+		"""准备产物 -> 调用上传适配器 -> 新上传的写入 file_id 缓存 -> 清理本地文件。"""
 		# 锁覆盖「准备 + 上传」：并发的同一链接会等第一个上传完，
 		# 然后直接命中它写下的 file_id 缓存，不再重复抓取、落盘和上传。
 		async with _exclusive(link):
@@ -397,7 +398,17 @@ class DownloadService:
 
 		artifact = prepared
 		try:
-			await upload(artifact)
+			file_id = await upload(artifact)
+			if not artifact.from_cache and file_id:
+				self.cache.set(
+					artifact.cache_key,
+					file_id,
+					file_name=artifact.filename or "",
+					caption=artifact.caption,
+					link=artifact.target_link,
+					author_id=artifact.author_id,
+					author_name=artifact.author_name,
+				)
 		finally:
 			if artifact.cleanup and artifact.path is not None:
 				await self._discard(artifact.path)
