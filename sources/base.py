@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 
@@ -135,52 +134,34 @@ class Author:
 
 
 class NovelSource(ABC):
+	"""小说来源：只负责识别链接、拉取并解析模型，不碰文件系统。"""
+
 	name: str
-	
+
 	@abstractmethod
 	def is_novel_link(self, link: str) -> bool:
 		"""链接是否为 novel """
-	
+
 	@abstractmethod
 	def is_series_link(self, link: str) -> bool:
 		"""链接是否为 series """
-	
+
 	@abstractmethod
 	def is_author_link(self, link: str) -> bool:
 		"""链接是否为 author """
-	
+
 	@abstractmethod
 	def can_handle(self, link: str) -> bool:
 		"""链接是否属于本源"""
-		
+
 	@abstractmethod
 	async def fetch_novel(self, link: str) -> Novel:
 		"""拉取并解析为 Novel """
 
 	@abstractmethod
-	async def save_novel(self, link: str) -> Path:
-		"""拉取单篇并保存为本地文件，返回文件路径"""
-
-	# @abstractmethod
 	async def fetch_series(self, link: str) -> Series:
 		"""拉取系列并解析为 Series """
-	
-	# @abstractmethod
-	async def save_series(self, link: str) -> Path:
-		"""拉取系列并保存为本地文件，返回文件路径"""
-	
-	# @abstractmethod
-	async def save_series_txt(self, link: str) -> Path:
-		"""拉取系列并保存为 txt 文件，返回文件路径"""
-	
-	# @abstractmethod
-	async def save_series_zip(self, link: str) -> Path:
-		"""拉取系列并保存为 zip 文件，返回文件路径"""
 
-	# @abstractmethod
+	@abstractmethod
 	async def fetch_author(self, link: str) -> Author:
 		"""拉取作者并解析为 Author """
-	
-	# @abstractmethod
-	async def save_author(self, link: str) -> Path:
-		"""拉取作者并保存为 zip 文件，返回文件路径"""
