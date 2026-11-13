@@ -49,15 +49,15 @@ Copy-Item .env.example .env
 .venv\Scripts\python.exe -m pytest test -q
 ```
 
-现状（2026-11-13 实测）：**205 passed / 1 failed / 3 skipped**，共 209 项。
+现状（2026-11-13 实测）：**206 passed / 3 skipped**，共 209 项。
 
 | 跑法 | 命令 | 结果 |
 |---|---|---|
-| 全量 | `pytest test -q` | 205 passed / 1 failed / 3 skipped |
-| 跳过真实 API 用例 | `pytest test -q --ignore=test/test_linpx.py` | 197 passed / 1 failed |
+| 全量 | `pytest test -q` | 206 passed / 3 skipped |
+| 跳过真实 API 用例 | `pytest test -q --ignore=test/test_linpx.py` | 198 passed |
 
-- 唯一失败项：`test/test_keyboard_routing.py`。`keyboards.py · down_series_keyboard()` 新增的 `dsf`（📄 下载首章）**还没注册到 router**，点下去只会回「暂不支持该操作」。修法见 [04 · 3.3 callback action 总表](docs/04-如何改代码.md)。
-- `test/test_linpx.py` 已修好：8 passed / 3 skipped；跳过的 3 条是真实 Linpx API 用例，需要 `$env:LINPX_LIVE = "1"` 才会跑。
+- 当前**全绿**：`test/test_keyboard_routing.py` 4 passed。`dsf`（📄 下载首章）已从代码中移除，不再有未接线的按钮。
+- `test/test_linpx.py`：8 passed / 3 skipped；跳过的 3 条是真实 Linpx API 用例，需要 `$env:LINPX_LIVE = "1"` 才会跑。
 
 ## 代码风格
 
@@ -80,7 +80,7 @@ FurryReadingBot/
 │  ├─ media.py             #   私聊截图：作者下架材料
 │  ├─ callbacks/           #   callback_data 分发与各业务展示
 │  │  ├─ router.py         #     action → handler 字典分发
-│  │  ├─ download.py       #     dn / ds / dst / dsz / dan（dsf 未接线）
+│  │  ├─ download.py       #     dn / ds / dst / dsz / dan
 │  │  ├─ apply.py          #     af / afy
 │  │  ├─ author.py         #     ba 查看作者 / 返回
 │  │  ├─ review.py         #     rfy / rfn
@@ -117,7 +117,7 @@ FurryReadingBot/
 ├─ files/novels/           # 下载临时目录（gitignore，单篇 / 系列上传后删除）
 ├─ script/                 # 运维脚本：导入 Linpx 推荐作者（同步 / 异步各一份）
 ├─ docs/                   # 01~06 设计 / 流程 / 改代码文档
-└─ test/                   # pytest 用例（209 collected：205 passed / 1 failed / 3 skipped）
+└─ test/                   # pytest 用例（209 collected：206 passed / 3 skipped）
 ```
 
 分层依赖（单向）：
