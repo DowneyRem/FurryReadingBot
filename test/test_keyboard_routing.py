@@ -74,3 +74,12 @@ def test_review_actions_use_r_prefix() -> None:
 	actions = {item.partition(";")[0] for item in all_callback_data()}
 	assert {"rfy", "rfn", "rby", "rbn"} <= actions
 	assert not {"afa", "afr", "ablock", "abdeny"} & actions
+
+
+def test_import_keyboard_carries_work_link() -> None:
+	"""「添加本文至书架」按钮必须把作品链接拼进 legado 深链。"""
+	markup = import_to_legado_keyboard(NOVEL_URL)
+	urls = [button.url for row in markup.inline_keyboard for button in row if button.url]
+
+	assert any("legado://import/addToBookshelf" in url for url in urls)
+	assert any(NOVEL_URL in url for url in urls)

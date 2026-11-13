@@ -5,6 +5,7 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from keyboards import import_to_legado_keyboard
 from handlers.telegram import reply, upload_file
 from services import ShareRequest, ShareResult, ShareService
 
@@ -58,6 +59,7 @@ async def share(
 			chat_id=artifact.channels,
 			caption=artifact.caption,
 			cache_key=artifact.cache_key,
+			reply_markup=import_to_legado_keyboard(artifact.link),
 		)
 		return {
 			chat_id: document.message_id
