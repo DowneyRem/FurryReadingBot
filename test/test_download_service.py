@@ -334,3 +334,155 @@ def test_deliver_cleans_file_when_upload_fails(tmp_path) -> None:
 	assert len(seen) == 1
 	assert seen[0].path is not None
 	assert not seen[0].path.exists()
+
+
+def test_same_link_prepare_is_serialized(tmp_path) -> None:
+	"""同一链接并发 prepare 不能同时落盘，否则两路会写坏同一个输出文件。"""
+	cache = FileCacheStore(path=tmp_path / "files_cache.json", default_ttl_days=1)
+	active = 0
+	peak = 0
+	saves: list[str] = []
+
+	async def fake_fetch(link: str) -> FakeItem:
+		return FakeItem()
+
+	async def fake_save(link: str, ext: str):
+		nonlocal active, peak
+		active += 1
+		peak = max(peak, active)
+		try:
+			await asyncio.sleep(0.01)
+			saves.append(ext)
+			path = tmp_path / f"out.{ext or 'txt'}"
+			path.write_text("data", encoding="utf-8")
+			return path
+		finally:
+			active -= 1
+
+	async def fake_resolve(link: str, kind: str) -> str:
+		return link
+
+	service = DownloadService(
+		cache=cache,
+		fetch_fn=fake_fetch,
+		save_fn=fake_save,
+		resolve_link_fn=fake_resolve,
+		resolve_source_fn=lambda link: FakeSource("series"),
+		list_manager=FakeListManager(),
+	)
+
+	async def main():
+		return await asyncio.gather(
+			service.prepare("dst", SERIES_LINK),
+			service.prepare("dst", SERIES_LINK),
+		)
+
+	results = run(main())
+
+	assert len(results) == 2
+	assert peak == 1  # 同一时刻只有一路在保存
+	assert len(saves) == 2  # 串行执行：第二次仍会抓取（prepare 不写 file_id 缓存）
+
+
+def test_different_links_are_not_serialized(tmp_path) -> None:
+	"""锁按链接生效：不同作品仍可并发，不能被一把全局锁串成一队。"""
+	other_link = "https://linpx.ink/pixiv/series/16181402"
+
+	async def fake_fetch(link: str) -> FakeItem:
+		return FakeItem()
+
+	async def fake_resolve(link: str, kind: str) -> str:
+		return link
+
+	async def main():
+		both_started = asyncio.Event()
+		entered = 0
+
+		async def fake_save(link: str, ext: str):
+			nonlocal entered
+			entered += 1
+			if entered == 2:
+				both_started.set()
+			# 若被串行化，第一路会在这里超时
+			await asyncio.wait_for(both_started.wait(), timeout=1)
+			item_id = link.rsplit("/", 1)[-1]
+			path = tmp_path / f"out-{item_id}.{ext or 'txt'}"
+			path.write_text("data", encoding="utf-8")
+			return path
+
+		service = DownloadService(
+			cache=FileCacheStore(
+				path=tmp_path / "files_cache.json", default_ttl_days=1),
+			fetch_fn=fake_fetch,
+			save_fn=fake_save,
+			resolve_link_fn=fake_resolve,
+			resolve_source_fn=lambda link: FakeSource("series"),
+			list_manager=FakeListManager(),
+		)
+		return await asyncio.gather(
+			service.prepare("dst", SERIES_LINK),
+			service.prepare("dst", other_link),
+		)
+
+	results = run(main())
+
+	assert len(results) == 2
+	assert results[0].item_id == "16181401"
+	assert results[1].item_id == "16181402"
+
+
+def test_deliver_same_link_uploads_once(tmp_path) -> None:
+	"""并发 deliver 同一链接：第二个等第一个传完，直接复用它的 file_id 缓存。"""
+	cache = FileCacheStore(path=tmp_path / "files_cache.json", default_ttl_days=1)
+	saves: list[str] = []
+	fetches: list[str] = []
+	uploads: list[DownloadArtifact] = []
+
+	async def fake_fetch(link: str) -> FakeItem:
+		fetches.append(link)
+		return FakeItem()
+
+	async def fake_save(link: str, ext: str):
+		saves.append(ext)
+		await asyncio.sleep(0.01)
+		path = tmp_path / "out.txt"
+		path.write_text("data", encoding="utf-8")
+		return path
+
+	async def fake_resolve(link: str, kind: str) -> str:
+		return link
+
+	service = DownloadService(
+		cache=cache,
+		fetch_fn=fake_fetch,
+		save_fn=fake_save,
+		resolve_link_fn=fake_resolve,
+		resolve_source_fn=lambda link: FakeSource("novel"),
+		list_manager=FakeListManager(),
+	)
+
+	async def upload(artifact: DownloadArtifact) -> None:
+		uploads.append(artifact)
+		# 模拟 handlers/telegram/upload.py：上传成功后写 file_id 缓存
+		cache.set(
+			artifact.cache_key,
+			"FILE_ID",
+			file_name=artifact.filename or "out.txt",
+		)
+		await asyncio.sleep(0.01)
+
+	async def main():
+		return await asyncio.gather(
+			service.deliver("dn", NOVEL_LINK, upload=upload),
+			service.deliver("dn", NOVEL_LINK, upload=upload),
+		)
+
+	outcomes = run(main())
+
+	assert len(outcomes) == 2
+	assert len(uploads) == 2
+	assert len(saves) == 1  # 第二路命中缓存，不再抓取/落盘
+	assert len(fetches) == 1
+	assert sum(1 for artifact in uploads if artifact.from_cache) == 1
+	cached = [artifact for artifact in uploads if artifact.from_cache][0]
+	assert cached.file_id == "FILE_ID"

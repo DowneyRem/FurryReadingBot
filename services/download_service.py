@@ -8,10 +8,13 @@ Telegram 相关的展示与上传适配留在 handlers：
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable, Literal
+from typing import AsyncIterator, Awaitable, Callable, Literal
 
 from sources import (
 	fetch as sources_fetch,
@@ -108,6 +111,37 @@ class DownloadOutcome:
 
 
 UploadCallback = Callable[[DownloadArtifact], Awaitable[None]]
+
+
+# 同一个链接同一时刻只允许一个下载任务：
+# 输出路径是确定性的（`files/novels/<标题>.txt` / `<标题>.zip`），两路并发写同一个
+# 路径时 `write_text` 会先截断再写，拼出来就是「章节重复 / 顺序错乱 / 尾巴缺失」，
+# 坏文件还会被当成正常产物写进 file_id 缓存，之后 TTL 内一直被复用。
+# asyncio.Lock 绑定事件循环，所以按 loop 分组（测试里每个 asyncio.run 都是新 loop）。
+_locks: dict[asyncio.AbstractEventLoop, dict[str, asyncio.Lock]] = {}
+_held: ContextVar[frozenset[str]] = ContextVar("download_held_locks", default=frozenset())
+
+
+def _lock_for(link: str) -> asyncio.Lock:
+	"""取该链接在当前事件循环上的锁。"""
+	loop = asyncio.get_running_loop()
+	return _locks.setdefault(loop, {}).setdefault(link, asyncio.Lock())
+
+
+@asynccontextmanager
+async def _exclusive(link: str) -> AsyncIterator[None]:
+	"""同一链接串行执行；同一任务内可重入（`deliver` 的锁要包住 `prepare`）。"""
+	held = _held.get()
+	if link in held:
+		yield
+		return
+
+	async with _lock_for(link):
+		token = _held.set(held | {link})
+		try:
+			yield
+		finally:
+			_held.reset(token)
 
 
 class DownloadService:
@@ -222,9 +256,18 @@ class DownloadService:
 		mapping = self._ACTIONS.get(action)
 		if mapping is None:
 			raise DownloadUnsupportedActionError(f"暂不支持该下载操作：{action}")
-		kind, requested_type = mapping
 		if not link:
 			raise DownloadInvalidLinkError("下载链接为空。")
+
+		# 同一链接串行：并发抓取/落盘会写同一个输出路径
+		async with _exclusive(link):
+			return await self._prepare(action, link)
+
+
+	async def _prepare(
+		self, action: str, link: str
+	) -> FormatChoice | DownloadArtifact:
+		kind, requested_type = self._ACTIONS[action]
 
 		# 单篇链接要求下载系列时，解析为其所属系列
 		target_link = await self._resolve_link(link, kind)
@@ -316,6 +359,19 @@ class DownloadService:
 		upload: UploadCallback,
 	) -> DownloadOutcome:
 		"""准备产物 -> 调用上传适配器 -> 清理本地文件。"""
+		# 锁覆盖「准备 + 上传」：并发的同一链接会等第一个上传完，
+		# 然后直接命中它写下的 file_id 缓存，不再重复抓取、落盘和上传。
+		async with _exclusive(link):
+			return await self._deliver(action, link, upload=upload)
+
+
+	async def _deliver(
+		self,
+		action: str,
+		link: str,
+		*,
+		upload: UploadCallback,
+	) -> DownloadOutcome:
 		prepared = await self.prepare(action, link)
 		if isinstance(prepared, FormatChoice):
 			return DownloadOutcome(format_choice_link=prepared.link)
