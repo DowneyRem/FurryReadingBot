@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from sources.base import Author, Novel, NovelSource, Series
 from sources.linpx import LinpxSource
 from sources.linpx.urls import url_author, url_novel, url_series
@@ -33,10 +31,15 @@ def resolve_source(link: str) -> NovelSource | None:
 	return None
 
 
-async def fetch(link: str) -> Novel | Series | Author:
+def _require_source(link: str) -> NovelSource:
 	source = resolve_source(link)
-	# if source is None:
-	# 	raise ValueError(f"暂不支持该链接：{link}")
+	if source is None:
+		raise ValueError(f"暂不支持该链接：{link}")
+	return source
+
+
+async def fetch(link: str) -> Novel | Series | Author:
+	source = _require_source(link)
 	if source.is_novel_link(link):
 		return await source.fetch_novel(link)
 	elif source.is_series_link(link):
@@ -46,29 +49,9 @@ async def fetch(link: str) -> Novel | Series | Author:
 
 
 async def resolve_link(link: str, kind: str) -> str:
-	source = resolve_source(link)
-	# if source is None:
-	# 	raise ValueError(f"暂不支持该链接：{link}")
+	source = _require_source(link)
 	if kind == "series" and source.is_novel_link(link):
 		novel = await source.fetch_novel(link)
 		return novel.series_url or link
 	else:
 		return link
-
-
-async def save(link: str, ext: str="") -> Path:
-	source = resolve_source(link)
-	# if source is None:
-	# 	raise ValueError(f"暂不支持该链接：{link}")
-	if source.is_novel_link(link):
-		return await source.save_novel(link)
-	elif source.is_series_link(link):
-		if ext == "txt":
-			return await source.save_series_txt(link)
-		elif ext == "zip":
-			return await source.save_series_zip(link)
-		else:
-			return await source.save_series(link)
-	else:
-		return await source.save_author(link)
-

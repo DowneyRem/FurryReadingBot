@@ -20,10 +20,9 @@ from sources import (
 	fetch as sources_fetch,
 	resolve_link as sources_resolve_link,
 	resolve_source as sources_resolve_source,
-	save as sources_save,
 )
 from sources.base import Author, Novel, NovelSource, Series
-from infra.files import remove_file
+from services import packaging
 from policy.author import AuthorPolicy
 from storage import ListManager, get_lists
 from storage.file_cache import FileCacheStore, get_file_cache
@@ -113,10 +112,9 @@ class DownloadOutcome:
 UploadCallback = Callable[[DownloadArtifact], Awaitable[None]]
 
 
-# 同一个链接同一时刻只允许一个下载任务：
-# 输出路径是确定性的（`files/novels/<标题>.txt` / `<标题>.zip`），两路并发写同一个
-# 路径时 `write_text` 会先截断再写，拼出来就是「章节重复 / 顺序错乱 / 尾巴缺失」，
-# 坏文件还会被当成正常产物写进 file_id 缓存，之后 TTL 内一直被复用。
+# 同一个链接同一时刻只允许一个下载任务：每次打包都有独立工作目录，不会互相写坏文件；
+# 串行是为了让后到的请求等第一个上传完，直接复用它写下的 file_id 缓存，
+# 不再重复抓取、打包和上传。
 # asyncio.Lock 绑定事件循环，所以按 loop 分组（测试里每个 asyncio.run 都是新 loop）。
 _locks: dict[asyncio.AbstractEventLoop, dict[str, asyncio.Lock]] = {}
 _held: ContextVar[frozenset[str]] = ContextVar("download_held_locks", default=frozenset())
@@ -163,6 +161,7 @@ class DownloadService:
 		*,
 		fetch_fn: Callable[[str], Awaitable[Novel | Series | Author]] | None = None,
 		save_fn: Callable[[str, str], Awaitable[Path]] | None = None,
+		discard_fn: Callable[[Path], Awaitable[None]] | None = None,
 		resolve_link_fn: Callable[[str, str], Awaitable[str]] | None = None,
 		resolve_source_fn: Callable[[str], NovelSource | None] | None = None,
 		list_manager: ListManager | None = None,
@@ -170,7 +169,8 @@ class DownloadService:
 	) -> None:
 		self._cache = cache
 		self._fetch = fetch_fn or sources_fetch
-		self._save = save_fn or sources_save
+		self._save = save_fn or packaging.build
+		self._discard = discard_fn or packaging.discard
 		self._resolve_link = resolve_link_fn or sources_resolve_link
 		self._resolve_source = resolve_source_fn or sources_resolve_source
 		self._list_manager = list_manager
@@ -319,8 +319,7 @@ class DownloadService:
 			cached = self.cache.get_valid(cache_key)
 			if cached:
 				# 保存期间其他人已完成上传，直接复用其 file_id
-				if path.is_file():
-					await remove_file(path)
+				await self._discard(path)
 				return DownloadArtifact(
 					kind=kind,
 					item_id=item_id,
@@ -380,8 +379,8 @@ class DownloadService:
 		try:
 			await upload(artifact)
 		finally:
-			if artifact.cleanup and artifact.path is not None and artifact.path.is_file():
-				await remove_file(artifact.path)
+			if artifact.cleanup and artifact.path is not None:
+				await self._discard(artifact.path)
 		return DownloadOutcome(artifact=artifact)
 
 

@@ -337,7 +337,7 @@ def test_deliver_cleans_file_when_upload_fails(tmp_path) -> None:
 
 
 def test_same_link_prepare_is_serialized(tmp_path) -> None:
-	"""同一链接并发 prepare 不能同时落盘，否则两路会写坏同一个输出文件。"""
+	"""同一链接并发 prepare 串行：后到的请求等前一个完成，再复用它的结果。"""
 	cache = FileCacheStore(path=tmp_path / "files_cache.json", default_ttl_days=1)
 	active = 0
 	peak = 0
