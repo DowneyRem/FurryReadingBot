@@ -34,7 +34,15 @@ def main() -> None:
 		raise SystemExit("请设置环境变量 BOT_TOKEN，或在 .env 中写入 BOT_TOKEN=...")
 
 	# 构建应用（v20+ 的核心对象）
-	app = (Application.builder().token(BOT_TOKEN).build())
+	# concurrent_updates：update 并行处理；用 config 里的有界值，不用 True（True = 256 路）
+	# post_shutdown：退出时关掉复用的 aiohttp 会话（v20+ 只能通过 builder 传，不是 setter）
+	app = (
+		Application.builder()
+		.token(BOT_TOKEN)
+		.concurrent_updates(CONCURRENT_UPDATES)
+		.post_shutdown(post_shutdown)
+		.build()
+	)
 
 	# 注册命令
 	app.add_handler(CommandHandler("start", start))
@@ -56,7 +64,6 @@ def main() -> None:
 
 	app.add_handler(CallbackQueryHandler(button_callback))
 	app.add_error_handler(error_handler)
-	# app.post_shutdown(post_shutdown)
 
 	logger.info("Bot 启动中……")
 	print("Bot 启动中……")

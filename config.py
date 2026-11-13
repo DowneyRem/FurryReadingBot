@@ -26,3 +26,7 @@ SHARE_SCORE_THRESHOLD = float(os.environ.get("SHARE_SCORE_THRESHOLD", 7))
 SHARE_COOLDOWN_DAYS = float(os.environ.get("SHARE_COOLDOWN_DAYS", 3))
 # 文件缓存天数：file_id 在该时间内可直接复用，不再重新上传
 FILE_CACHE_TTL_DAYS = float(os.environ.get("FILE_CACHE_TTL_DAYS", 7))
+
+# update 并发数：1 = 串行处理；越高越容易撞 Telegram 限流，也会把磁盘和线程池打满。
+# 注意 python-telegram-bot 的 concurrent_updates(True) 是 256，不适合本 Bot。
+CONCURRENT_UPDATES = max(1, int(os.environ.get("CONCURRENT_UPDATES", "8") or 8))
