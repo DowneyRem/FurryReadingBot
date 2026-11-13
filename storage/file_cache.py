@@ -39,6 +39,7 @@ class FileCacheStore(JsonStore):
 			file_id=str(info.get("file_id") or ""),
 			file_name=str(info.get("file_name") or ""),
 			caption=str(info.get("caption") or ""),
+			link=str(info.get("link") or ""),
 			author_id=str(info.get("author_id") or ""),
 			author_name=str(info.get("author_name") or ""),
 			uploaded_at=str(info.get("uploaded_at") or ""),
@@ -79,6 +80,7 @@ class FileCacheStore(JsonStore):
 		*,
 		file_name: str = "",
 		caption: str = "",
+		link: str = "",
 		author_id: str | int = "",
 		author_name: str = "",
 	) -> None:
@@ -92,6 +94,7 @@ class FileCacheStore(JsonStore):
 				file_id=file_id,
 				file_name=file_name or "",
 				caption=caption or "",
+				link=link or "",
 				author_id=str(author_id or ""),
 				author_name=author_name or "",
 				uploaded_at=now.strftime("%Y-%m-%dT%H:%M:%S%z"),

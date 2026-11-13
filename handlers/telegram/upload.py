@@ -43,12 +43,14 @@ async def upload_file(
 	reply_to_message_id: int | None = None,
 	cache_key: str | None = None,
 	cleanup: bool = False,
+	link: str = "",
 	author_id: str | int = "",
 	author_name: str = "",
 ) -> dict[int | str, SentDocument]:
 	"""优先 file_id；否则上传 path，成功后写入 FileCacheStore。
 
 	返回值按目标频道给出 file_id + message_id（下架要用 message_id）。
+	`link` 一起写进缓存：分享时要把「添加本文至书架」的链接拼进按钮。
 	"""
 	
 	file_path = Path(path) if path else None
@@ -124,6 +126,7 @@ async def upload_file(
 			last_file_id,
 			file_name=filename or (file_path.name if file_path else ""),
 			caption=caption or "",
+			link=link,
 			author_id=author_id,
 			author_name=author_name,
 		)

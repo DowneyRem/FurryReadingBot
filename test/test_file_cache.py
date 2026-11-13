@@ -54,6 +54,29 @@ def test_author_fields_persist(tmp_path) -> None:
 	assert info.author_name == "作者A"
 
 
+def test_link_persists(tmp_path) -> None:
+	"""作品链接跟着 file_id 一起缓存：分享到频道时「添加本文至书架」要用。"""
+	path = tmp_path / "files_cache.json"
+	key = FileCacheStore.make_key("novel", "1", "txt")
+	FileCacheStore(path=path, default_ttl_days=1).set(
+		key, "FILE_ID", link="https://linpx.ink/pixiv/novel/1")
+
+	info = FileCacheStore(path=path, default_ttl_days=1).get_valid(key)
+	assert info is not None
+	assert info.link == "https://linpx.ink/pixiv/novel/1"
+
+
+def test_missing_link_reads_as_empty(tmp_path) -> None:
+	"""老缓存没有 link 字段，读出来是空串而不是 KeyError。"""
+	key = FileCacheStore.make_key("novel", "1", "txt")
+	store = _store(tmp_path, default_ttl_days=1)
+	store.set(key, "FILE_ID")
+
+	info = store.get_valid(key)
+	assert info is not None
+	assert info.link == ""
+
+
 def test_zero_ttl_means_immediately_expired(tmp_path) -> None:
 	"""default_ttl_days=0 不应被 or 兜底成默认 30 天。"""
 	store = _store(tmp_path, default_ttl_days=0)
