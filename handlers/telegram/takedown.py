@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from telegram.error import BadRequest
+from telegram.error import BadRequest, RetryAfter
 
 from services import TakedownResult, TakedownService
 
@@ -29,7 +30,19 @@ async def delete_message(
 		context: ContextTypes.DEFAULT_TYPE,
 		chat_id: str | int,
 		message_id: int) -> None:
-	"""删一条频道消息；「消息已不存在」视为成功，保证下架可重放。"""
+	"""删一条频道消息；「消息已不存在」视为成功，保证下架可重放；被限流时等待后重试一次。"""
+	try:
+		await _delete(context, chat_id, message_id)
+	except RetryAfter as exc:
+		wait = exc.retry_after
+		await asyncio.sleep(wait.total_seconds() if hasattr(wait, "total_seconds") else wait)
+		await _delete(context, chat_id, message_id)
+
+
+async def _delete(
+		context: ContextTypes.DEFAULT_TYPE,
+		chat_id: str | int,
+		message_id: int) -> None:
 	try:
 		await context.bot.delete_message(
 			chat_id=chat_target(chat_id), message_id=message_id)

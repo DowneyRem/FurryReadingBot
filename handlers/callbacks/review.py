@@ -50,12 +50,13 @@ async def notify_applicant(
 
 
 async def close_transit_message(
-		update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
+		update: Update, context: ContextTypes.DEFAULT_TYPE, text: str,
+		*, reply_markup=None) -> None:
 	"""删除中转消息，并把审核结果留在频道里。"""
 	query = update.callback_query
 	message = query.message
 	if message is None:
-		await reply(update, context, text, delete_after=8)
+		await reply(update, context, text, reply_markup=reply_markup, delete_after=8)
 		return
 
 	try:
@@ -66,9 +67,30 @@ async def close_transit_message(
 	chat_id = getattr(message, "chat_id", None)
 	if chat_id:
 		try:
-			await context.bot.send_message(chat_id=chat_id, text=text)
+			await context.bot.send_message(
+				chat_id=chat_id, text=text, reply_markup=reply_markup)
 		except Exception:
 			logger.warning("审核回执发送失败", exc_info=True)
+
+
+async def ensure_transit_admin(
+		update: Update, context: ContextTypes.DEFAULT_TYPE, action: str) -> bool:
+	"""核验按钮的管理员校验：通过则 answer 并返回 True；否则只弹窗提示，卡片保留。"""
+	query = update.callback_query
+	user = update.effective_user
+	if query is None or user is None:
+		return False
+	admin = await transit_admin_policy(context.bot).check(user.id)
+	if admin.allowed:
+		await query.answer()
+		return True
+	logger.warning(
+		"非管理员尝试核验 action=%s user=%s status=%s", action, user.id, admin.status)
+	text = (
+		"无法确认你的管理员身份，请稍后重试" if admin.status is None
+		else "仅中转频道管理员可以核验申请")
+	await query.answer(text, show_alert=True)
+	return False
 
 
 def _author_id_from_data(data: str) -> str:
@@ -104,14 +126,7 @@ async def review_application(
 	"""rfy / rfn：核验申请并更新名单。"""
 	author_id = _author_id_from_data(data)
 	user = update.effective_user
-	if user is None:
-		return
-
-	admin = await transit_admin_policy(context.bot).check(user.id)
-	if not admin.allowed:
-		logger.warning(
-			"非管理员尝试核验申请 author=%s user=%s", author_id or "-", user.id)
-		await close_transit_message(update, context, "仅中转频道管理员可以核验申请")
+	if not await ensure_transit_admin(update, context, data.partition(";")[0]):
 		return
 
 	if not author_id:

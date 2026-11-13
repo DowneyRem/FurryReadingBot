@@ -140,6 +140,8 @@ class BlacklistService:
 		if record is None:
 			return MaterialSubmission("no_request")
 		if self.black_requests.is_stale(record):
+			# 只提示一次：过期申请随即作废，之后的图片按普通图片忽略
+			self.black_requests.discard_material(record.author_id)
 			return MaterialSubmission("expired", record)
 		if not self.black_requests.attach_photo(record.author_id, photo_file_id):
 			return MaterialSubmission("no_request", record)
@@ -147,6 +149,19 @@ class BlacklistService:
 			"作者下架材料已提交 author=%s user=%s",
 			record.author_id, user_id)
 		return MaterialSubmission("submitted", self.black_requests.get(record.author_id))
+
+
+	def pending_review_records(self) -> list[JsonDict]:
+		"""已交截图、等管理员核验的申请，供 `/review` 重推卡片。"""
+		return [
+			record for record in self.black_requests.records().values()
+			if record.status == BlackRequestStore.STATUS_REVIEW
+		]
+
+
+	def can_retry_takedown(self, author_id: str | int) -> bool:
+		"""「重试删除」只对仍在黑名单的作者生效，避免旧回执误删已解除拉黑的作者。"""
+		return self.policy.check(str(author_id)).is_blacklisted
 
 
 	def review(self, author_id: str | int, decision: BlacklistDecision) -> BlacklistReview:

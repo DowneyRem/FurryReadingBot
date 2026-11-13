@@ -39,9 +39,18 @@ class FakeUser:
 	last_name = "User"
 
 
+class FakeQuery:
+	def __init__(self) -> None:
+		self.answers: list[tuple[str | None, bool]] = []
+
+	async def answer(self, text=None, show_alert=False):
+		self.answers.append((text, show_alert))
+
+
 class FakeUpdate:
 	def __init__(self) -> None:
 		self.effective_user = FakeUser()
+		self.callback_query = FakeQuery()
 
 
 class FakeContext:
@@ -53,7 +62,8 @@ class FakeAdminPolicy:
 		self.allowed = allowed
 
 	async def check(self, user_id):
-		return AdminDecision(str(user_id), self.allowed)
+		status = "administrator" if self.allowed else "member"
+		return AdminDecision(str(user_id), self.allowed, status)
 
 
 class FakeService:
@@ -81,7 +91,7 @@ def patch_review(
 	closed: list[str] = []
 	notified: list[tuple[JsonDict, str]] = []
 
-	async def fake_close(update, context, text):
+	async def fake_close(update, context, text, *, reply_markup=None):
 		closed.append(text)
 
 	async def fake_notify(context, record, text):
@@ -198,18 +208,22 @@ def test_review_application_already_processed(monkeypatch) -> None:
 
 
 def test_review_application_requires_admin(monkeypatch) -> None:
+	"""非管理员点核验按钮：只弹窗提示，卡片必须留着给真正的管理员处理。"""
 	service, closed, notified = patch_review(
 		monkeypatch,
 		ReviewResult("approved", "42", "作者", "pending", RECORD),
 		admin=False,
 	)
+	update = FakeUpdate()
 
 	run(review_application(
-		FakeUpdate(), FakeContext(), data="rfy;42", decision="approve"))
+		update, FakeContext(), data="rfy;42", decision="approve"))
 
 	assert service.called is None
-	assert "仅中转频道管理员" in closed[0]
+	assert closed == []
 	assert notified == []
+	text, show_alert = update.callback_query.answers[0]
+	assert show_alert and "仅中转频道管理员" in text
 
 
 def test_review_application_invalid_data(monkeypatch) -> None:

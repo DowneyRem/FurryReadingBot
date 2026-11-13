@@ -336,36 +336,49 @@ class ShareRecordStore(JsonStore):
 		message_id: int,
 	) -> bool:
 		"""下架单条消息；删空了自动回收频道 / 作品 / 作者。"""
+		row = JsonDict(
+			kind=kind, item_id=item_id, chat_id=chat_id, message_id=message_id)
+		return self.remove_messages(author_id, [row]) > 0
+
+	def remove_messages(self, author_id: str | int | None, rows: list[JsonDict]) -> int:
+		"""批量下架（行需带 kind / item_id / chat_id / message_id），只写一次盘；返回移除条数。"""
 		author_key = _as_str(author_id) or UNKNOWN_AUTHOR
-		work_key = self.make_key(kind, item_id)
 		with self._lock:
 			self._maybe_reload()
 			self._prune()
 			author = self._items.get(author_key)
-			work = author.get(work_key) if author else None
-			if not work:
-				return False
-			history = work["history"]
-			chat_key = str(chat_id)
-			rows = history.get(chat_key) or []
-			kept = [
-				row for row in rows
-				if _as_int(row.message_id) != _as_int(message_id)
-			]
-			if len(kept) == len(rows):
-				return False
-			if kept:
-				history[chat_key] = kept
-			else:
-				history.pop(chat_key, None)
-			if history:
-				first, last = self._span(history)
-				work["first_shared_at"] = first
-				work["last_shared_at"] = last
-			else:
-				author.pop(work_key, None)
-			self._persist()
-			return True
+			if not author:
+				return 0
+			removed = sum(self._remove_one(author, row) for row in rows)
+			if removed:
+				self._persist()
+			return removed
+
+	def _remove_one(self, author: JsonDict, row: JsonDict) -> bool:
+		work_key = self.make_key(row.kind, row.item_id)
+		work = author.get(work_key)
+		if not work:
+			return False
+		history = work["history"]
+		chat_key = str(row.chat_id)
+		messages = history.get(chat_key) or []
+		kept = [
+			message for message in messages
+			if _as_int(message.message_id) != _as_int(row.message_id)
+		]
+		if len(kept) == len(messages):
+			return False
+		if kept:
+			history[chat_key] = kept
+		else:
+			history.pop(chat_key, None)
+		if history:
+			first, last = self._span(history)
+			work["first_shared_at"] = first
+			work["last_shared_at"] = last
+		else:
+			author.pop(work_key, None)
+		return True
 
 	def drop_author(self, author_id: str | int) -> bool:
 		"""整块删除一个作者（拉黑后下架完消息时调用）。"""
