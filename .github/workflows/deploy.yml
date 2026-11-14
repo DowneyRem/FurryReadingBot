@@ -1,0 +1,32 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [ deploy ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            if [ ! -d /root/FurryReadingBot ]; then
+              echo "首次部署，正在克隆仓库..."
+              git clone -b deploy https://github.com/DowneyRem/FurryReadingBot.git /root/FurryReadingBot
+            fi
+
+            cd /root/FurryReadingBot
+            git fetch origin deploy
+            git reset --hard origin/deploy
+            uv sync
+
+            cp deploy/furryreadingbot.service /etc/systemd/system/furryreadingbot.service
+            systemctl daemon-reload
+            systemctl enable furryreadingbot
+            systemctl restart furryreadingbot
