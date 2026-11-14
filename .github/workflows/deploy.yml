@@ -27,6 +27,7 @@ jobs:
             git fetch origin deploy
             git reset --hard origin/deploy
 
+
             # 2. 部署/同步运营数据仓库（私有仓库）
             DATA_DIR="/root/FurryReadingBot/data"
             PRIVATE_REPO="${{ secrets.PRIVATE_REPO }}"
@@ -37,11 +38,24 @@ jobs:
               rm -rf "$DATA_DIR"
               git clone "$PRIVATE_REPO_URL" "$DATA_DIR"
             else
-              echo "更新私有数据仓库..."
+              echo "安全更新私有数据仓库..."
               cd "$DATA_DIR"
-              git pull origin main --force
+
+              # 抓取远端最新状态，但不自动合并，避免直接污染本地
+              git fetch origin main
+              # 如果本地有未提交的新数据（Bot刚才写入的），先暂存保护起来
+              git stash || true
+              # 尝试安全合并远端变动（使用 --ff-only，如果远端有冲突或被别人强改过，拒绝盲目覆盖，报错并中止）
+              git merge origin/main --ff-only || {
+                echo "警告：远端私有仓库与本地数据存在冲突！放弃自动合并，以服务器本地数据为准。"
+                git merge --abort || true
+              }
+
+              # 恢复本地的未提交修改
+              git stash pop || true
               cd /root/FurryReadingBot
             fi
+
 
             # 3. 安装并配置 uv 环境
             if ! command -v uv &> /dev/null; then
@@ -51,6 +65,7 @@ jobs:
 
             export PATH="/root/.local/bin:$PATH"
             uv sync
+
 
             # 4. 自动生成 .env
             cat > .env << EOF
@@ -67,6 +82,7 @@ jobs:
             SHARE_COOLDOWN_DAYS=3
             FILE_CACHE_TTL_DAYS=7
             EOF
+
 
             # 5. 安装 / 更新 systemd 服务并重启
             cp deploy/furryreadingbot.service /etc/systemd/system/furryreadingbot.service
