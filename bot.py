@@ -55,6 +55,7 @@ def main() -> None:
 	app.add_handler(CommandHandler("ping", ping))
 	app.add_handler(CommandHandler("down", download))
 	app.add_handler(CommandHandler("review", review))
+	app.add_handler(CommandHandler("sync", sync))
 	app.add_handler(CommandHandler("black", black))
 	app.add_handler(CommandHandler("furry", furry))
 

@@ -22,6 +22,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		"/black 申请下架（作者 ID 或主页链接）",
 		"/furry 申请兽人作者（作者 ID 或主页链接）",
 		"/review 仅管理员：重新推送待审核申请",
+		"/sync 同步运营数据",
 	]
 	await update.message.reply_text("\n".join(text))
 

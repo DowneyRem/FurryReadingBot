@@ -40,6 +40,11 @@ from services.share_service import (
 	ShareService,
 	ShareStatus,
 )
+from services.sync_service import (
+	SyncDataService,
+	SyncResult,
+	SyncTimeoutError,
+)
 from services.takedown_service import (
 	TakedownDelete,
 	TakedownResult,
@@ -58,7 +63,7 @@ __all__ = [
 	"BlacklistReview",
 	"BlacklistService",
 	"MaterialSubmission",
-	
+
 	"AuthorAccess",
 	"DownloadArtifact",
 	"DownloadError",
@@ -70,17 +75,21 @@ __all__ = [
 	"DownloadInvalidLinkError",
 	"DownloadUnsupportedActionError",
 	"DownloadUnsupportedLinkError",
-	
+
 	"ReviewDecision",
 	"ReviewResult",
 	"ReviewService",
 	"ReviewStatus",
-	
+
 	"ShareArtifact",
 	"ShareRequest",
 	"ShareResult",
 	"ShareService",
 	"ShareStatus",
+
+	"SyncDataService",
+	"SyncResult",
+	"SyncTimeoutError",
 
 	"TakedownDelete",
 	"TakedownResult",
