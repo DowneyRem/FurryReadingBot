@@ -24,6 +24,18 @@ jobs:
             cd /root/FurryReadingBot
             git fetch origin deploy
             git reset --hard origin/deploy
+
+            # 1. 检查并自动安装 uv（如果服务器上还没有）
+            if ! command -v uv &> /dev/null; then
+              echo "正在安装 uv..."
+              curl -LsSf https://astral.sh/uv/install.sh | sh
+            fi
+
+            # 2. 将 root 用户的 uv 路径加入到当前 SSH 会话的 PATH 中
+            export PATH="/root/.local/bin:$PATH"
+
+            # 3. 使用 uv 创建/同步虚拟环境并安装依赖
+            # （uv sync 会自动检测 pyproject.toml 并创建 .venv 虚拟环境）
             uv sync
 
             # 自动生成 .env
