@@ -31,13 +31,14 @@ jobs:
             PRIVATE_REPO="${{ secrets.PRIVATE_REPO }}"
             PRIVATE_REPO_URL="https://oauth2:${{ secrets.PRIVATE_REPO_TOKEN }}@github.com/${PRIVATE_REPO}.git"
 
-            if [ ! -d "$DATA_DIR" ]; then
-              echo "首次部署，正在克隆私有数据仓库到 data 目录..."
+            if [ ! -d "$DATA_DIR/.git" ]; then
+              echo "data 目录不存在或不是一个 Git 仓库，正在重新克隆私有数据仓库..."
+              rm -rf "$DATA_DIR"
               git clone "$PRIVATE_REPO_URL" "$DATA_DIR"
             else
               echo "更新私有数据仓库..."
               cd "$DATA_DIR"
-              git pull origin main
+              git pull origin main --force
               cd /root/FurryReadingBot
             fi
 
