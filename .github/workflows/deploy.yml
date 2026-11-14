@@ -16,8 +16,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
+            # 1. 部署主代码仓库（公开仓库）
             if [ ! -d /root/FurryReadingBot ]; then
-              echo "首次部署，正在克隆仓库..."
+              echo "首次部署，正在克隆代码仓库..."
               git clone -b deploy https://github.com/DowneyRem/FurryReadingBot.git /root/FurryReadingBot
             fi
 
@@ -25,20 +26,31 @@ jobs:
             git fetch origin deploy
             git reset --hard origin/deploy
 
-            # 1. 检查并自动安装 uv（如果服务器上还没有）
+            # 2. 部署/同步运营数据仓库（私有仓库）
+            DATA_DIR="/root/FurryReadingBot/data"
+            PRIVATE_REPO="${{ secrets.PRIVATE_REPO }}"
+            PRIVATE_REPO_URL="https://oauth2:${{ secrets.PRIVATE_REPO_TOKEN }}@github.com/${PRIVATE_REPO}.git"
+
+            if [ ! -d "$DATA_DIR" ]; then
+              echo "首次部署，正在克隆私有数据仓库到 data 目录..."
+              git clone "$PRIVATE_REPO_URL" "$DATA_DIR"
+            else
+              echo "更新私有数据仓库..."
+              cd "$DATA_DIR"
+              git pull origin main
+              cd /root/FurryReadingBot
+            fi
+
+            # 3. 安装并配置 uv 环境
             if ! command -v uv &> /dev/null; then
               echo "正在安装 uv..."
               curl -LsSf https://astral.sh/uv/install.sh | sh
             fi
 
-            # 2. 将 root 用户的 uv 路径加入到当前 SSH 会话的 PATH 中
             export PATH="/root/.local/bin:$PATH"
-
-            # 3. 使用 uv 创建/同步虚拟环境并安装依赖
-            # （uv sync 会自动检测 pyproject.toml 并创建 .venv 虚拟环境）
             uv sync
 
-            # 自动生成 .env
+            # 4. 自动生成 .env
             cat > .env << EOF
             BOT_TOKEN=${{ secrets.BOT_TOKEN }}
             FURRY_READING=${{ secrets.FURRY_READING }}
@@ -48,17 +60,13 @@ jobs:
             FURRY_READING_NEW_GROUP=${{ secrets.FURRY_READING_NEW_GROUP }}
             TEST_GROUP=${{ secrets.TEST_GROUP }}
 
-            # 分享模式：test 只发测试频道；prod 按评分分流到正式频道
             SHARE_MODE=test
-            # prod 模式下，评分达到该值的作品同时发到兽人阅读和兽人小说；否则只发兽人小说
             SHARE_SCORE_THRESHOLD=7
-            # 分享冷却（天）：同一部作品在该时间内不会重复发送到频道
             SHARE_COOLDOWN_DAYS=3
-            # 文件缓存天数：file_id 在该时间内可直接复用
             FILE_CACHE_TTL_DAYS=7
             EOF
 
-            # 安装 / 更新 systemd 服务
+            # 5. 安装 / 更新 systemd 服务并重启
             cp deploy/furryreadingbot.service /etc/systemd/system/furryreadingbot.service
             systemctl daemon-reload
             systemctl enable furryreadingbot
