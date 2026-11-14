@@ -42,6 +42,11 @@
 - `SHARE_MODE=test` 只发测试频道；`prod` 按评分分流到「兽人小说 / 兽人阅读」
 - 分享记录带 `message_id`，作者下架时能逐条回溯删除
 
+**数据同步**
+- `/sync` 调用 `data/sync_data.sh`，把 `data/*.json` 的变动提交到私有数据仓库
+- 脚本内部 `flock`，与服务器上的定时任务串行，不会同时 `git commit / push`
+- 没有数据变动时直接跳过；超时 / 失败会原样回显脚本输出
+
 **版权与下架**
 - 作者本人：主页链接 → 确认 → 私聊提交 Pixiv 后台截图 → 中转频道核验
 - 核验通过 = 进黑名单 + 移出兽人名单 + 删除该作者的频道历史分享
@@ -63,6 +68,7 @@ https://linpx.ink/pixiv/user/130586197     # 作者全部作品
 | `/furry [作者ID/主页链接]` | 申请把作者加入兽人作者名单 | 所有人 |
 | `/black [作者ID/主页链接]` | 作者本人申请下架 | 所有人 |
 | `/review` | 重推待审申请 | 中转频道管理员 |
+| `/sync` | 把运营数据同步到私有仓库 | 所有人 |
 
 完整场景、失败提示与 FAQ 见 [02 · 用户使用流程](docs/02-用户使用流程.md)。
 
@@ -144,12 +150,12 @@ handlers  →  services  →  policy / sources  →  storage / infra / utils
 .venv\Scripts\python.exe -m pytest test -q
 ```
 
-当前基线（2026-11-13）：**220 项 → 217 passed / 3 skipped**，全绿。
+当前基线（2026-11-14）：**256 项 → 253 passed / 3 skipped**，全绿。
 
 | 跑法 | 命令 | 结果 |
 |---|---|---|
-| 全量 | `pytest test -q` | 217 passed / 3 skipped |
-| 跳过真实 API 用例 | `pytest test -q --ignore=test/test_linpx.py` | 209 passed |
+| 全量 | `pytest test -q` | 253 passed / 3 skipped |
+| 跳过真实 API 用例 | `pytest test -q --ignore=test/test_linpx.py` | 242 passed |
 | 只跑真实 Linpx API | `$env:LINPX_LIVE="1"` 后 `pytest test/test_linpx.py -q` | 11 passed（3 条真实 API 用例解封） |
 
 测试不需要真实 Bot Token。代码风格由 `test/test_style.py` 守门：**`.py` 一律 Tab 缩进（Tab = 4 列）**，行首缩进出现空格即失败；其余约定见 [07 §6~§7](docs/07-配置与部署.md)。
