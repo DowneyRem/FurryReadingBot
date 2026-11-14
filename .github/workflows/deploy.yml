@@ -26,6 +26,27 @@ jobs:
             git reset --hard origin/deploy
             uv sync
 
+            # 自动生成 .env
+            cat > .env << EOF
+            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+            FURRY_READING=${{ secrets.FURRY_READING }}
+            FURRY_NOVELS=${{ secrets.FURRY_NOVELS }}
+            TEST_CHANNEL=${{ secrets.TEST_CHANNEL }}
+            TRANSIT_CHANNEL=${{ secrets.TRANSIT_CHANNEL }}
+            FURRY_READING_NEW_GROUP=${{ secrets.FURRY_READING_NEW_GROUP }}
+            TEST_GROUP=${{ secrets.TEST_GROUP }}
+
+            # 分享模式：test 只发测试频道；prod 按评分分流到正式频道
+            SHARE_MODE=test
+            # prod 模式下，评分达到该值的作品同时发到兽人阅读和兽人小说；否则只发兽人小说
+            SHARE_SCORE_THRESHOLD=7
+            # 分享冷却（天）：同一部作品在该时间内不会重复发送到频道
+            SHARE_COOLDOWN_DAYS=3
+            # 文件缓存天数：file_id 在该时间内可直接复用
+            FILE_CACHE_TTL_DAYS=7
+            EOF
+
+            # 安装 / 更新 systemd 服务
             cp deploy/furryreadingbot.service /etc/systemd/system/furryreadingbot.service
             systemctl daemon-reload
             systemctl enable furryreadingbot
