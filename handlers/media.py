@@ -32,7 +32,7 @@ async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		return
 	if result.status == "expired":
 		await message.reply_text(
-			"截图提交超时，请重新发送作者主页链接，再点「🈲 申请黑名单」。")
+			"截图提交超时，请重新发送作者主页链接，再点「🈲 申请下架」。")
 		return
 
 	record = result.record
