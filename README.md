@@ -25,7 +25,7 @@
 - 单篇 → `txt`；系列 → 自动判断合并 `txt`（章节标题数字覆盖率 ≥ 75%）或分包 `zip`；作者主页 → 全量 `zip`
 - Telegram `file_id` 缓存（默认 7 天），二次下载直接复用，不再重新上传
 - 同一作品 `txt` / `zip` 都在缓存里时，让用户自己选格式
-- 上传成功后删除本地文件（作者全量下载目前会残留空目录）
+- 上传成功后删除本地文件：每次下载在 `files/work/dl-*` 独立工作目录里打包，交付后整目录删除
 
 **名单与权限**
 - 黑名单 → 拒绝下载、拒绝申请；兽人作者名单 → 直接放行；都不命中 → 只能申请
@@ -98,7 +98,7 @@ Copy-Item data.example\*.json data\  # 可选：导入示例兽人作者名单
 
 ## 配置
 
-全部配置都在 `.env`，缺失时只有 `BOT_TOKEN` 会明确报错。
+全部配置都在 `.env`；启动时 `config_errors()` 会按 `SHARE_MODE` 检查必需项，缺失直接退出并列出所有问题。
 
 | 变量 | 必填 | 默认 | 说明 |
 |---|---|---|---|
@@ -109,6 +109,7 @@ Copy-Item data.example\*.json data\  # 可选：导入示例兽人作者名单
 | `FURRY_NOVELS` / `FURRY_READING` | `prod` 必填 | 空 | 兽人小说 / 兽人阅读频道，`prod` 下按评分分流 |
 | `SHARE_SCORE_THRESHOLD` | 可选 | `7` | 同时发兽人阅读的评分下限 |
 | `SHARE_COOLDOWN_DAYS` / `FILE_CACHE_TTL_DAYS` | 可选 | `3` / `7` | 分享冷却 / `file_id` 缓存天数 |
+| `CONCURRENT_UPDATES` | 可选 | `8` | update 并发数，`1` = 串行；不要用 `True`（PTB 里等于 256 路） |
 
 逐项含义、`prod` 示例、「配了不生效」的变量：见 [07 §4](docs/07-配置与部署.md)。
 
@@ -166,7 +167,7 @@ handlers  →  services  →  policy / sources  →  storage / infra / utils
 | 状态 | 内容 |
 |---|---|
 | ✅ 已落地 | 名单判定、下载与打包、`file_id` 缓存、申请 / 审核、分享分流与冷却、作者下架 + 历史分享清理 |
-| ⚠️ 已知缺口 | 配置无启动校验、作者全量下载残留目录、`callback_data` 可伪造、无 lint / Docker / 指标 |
+| ⚠️ 已知缺口 | `callback_data` 可伪造、无 lint / Docker / 指标、白名单未接入判定 |
 | ❌ 未实现 | 评分（`score` 恒为 `None`）、标签 / 正文自动识别、翻译、授权白名单接入 |
 
 完整清单与优先级见 [01](docs/01-功能清单与缺口.md)，演进方向见 [06](docs/06-未来架构.md)。
