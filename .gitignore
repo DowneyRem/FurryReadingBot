@@ -3,7 +3,7 @@
 .env
 files
 *.zip
-data/*.json
+data
 
 # Python
 __pycache__/
