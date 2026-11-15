@@ -91,7 +91,8 @@ def review_receipt(
 	record = result.record
 	if record is not None:
 		text.append(f"🈸 申请人：{record.user_name}（#u{record.user_id}）")
-	text.append(f"👤 审核人：{user.first_name} {user.last_name}（#u{user.id}）")
+	user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
+	text.append(f"👤 审核人：{user_name}（#u{user.id}）")
 	return "\n".join(text)
 
 
@@ -156,12 +157,13 @@ async def request_blacklist_confirm(
 
 	await edit_or_reply(update, context, "正在受理申请，请稍候……")
 
+	user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
 	result = BlacklistService().request(
 		author_id,
 		author_url=link,
 		author_name=await _author_name(link),
 		user_id=user.id,
-		user_name=f"{user.first_name} {user.last_name}".strip(),
+		user_name=user_name,
 	)
 	if result.status == "already_blacklisted":
 		await edit_or_reply(
@@ -247,10 +249,11 @@ async def retry_takedown(
 		return
 
 	takedown = await _takedown(context, author_id)
+	user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
 	text = "\n".join([
 		f"🈲 #作者下架重试删除（#a{author_id}）",
 		takedown_notice(takedown),
-		f"👤 操作人：{user.first_name} {user.last_name}（#u{user.id}）",
+		f"👤 操作人：{user_name}（#u{user.id}）",
 	])
 	retry = retry_takedown_keyboard(author_id) if takedown.failed else None
 	await close_transit_message(update, context, text, reply_markup=retry)

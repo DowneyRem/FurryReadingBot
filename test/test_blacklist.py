@@ -46,6 +46,14 @@ class FakeUser:
 	last_name = "User"
 
 
+class NoLastNameUser:
+	"""Telegram 允许用户不设姓：last_name 为 None，不能拼出「Admin None」。"""
+
+	id = 9
+	first_name = "Admin"
+	last_name = None
+
+
 class FakeMessage:
 	def __init__(self, file_id: str = "PHOTO") -> None:
 		self.photo = [FakePhoto(file_id)]
@@ -182,6 +190,32 @@ def test_receipt_and_applicant_text() -> None:
 	assert "🈲 #作者下架申请已拒绝" in text
 	assert "❌ 已拒绝：作者（#a42）" in text
 	assert "未通过" in applicant_text(rejected)
+
+
+def test_receipt_and_request_skip_missing_last_name(monkeypatch) -> None:
+	"""没设姓的用户：回执与申请记录里都不能出现「Admin None」。"""
+	approved = BlacklistReview("approved", "42", "作者", RECORD)
+	text = review_receipt(approved, NoLastNameUser())
+	assert "None" not in text
+	assert "👤 审核人：Admin（#u9）" in text
+
+	service, _, closed, _, _ = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			request=BlacklistRequest("needs_material", "42", "作者")),
+	)
+	update = FakeUpdate()
+	update.effective_user = NoLastNameUser()
+	run(request_blacklist_confirm(
+		update, FakeContext(), data=f"aby;{AUTHOR_URL}"))
+
+	kwargs = service.calls[0][2]
+	assert kwargs["user_name"] == "Admin"
+
+	service.can_retry_takedown = lambda author_id: True
+	run(blacklist_handler.retry_takedown(
+		update, FakeContext(), data="rbt;42"))
+	assert "👤 操作人：Admin（#u9）" in closed[0]
 
 
 def test_takedown_notice_variants() -> None:
