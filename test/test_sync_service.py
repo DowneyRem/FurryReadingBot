@@ -1,6 +1,6 @@
 """services.sync_service：/sync 调用的脚本执行、超时与跳过判定。
 
-用 monkeypatch 替换 `run_script`，不真的跑 git / bash，Windows 上也能测。
+用 monkeypatch 替换 `run_script`，不真的跑 git / 同步脚本，Windows 上也能测。
 
 运行（在项目根目录）:
 	python -m pytest test/test_sync_service.py -q
@@ -139,9 +139,11 @@ def test_sync_runs_are_serialized(monkeypatch) -> None:
 
 
 def test_default_script_lives_in_data_dir() -> None:
+	"""平台不同、脚本不同，但都放在 data/ 下，与 sync_data.sh 一一对应。"""
 	path = SYNC_SCRIPT
+	expected = "sync_data.ps1" if sync_service.IS_WINDOWS else "sync_data.sh"
 
-	assert path.name == "sync_data.sh"
+	assert path.name == expected
 	assert path.parent.name == "data"
 	assert SyncDataService().script == path
 
@@ -154,15 +156,15 @@ class FakeProcess:
 		self.killed = False
 
 	async def communicate(self):
-		if self._hang and not self.killed:
-			await asyncio.sleep(3600)
+		while self._hang and not self.killed:
+			await asyncio.sleep(0.01)
 		return self._output, None
 
 	def kill(self) -> None:
 		self.killed = True
 
 
-def test_run_script_uses_configured_bash_and_collects_output(monkeypatch) -> None:
+def test_run_script_uses_configured_shell_and_collects_output(monkeypatch) -> None:
 	captured: dict = {}
 
 	async def fake_exec(*args, **kwargs):
@@ -175,9 +177,22 @@ def test_run_script_uses_configured_bash_and_collects_output(monkeypatch) -> Non
 	code, output = run(sync_service.run_script(HERE, timeout=5))
 
 	assert (code, output) == (0, "数据同步到私有仓库成功！")
-	assert captured["args"] == (sync_service.SYNC_BASH, str(HERE))
+	assert captured["args"] == (*sync_service.SYNC_SHELL, str(HERE))
 	assert captured["kwargs"]["cwd"] == str(HERE.parent)
 	assert captured["kwargs"]["stderr"] == asyncio.subprocess.STDOUT
+
+
+def test_sync_shell_matches_platform() -> None:
+	"""Linux 走 bash + .sh；Windows 走 powershell + .ps1（没有 /bin/bash 可用）。"""
+	shell = sync_service.SYNC_SHELL
+
+	if sync_service.IS_WINDOWS:
+		assert shell[0] == "powershell.exe"
+		assert "-File" in shell
+		assert sync_service.SYNC_SCRIPT.suffix == ".ps1"
+	else:
+		assert shell == ("/bin/bash",)
+		assert sync_service.SYNC_SCRIPT.suffix == ".sh"
 
 
 def test_run_script_timeout_kills_process(monkeypatch) -> None:
