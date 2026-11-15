@@ -49,13 +49,14 @@ async def share(
 	file_type = parts[3] if len(parts) > 3 else "txt"
 	query = update.callback_query
 	user = query.from_user if query else None
+	user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip() if user else ""
 	request = ShareRequest(
 		kind=kind,
 		item_id=item_id,
 		file_type=file_type,
 		public=public,
 		user_id=user.id if user else None,
-		user_name=(user.first_name or "") if user else "",
+		user_name=user_name,
 	)
 
 	async def send(artifact, chat_id: str) -> int:

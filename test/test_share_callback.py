@@ -31,6 +31,7 @@ def run(coro):
 class FakeUser:
 	id = 42
 	first_name = "Alice"
+	last_name = None
 
 
 class FakeQuery:
