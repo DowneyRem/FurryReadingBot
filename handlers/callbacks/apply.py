@@ -104,10 +104,11 @@ async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 	await edit_or_reply(update, context, "正在提交申请，请稍候……")
 
 	try:
+		user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
 		result = await ApplyService().submit(
 			link,
 			user_id=user.id,
-			user_name=f"{user.first_name} {user.last_name}",
+			user_name=user_name,
 			send_transit=lambda record: send_to_transit(update, context, record),
 		)
 	except ApplyInvalidLinkError:

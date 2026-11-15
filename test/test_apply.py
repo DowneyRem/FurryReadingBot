@@ -74,6 +74,14 @@ class FakeUser:
 	last_name = "Wang"
 
 
+class NoLastNameUser:
+	"""Telegram 允许用户不设姓：last_name 为 None，不能拼出「Alice None」。"""
+
+	id = 42
+	first_name = "Alice"
+	last_name = None
+
+
 class FakeUpdate:
 	def __init__(self) -> None:
 		self.effective_user = FakeUser()
@@ -174,6 +182,19 @@ def test_apply_furry_confirm_submits(monkeypatch) -> None:
 	assert service.submitted is not None
 	assert service.submitted["user_id"] == 42
 	assert service.submitted["user_name"] == "Alice Wang"
+
+
+def test_apply_furry_confirm_without_last_name(monkeypatch) -> None:
+	"""没设姓的用户：申请记录里不能出现「Alice None」。"""
+	service, _ = patch_handler(monkeypatch)
+	update = FakeUpdate()
+	update.effective_user = NoLastNameUser()
+
+	run(apply_handler.apply_furry_confirm(
+		update, object(), data=f"afy;{AUTHOR_LINK}"))
+
+	assert service.submitted is not None
+	assert service.submitted["user_name"] == "Alice"
 
 
 def test_apply_furry_confirm_pending(monkeypatch) -> None:
