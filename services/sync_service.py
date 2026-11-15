@@ -1,9 +1,14 @@
-"""数据同步业务：调用 `data/sync_data.sh` 把运营数据提交到私有仓库。
+"""数据同步业务：调用 `data/` 下的同步脚本把运营数据提交到私有仓库。
 
 分工：
-  - 脚本负责 git add / commit / pull --rebase / push，并在内部用 flock 串行，
+  - 脚本负责 git add / commit / pull --rebase / push，并在内部加锁串行，
     所以定时任务和 `/sync` 不会同时改同一个仓库；
   - 本模块只负责选脚本、限时、收集输出，并把结果翻译成 handler 能用的结构。
+
+平台差异只在「脚本」和「解释器」两处：
+  - Linux / macOS：`data/sync_data.sh` + `/bin/bash`（服务器上的定时任务也用它）；
+  - Windows：`data/sync_data.ps1` + `powershell.exe`（内容与 .sh 一一对应，
+    只是把 flock 换成独占锁文件、路径换成相对于脚本自身）。
 
 不 import telegram，便于单测。
 """
@@ -12,20 +17,33 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
-SYNC_SCRIPT = ROOT / "data" / "sync_data.sh"
-SYNC_BASH = "/bin/bash"
+IS_WINDOWS = os.name == "nt"
+
+if IS_WINDOWS:
+	SYNC_SCRIPT = ROOT / "data" / "sync_data.ps1"
+	SYNC_SHELL = (
+		"powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+	)
+else:
+	SYNC_SCRIPT = ROOT / "data" / "sync_data.sh"
+	SYNC_SHELL = ("/bin/bash",)
+
 # 要大于脚本里 flock -w 的 240 秒，避免排队时被 Python 先杀掉
 SCRIPT_TIMEOUT = 300.0
+# 超时杀掉脚本后，留给「把已经产生的输出收回来」的时间；收不到就不再等
+TAIL_TIMEOUT = 5.0
 # 脚本报告「没有数据变动」时的输出片段，用来把结果翻译成 skipped
 SKIPPED_HINTS = ("没有发现数据变动", "跳过同步", "No changes")
 
-# 脚本内部已有 flock；这里再加一把进程内锁，连点 /sync 时排队而不是同时拉起多个 bash。
+# 脚本内部已有 flock；这里再加一把进程内锁，连点 /sync 时排队而不是同时拉起多个脚本。
 # asyncio.Lock 绑定事件循环，所以按 loop 分组（测试里每个 asyncio.run 都是新 loop）。
 _locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
 
@@ -56,22 +74,52 @@ def _lock() -> asyncio.Lock:
 	return _locks.setdefault(loop, asyncio.Lock())
 
 
+def _kill_tree(process) -> None:
+	"""杀掉脚本及其子进程。
+
+	Windows 上 `Process.kill()` 只结束 powershell，`git` 子进程会留下来继续跑、
+	继续握着仓库锁，所以先用 `taskkill /T` 清掉整棵进程树。
+	"""
+	pid = getattr(process, "pid", None)
+	if IS_WINDOWS and pid:
+		subprocess.run(
+			["taskkill", "/F", "/T", "/PID", str(pid)],
+			stdout=subprocess.DEVNULL,
+			stderr=subprocess.DEVNULL,
+			check=False,
+		)
+	try:
+		process.kill()
+	except ProcessLookupError:  # 已经被 taskkill 结束
+		pass
+
+
+def _decode(data: bytes) -> str:
+	"""脚本输出统一按 UTF-8 解码（两个脚本都保证输出是 UTF-8）。"""
+	return (data or b"").decode("utf-8", "replace").strip()
+
+
 async def run_script(path: Path, *, timeout: float = SCRIPT_TIMEOUT) -> tuple[int, str]:
 	"""执行同步脚本，返回 (退出码, 合并后的 stdout/stderr)；超时会杀掉脚本并抛异常。"""
 	process = await asyncio.create_subprocess_exec(
-		SYNC_BASH, str(path),
+		*SYNC_SHELL, str(path),
 		cwd=str(path.parent),
 		stdout=asyncio.subprocess.PIPE,
 		stderr=asyncio.subprocess.STDOUT,
 	)
+	# 用 shield 保护 communicate()：Windows 上被 wait_for 取消后再调一次会等不到
+	# EOF，`/sync` 会永久卡在锁上。超时后只再给 TAIL_TIMEOUT 秒回收部分输出。
+	reading = asyncio.ensure_future(process.communicate())
 	try:
-		stdout, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
+		stdout, _ = await asyncio.wait_for(asyncio.shield(reading), timeout=timeout)
 	except asyncio.TimeoutError:
-		process.kill()
-		stdout, _ = await process.communicate()
-		raise SyncTimeoutError(
-			timeout, stdout.decode("utf-8", "replace").strip()) from None
-	return int(process.returncode or 0), stdout.decode("utf-8", "replace").strip()
+		_kill_tree(process)
+		try:
+			stdout, _ = await asyncio.wait_for(reading, timeout=TAIL_TIMEOUT)
+		except asyncio.TimeoutError:
+			stdout = b""
+		raise SyncTimeoutError(timeout, _decode(stdout)) from None
+	return int(process.returncode or 0), _decode(stdout)
 
 
 class SyncDataService:
