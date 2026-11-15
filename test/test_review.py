@@ -39,6 +39,14 @@ class FakeUser:
 	last_name = "User"
 
 
+class NoLastNameUser:
+	"""Telegram 允许用户不设姓：last_name 为 None，不能拼出「Admin None」。"""
+
+	id = 9
+	first_name = "Admin"
+	last_name = None
+
+
 class FakeQuery:
 	def __init__(self) -> None:
 		self.answers: list[tuple[str | None, bool]] = []
@@ -132,6 +140,31 @@ def test_receipt_text_approved() -> None:
 	assert "✅ 通过：作者（#a42）" in text
 	assert "🈸 申请：Alice（#u1）" in text
 	assert "👤 审核：Admin User" in text
+
+
+def test_receipt_text_without_last_name() -> None:
+	"""没设姓的用户：审核回执不能出现「Admin None」或多余空格。"""
+	text = _receipt_text(
+		ReviewResult("approved", "42", "作者", "pending", RECORD),
+		NoLastNameUser(),
+	)
+	assert "None" not in text
+	assert "👤 审核：Admin（#u9）" in text
+
+
+def test_review_application_reviewer_name_without_last_name(monkeypatch) -> None:
+	service, _, _ = patch_review(
+		monkeypatch,
+		ReviewResult("rejected", "42", "作者", "pending", RECORD),
+	)
+	update = FakeUpdate()
+	update.effective_user = NoLastNameUser()
+
+	run(review_application(
+		update, FakeContext(), data="rfn;42", decision="reject"))
+
+	assert service.called is not None
+	assert service.called["reviewer_name"] == "Admin"
 
 
 def test_transit_author_caption_uses_author_metadata() -> None:

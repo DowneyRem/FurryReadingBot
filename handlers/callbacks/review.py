@@ -115,8 +115,8 @@ def _receipt_text(result: ReviewResult, user) -> str:
 	record = result.record
 	if record is not None:
 		text.append(f"🈸 申请：{record.user_name}（#u{record.user_id}）")
-	last_name = f"{user.last_name if user.last_name is not None else''}"
-	text.append(f"👤 审核：{user.first_name} {last_name} （#u{user.id}）")
+	user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
+	text.append(f"👤 审核：{user_name}（#u{user.id}）")
 	return "\n".join(text)
 
 
@@ -133,11 +133,12 @@ async def review_application(
 		await close_transit_message(update, context, "申请参数不完整")
 		return
 
+	user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
 	result = ReviewService().review(
 		author_id,
 		decision,
 		reviewer_id=user.id,
-		reviewer_name=f"{user.first_name} {user.last_name}",
+		reviewer_name=user_name,
 	)
 
 	if result.status == "missing":
