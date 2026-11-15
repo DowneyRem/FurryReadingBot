@@ -1,4 +1,4 @@
-"""handlers.sync：/sync 的结果文案、消息编辑与「不校验管理员」。
+"""handlers.sync：/sync 的管理员校验、结果文案与消息编辑。
 
 运行（在项目根目录）:
 	python -m pytest test/test_sync_command.py -q
@@ -10,6 +10,7 @@ import asyncio
 import importlib
 
 from handlers.sync import format_sync_result, sync as sync_command
+from policy.admin import AdminDecision, AdminPolicy
 from services import SyncResult
 
 # handlers/__init__ 导出的 sync 是函数，会遮住同名子模块，这里显式取模块
@@ -60,15 +61,32 @@ class FakeContext:
 
 
 class FakeService:
+	"""记录被调用次数：非管理员时不该有任何同步动作。"""
+
 	def __init__(self, result: SyncResult) -> None:
 		self._result = result
+		self.calls = 0
 
 	async def sync(self) -> SyncResult:
+		self.calls += 1
 		return self._result
 
 
-def patch_service(monkeypatch, result: SyncResult) -> None:
-	monkeypatch.setattr(sync_module, "SyncDataService", lambda: FakeService(result))
+class FakeAdminPolicy:
+	def __init__(self, allowed: bool) -> None:
+		self.allowed = allowed
+
+	async def check(self, user_id):
+		return AdminDecision(str(user_id), self.allowed)
+
+
+def patch_service(monkeypatch, result: SyncResult, *, admin: bool = True) -> FakeService:
+	"""替换同步服务与管理员判定；`admin=False` 用来测拒绝分支。"""
+	service = FakeService(result)
+	monkeypatch.setattr(sync_module, "SyncDataService", lambda: service)
+	monkeypatch.setattr(
+		sync_module, "transit_admin_policy", lambda bot: FakeAdminPolicy(admin))
+	return service
 
 
 def test_sync_command_reports_success(monkeypatch) -> None:
@@ -128,14 +146,34 @@ def test_sync_command_falls_back_when_edit_fails(monkeypatch) -> None:
 	assert "已同步到私有仓库" in update.effective_message.replies[-1][0]
 
 
-def test_sync_command_needs_no_admin(monkeypatch) -> None:
-	"""暂时不校验管理员：FakeUpdate 没有 chat / 成员查询，命令也要照常跑完。"""
-	patch_service(monkeypatch, SyncResult(True, "ok"))
+def test_sync_command_requires_admin(monkeypatch) -> None:
+	"""非管理员：只回一句拒绝，不发「⏳」、也不碰同步服务。"""
+	service = patch_service(monkeypatch, SyncResult(True, "ok"), admin=False)
 	update = FakeUpdate()
 
 	run(sync_command(update, FakeContext()))
 
-	assert update.effective_message.notice.edits
+	assert len(update.effective_message.replies) == 1
+	assert "仅中转频道管理员" in update.effective_message.replies[0][0]
+	assert update.effective_message.notice.edits == []
+	assert service.calls == 0
+
+
+def test_sync_command_denies_when_status_unknown(monkeypatch) -> None:
+	"""默认拒绝：用真实 AdminPolicy，成员状态查不到（返回 None）也按非管理员处理。"""
+	service = patch_service(monkeypatch, SyncResult(True, "ok"))
+
+	async def no_status(user_id: str) -> None:
+		return None
+
+	monkeypatch.setattr(
+		sync_module, "transit_admin_policy", lambda bot: AdminPolicy(no_status))
+	update = FakeUpdate()
+
+	run(sync_command(update, FakeContext()))
+
+	assert "仅中转频道管理员" in update.effective_message.replies[0][0]
+	assert service.calls == 0
 
 
 def test_format_escapes_html_and_truncates() -> None:

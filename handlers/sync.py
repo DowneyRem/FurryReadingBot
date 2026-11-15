@@ -1,7 +1,7 @@
-"""数据同步命令：`/sync` 把 `data/` 里的运营数据提交到私有仓库。
+"""管理员命令：`/sync` 把 `data/` 里的运营数据提交到私有仓库。
 
-暂时**不校验管理员**：任何私聊用户都能触发一次同步；脚本本身只提交数据、
-没有数据变动时直接跳过，风险可控。以后要收紧时在这里加 AdminPolicy 即可。
+权限与 `/review` 一致：只认**中转频道**的 `creator` / `administrator`
+（`AdminPolicy`，默认拒绝）。这样改管理员只需在 Telegram 里调频道权限。
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from handlers.telegram import transit_admin_policy
 from services import SyncDataService, SyncResult
 
 
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 # Telegram 单条消息上限 4096，给说明文字留余量
 MAX_OUTPUT = 1500
+# 非管理员的统一回复；与 `/review` 的措辞保持一致
+DENIED = "⚠️ 仅中转频道管理员可以同步运营数据"
 
 
 def format_sync_result(result: SyncResult) -> str:
@@ -44,17 +47,24 @@ def _output(text: str) -> str:
 
 
 async def sync(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	"""/sync：调用 data/sync_data.sh 提交运营数据。"""
+	"""/sync：管理员把运营数据提交到私有仓库。"""
 	message = update.effective_message
-	if message is None:
+	user = update.effective_user
+	if message is None or user is None:
+		return
+
+	decision = await transit_admin_policy(context.bot).check(user.id)
+	if not decision.allowed:
+		logger.warning(
+			"非管理员尝试同步运营数据 user=%s status=%s", user.id, decision.status)
+		await message.reply_text(DENIED)
 		return
 
 	notice = await message.reply_text("⏳ 正在同步运营数据到私有仓库…")
 	result = await SyncDataService().sync()
 	logger.info(
 		"数据同步请求 user=%s ok=%s code=%s skipped=%s",
-		getattr(update.effective_user, "id", "?"),
-		result.ok, result.returncode, result.skipped,
+		user.id, result.ok, result.returncode, result.skipped,
 	)
 
 	text = format_sync_result(result)
