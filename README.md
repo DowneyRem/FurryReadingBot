@@ -21,35 +21,12 @@
 
 ## 功能
 
-**下载**
-- 单篇 → `txt`；系列 → 自动判断合并 `txt`（章节标题数字覆盖率 ≥ 75%）或分包 `zip`；作者主页 → 全量 `zip`
-- Telegram `file_id` 缓存（默认 7 天），二次下载直接复用，不再重新上传
-- 同一作品 `txt` / `zip` 都在缓存里时，让用户自己选格式
-- 上传成功后删除本地文件：每次下载在 `files/work/dl-*` 独立工作目录里打包，交付后整目录删除
-
-**名单与权限**
-- 黑名单 → 拒绝下载、拒绝申请；兽人作者名单 → 直接放行；都不命中 → 只能申请
-- 判定规则收口在 `policy/author.py`，下载与申请共用同一套逻辑
-
-**申请与审核**
-- 申请前明确告知后果 + 二次确认；重复申请只累计次数，不重复送审
-- 申请卡片推送到中转频道，管理员点「通过 / 拒绝」→ 改名单 + 私聊通知申请人
-- 管理员身份按**中转频道成员权限**判定（`creator` / `administrator`），不维护 ID 名单，撤销即时（≤60 秒）生效
-- `/review` 可把历史待审申请重新推一遍
-
-**分享**
-- 公开 / 私密 / 拒绝三按钮；同一作品默认 3 天冷却，并发点击有拦截
-- `SHARE_MODE=test` 只发测试频道；`prod` 按评分分流到「兽人小说 / 兽人阅读」
-- 分享记录带 `message_id`，作者下架时能逐条回溯删除
-
-**数据同步**
-- `/sync` 调用 `data/sync_data.sh`，把 `data/*.json` 的变动提交到私有数据仓库
-- 脚本内部 `flock`，与服务器上的定时任务串行，不会同时 `git commit / push`
-- 没有数据变动时直接跳过；超时 / 失败会原样回显脚本输出
-
-**版权与下架**
-- 作者本人：主页链接 → 确认 → 私聊提交 Pixiv 后台截图 → 中转频道核验
-- 核验通过 = 进黑名单 + 移出兽人名单 + 删除该作者的频道历史分享
+- **下载**：单篇 `txt`；系列按章节标题数字覆盖率 ≥ 75% 自动合并 `txt`，否则分包 `zip`；作者主页全量 `zip`。`file_id` 缓存 7 天，交付后整目录删除
+- **名单与权限**：黑名单拒绝下载与申请 → 兽人作者名单放行 → 其余只能申请；判定收口在 `policy/author.py`
+- **申请与审核**：后果告知 + 二次确认 + 重复待审拦截；中转频道人工核验；管理员按频道权限判定（撤销 ≤60 秒生效）；`/review` 重推
+- **分享**：公开 / 私密 / 拒绝；3 天冷却 + 并发拦截；`SHARE_MODE` 决定目标频道；记录带 `message_id` 供下架回溯
+- **数据同步**：`/sync` 跑 `data/sync_data.sh`，脚本内 `flock` 与定时任务串行，无变动直接跳过
+- **版权与下架**：作者主页 → 后台截图 → 中转频道核验 → 进黑名单 + 移出兽人名单 + 删除历史分享
 
 ## 使用
 
@@ -73,62 +50,29 @@ https://linpx.ink/pixiv/user/130586197     # 作者全部作品
 完整场景、失败提示与 FAQ 见 [02 · 用户使用流程](docs/02-用户使用流程.md)。
 
 
-## 快速开始
+## 跑起来
 
-要求 **Python 3.12+**，推荐 [uv](https://docs.astral.sh/uv/)。
+最短路径：`git clone` → `uv sync` → 填 `.env` → `.venv\Scripts\python.exe bot.py`（要求 Python 3.12+）。
 
-```powershell
-git clone https://github.com/<owner>/FurryReadingBot.git
-cd FurryReadingBot
-
-uv sync
-Copy-Item .env.example .env          # Linux / macOS: cp .env.example .env
-# 编辑 .env，至少填 BOT_TOKEN 与 TEST_CHANNEL
-
-New-Item -ItemType Directory -Force -Path data | Out-Null   # Linux / macOS: mkdir -p data
-Copy-Item data.example\*.json data\  # 可选：导入示例兽人作者名单
-.venv\Scripts\python.exe bot.py
-```
-
-> `<owner>` 换成实际仓库地址；Linux / macOS 用 `.venv/bin/python bot.py`，没有 uv 时用 `venv + pip` 装依赖（见 [07 §2](docs/07-配置与部署.md)）。
-> 不拷 `data.example` 也能启动：缺失的 JSON 会自动建为空，只是所有作者都要走申请。
-
-安装、频道配置、上线自检、systemd 部署、常见报错：**[07 · 配置与部署](docs/07-配置与部署.md)**。
+| 想知道 | 看哪节 |
+|---|---|
+| 安装（uv / venv+pip）、数据目录与示例名单 | [07 §2~§3](docs/07-配置与部署.md) |
+| `.env` 每个变量、`test` / `prod` 示例 | [07 §4](docs/07-配置与部署.md) |
+| 启动方式、上线自检清单 | [07 §5](docs/07-配置与部署.md) |
+| 测试基线与跑法、代码风格 | [07 §6~§7](docs/07-配置与部署.md) |
+| systemd 部署、运维清单、常见报错 | [07 §8~§9](docs/07-配置与部署.md) |
 
 
-## 配置
+## 架构
 
-全部配置都在 `.env`；启动时 `config_errors()` 会按 `SHARE_MODE` 检查必需项，缺失直接退出并列出所有问题。
-
-| 变量 | 必填 | 默认 | 说明 |
-|---|---|---|---|
-| `BOT_TOKEN` | ✅ | — | Bot Token，缺失直接退出 |
-| `TEST_CHANNEL` | 分享 / 审核必填 | 空 | `SHARE_MODE=test` 时的分享目标，也是中转频道回退值 |
-| `TRANSIT_CHANNEL` | 审核必填 | `TEST_CHANNEL` | 待审申请（作者申请 / 下架申请）的中转频道 |
-| `SHARE_MODE` | 可选 | `test` | `test` 只发测试频道；`prod` 发正式频道 |
-| `FURRY_NOVELS` / `FURRY_READING` | `prod` 必填 | 空 | 兽人小说 / 兽人阅读频道，`prod` 下按评分分流 |
-| `SHARE_SCORE_THRESHOLD` | 可选 | `7` | 同时发兽人阅读的评分下限 |
-| `SHARE_COOLDOWN_DAYS` / `FILE_CACHE_TTL_DAYS` | 可选 | `3` / `7` | 分享冷却 / `file_id` 缓存天数 |
-| `CONCURRENT_UPDATES` | 可选 | `8` | update 并发数，`1` = 串行；不要用 `True`（PTB 里等于 256 路） |
-
-逐项含义、`prod` 示例、「配了不生效」的变量：见 [07 §4](docs/07-配置与部署.md)。
-
-## 架构一览
-
-单体、事件驱动、分层的 Bot：一个 Python 进程 + 一组 JSON 文件即可运行，没有数据库、没有任务队列、没有 Web 服务。
+单体、事件驱动、四层：一个 Python 进程 + 一组 JSON 文件，没有数据库 / 任务队列 / Web 服务。
 
 ```text
 handlers  →  services  →  policy / sources  →  storage / infra / utils
 （接入）      （用例编排）   （规则 / 来源）      （基础设施）
 ```
 
-三条能当红线用的约定：
-
-- `services/` 及以下**不 import telegram**：上传、删除、送审都通过回调注入。
-- **只有 `storage/` 读写业务 JSON**：原子写 + mtime 热加载 + 进程锁。
-- 新增来源 = 实现 `NovelSource` + 在 `sources/__init__.py` 的 `_SOURCES` 里注册一行。
-
-分层图、目录树、数据契约、已知越界：见 [03 · 项目架构说明](docs/03-项目架构说明.md)。
+红线一句话：`services/` 及以下**不 import telegram**；**只有 `storage/` 读写业务 JSON**；新增来源 = 实现 `NovelSource` + 在 `_SOURCES` 注册一行。分层图、目录树、数据契约见 [03](docs/03-项目架构说明.md)。
 
 
 ## 文档
@@ -145,23 +89,6 @@ handlers  →  services  →  policy / sources  →  storage / infra / utils
 | [Upgrade.md](Upgrade.md) | 产品改造方案（分流、黑白名单、人工核验）与实施进度 |
 
 
-## 测试
-
-```powershell
-.venv\Scripts\python.exe -m pytest test -q
-```
-
-当前基线（2026-11-14）：**256 项 → 253 passed / 3 skipped**，全绿。
-
-| 跑法 | 命令 | 结果 |
-|---|---|---|
-| 全量 | `pytest test -q` | 253 passed / 3 skipped |
-| 跳过真实 API 用例 | `pytest test -q --ignore=test/test_linpx.py` | 242 passed |
-| 只跑真实 Linpx API | `$env:LINPX_LIVE="1"` 后 `pytest test/test_linpx.py -q` | 11 passed（3 条真实 API 用例解封） |
-
-测试不需要真实 Bot Token。代码风格由 `test/test_style.py` 守门：**`.py` 一律 Tab 缩进（Tab = 4 列）**，行首缩进出现空格即失败；其余约定见 [07 §6~§7](docs/07-配置与部署.md)。
-
-
 ## 现状与路线图
 
 | 状态 | 内容 |
@@ -170,7 +97,7 @@ handlers  →  services  →  policy / sources  →  storage / infra / utils
 | ⚠️ 已知缺口 | `callback_data` 可伪造、无 lint / Docker / 指标、白名单未接入判定 |
 | ❌ 未实现 | 评分（`score` 恒为 `None`）、标签 / 正文自动识别、翻译、授权白名单接入 |
 
-完整清单与优先级见 [01](docs/01-功能清单与缺口.md)，演进方向见 [06](docs/06-未来架构.md)。
+测试基线：`pytest test -q` → **253 passed / 3 skipped**（跑法与代码风格见 [07 §6~§7](docs/07-配置与部署.md)）。完整清单与优先级见 [01](docs/01-功能清单与缺口.md)，演进方向见 [06](docs/06-未来架构.md)。
 
 
 ## 免责声明
