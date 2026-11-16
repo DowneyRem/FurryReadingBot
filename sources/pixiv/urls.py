@@ -31,9 +31,9 @@ def url_user(user_id: str | int) -> str:
 def url_user_data(user_id: str | int) -> str:
 	return f"{BASE}/ajax/user/{user_id}"
 
-def url_user_work_latest(user_id: str | int) -> str:
+def url_user_works_latest(user_id: str | int) -> str:
 	return f"{BASE}/ajax/user/{user_id}/works/latest"
-	
+
 def url_user_works_all(user_id: str | int) -> str:
 	return f"{BASE}/ajax/user/{user_id}/profile/all"
 
@@ -43,10 +43,10 @@ def url_author(author_id: str | int) -> str:
 	return url_user(author_id)
 
 def url_author_data(author_id: str | int) -> str:
-	return url_author(author_id)
+	return url_author_data(author_id)
 
-def url_author_work_latest(author_id: str | int) -> str:
-	return url_user_works_all(author_id)
+def url_author_works_latest(author_id: str | int) -> str:
+	return url_user_works_latest(author_id)
 
 def url_author_works_all(author_id: str | int) -> str:
-	return url_author_works_all(author_id)
+	return url_user_works_all(author_id)
