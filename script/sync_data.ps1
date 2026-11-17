@@ -1,7 +1,8 @@
-﻿# Windows 版数据同步脚本：供 /sync 与定时任务调用。
+﻿# 数据同步脚本：供 /sync 与定时任务调用。
 # 由 services/sync_service.py 以
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File script/sync_data.ps1
 # 执行；也可以手动在仓库根目录跑同一个命令。
+# 数据目录固定为脚本上一级的 data/（脚本自己进去 git add / commit / push）。
 #
 # 注意：本文件必须保存成「UTF-8 带 BOM」——Windows PowerShell 5.1 会把没有 BOM
 # 的文件按系统 ANSI 代码页读，中文提示会变成乱码。
@@ -27,7 +28,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $dataDir '.git'))) {
     exit 1
 }
 
-# 0. 互斥锁：对应 .sh 里的 flock -w 240，用「独占打开锁文件」实现，等不到就跳过。
+# 0. 互斥锁：定时任务与 /sync 可能同时触发，用「独占打开锁文件」串行，等不到就跳过。
 #    锁文件放在 .git 里，不会出现在 git status 中，也就不会被提交。
 $lockPath = Join-Path $dataDir '.git\sync.lock'
 $deadline = (Get-Date).AddSeconds(240)
@@ -47,34 +48,39 @@ while (-not $lock) {
 }
 
 try {
-    # 1. 每次同步前自动应用机器人身份
-    git config user.name 'github-actions[bot]'
-    git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-
-    # 2. 检查是否有未提交的运营数据更改
-    $changes = git status -s
+    # 1. 检查是否有未提交的运营数据更改（只认 data/*.json）
+    $changes = git status -s -- ':(glob)*.json'
     if ($LASTEXITCODE -ne 0) {
         Write-Output "读取仓库状态失败（git status 退出码 $LASTEXITCODE）。"
         exit 3
     }
-    if (-not $changes) {
-        Write-Output '没有发现数据变动，跳过同步。'
-        exit 0
+    if ($changes) {
+        Write-Output '检测到本地有新的运营数据，正在提交...'
+        git add -- ':(glob)*.json'
+        if ($LASTEXITCODE -ne 0) { exit 3 }
+
+        $message = '同步运营数据：' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        # 2. 提交：bot 身份只用于本次提交，不写进仓库配置
+        git -c 'user.name=github-actions[bot]' -c 'user.email=41898282+github-actions[bot]@users.noreply.github.com' commit -m $message
+        if ($LASTEXITCODE -ne 0) { exit 3 }
     }
-
-    Write-Output '检测到本地有新的运营数据，正在提交...'
-    git add .
-    if ($LASTEXITCODE -ne 0) { exit 3 }
-
-    $message = '同步运营数据：' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-    git commit -m $message
-    if ($LASTEXITCODE -ne 0) { exit 3 }
+    else {
+        $unpushed = ''
+        try { $unpushed = git log --oneline 'origin/main..HEAD' 2>$null } catch { $unpushed = '' }
+        if (-not $unpushed) {
+            Write-Output '没有发现数据变动，跳过同步。'
+            exit 0
+        }
+        # 上次 push 失败时本地会留下提交；没有新数据也要把它推上去
+        Write-Output '没有新的数据变动，但本地有未推送的提交，继续推送。'
+    }
 
     # 3. 先拉远端（rebase）再推；拉取失败就回滚，本地提交仍然保留
     git pull origin main --rebase
     if ($LASTEXITCODE -ne 0) {
         Write-Output '拉取远端数据失败，本次同步已放弃（本地提交仍然保留）。'
-        git rebase --abort 2>$null
+        # rebase 可能根本没开始（例如远端不存在）；失败不能盖掉 exit 4
+        try { git rebase --abort 2>$null } catch { }
         exit 4
     }
 
