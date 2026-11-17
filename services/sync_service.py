@@ -5,10 +5,14 @@
     所以定时任务和 `/sync` 不会同时改同一个仓库；
   - 本模块只负责选脚本、限时、收集输出，并把结果翻译成 handler 能用的结构。
 
+`/sync` 会传 `import_author=True`：先抓 Linpx 推荐作者合并进兽人作者名单，
+再跑脚本提交；服务器定时任务直接调脚本（`script/sync_data.sh`），不经过这里，
+所以自动同步不会联网抓推荐作者。
+
 平台差异只在「脚本」和「解释器」两处：
-  - Linux / macOS：`data/sync_data.sh` + `/bin/bash`（服务器上的定时任务也用它）；
-  - Windows：`data/sync_data.ps1` + `powershell.exe`（内容与 .sh 一一对应，
-    只是把 flock 换成独占锁文件、路径换成相对于脚本自身）。
+  - Linux：`script/sync_data.sh` + `/bin/bash`（服务器上的定时任务也用它）；
+  - Windows：`script/sync_data.ps1` + `powershell.exe`（与 .sh 契约一致：
+    退出码 / 锁 / 提示，只是把 flock 换成独占锁文件）。
 
 不 import telegram，便于单测。
 """
@@ -22,18 +26,20 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from services.import_author_service import ImportAuthorResult, import_authors
+
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
 IS_WINDOWS = os.name == "nt"
 
 if IS_WINDOWS:
-	SYNC_SCRIPT = ROOT / "data" / "sync_data.ps1"
+	SYNC_SCRIPT = ROOT / "script" / "sync_data.ps1"
 	SYNC_SHELL = (
 		"powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
 	)
 else:
-	SYNC_SCRIPT = ROOT / "data" / "sync_data.sh"
+	SYNC_SCRIPT = ROOT / "script" / "sync_data.sh"
 	SYNC_SHELL = ("/bin/bash",)
 
 # 要大于脚本里 flock -w 的 240 秒，避免排队时被 Python 先杀掉
@@ -50,13 +56,18 @@ _locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
 
 @dataclass(frozen=True)
 class SyncResult:
-	"""一次数据同步的结果；handler 据此回复。"""
+	"""一次数据同步的结果；handler 据此回复。
+
+	`linpx` 只在请求了推荐作者合并时才有值（`/sync` 手动触发）；
+	自动同步脚本不联网，保持 None。
+	"""
 
 	ok: bool
 	output: str = ""
 	returncode: int = 0
 	timed_out: bool = False
 	skipped: bool = False
+	linpx: ImportAuthorResult | None = None
 
 
 class SyncTimeoutError(RuntimeError):
@@ -138,23 +149,31 @@ class SyncDataService:
 	def script(self) -> Path:
 		return self._script or SYNC_SCRIPT
 
-	async def sync(self) -> SyncResult:
-		"""跑一次同步脚本；失败、超时、脚本缺失都返回结果而不是抛异常。"""
+	async def sync(self, *, import_author: bool = False) -> SyncResult:
+		"""跑一次同步脚本；失败、超时、脚本缺失都返回结果而不是抛异常。
+
+		`import_author=True` 时先把 Linpx 推荐作者合并进兽人作者名单，再提交。
+		推荐作者抓取失败不阻止提交：本地已有的运营数据仍然要上传，
+		失败原因放在 `result.linpx` 里让 handler 提示。
+		"""
 		path = self.script
 		if not path.is_file():
 			logger.error("数据同步脚本不存在：%s", path)
 			return SyncResult(False, f"同步脚本不存在：{path}")
 
 		async with _lock():
+			# 与脚本共用同一把锁：连点 /sync 时排队执行，顺序固定为「先合并名单，再提交」
+			linpx = await import_authors() if import_author else None
 			try:
 				code, output = await run_script(path, timeout=self._timeout)
 			except SyncTimeoutError as exc:
 				logger.warning("数据同步超时：%s（%s 秒）", path, exc.timeout)
 				return SyncResult(
-					False, exc.output, timed_out=True)
+					False, exc.output, timed_out=True, linpx=linpx)
 			except OSError as exc:
 				logger.exception("启动数据同步脚本失败：%s", path)
-				return SyncResult(False, f"无法执行同步脚本：{exc}")
+				return SyncResult(
+					False, f"无法执行同步脚本：{exc}", linpx=linpx)
 
 		skipped = code == 0 and any(hint in output for hint in SKIPPED_HINTS)
 		if code == 0:
@@ -162,4 +181,4 @@ class SyncDataService:
 		else:
 			logger.warning("数据同步失败：%s（退出码 %s）\n%s", path, code, output)
 		return SyncResult(
-			code == 0, output, returncode=code, skipped=skipped)
+			code == 0, output, returncode=code, skipped=skipped, linpx=linpx)

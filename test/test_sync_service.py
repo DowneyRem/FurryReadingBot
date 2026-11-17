@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from services import sync_service
+from services.import_author_service import ImportAuthorResult
 from services.sync_service import (
 	SyncDataService,
 	SYNC_SCRIPT,
@@ -31,6 +32,10 @@ def run(coro):
 
 def patch_runner(monkeypatch, runner) -> None:
 	monkeypatch.setattr(sync_service, "run_script", runner)
+
+
+def patch_importer(monkeypatch, importer) -> None:
+	monkeypatch.setattr(sync_service, "import_authors", importer)
 
 
 def test_sync_success(monkeypatch) -> None:
@@ -138,14 +143,76 @@ def test_sync_runs_are_serialized(monkeypatch) -> None:
 	assert peak == 1
 
 
-def test_default_script_lives_in_data_dir() -> None:
-	"""平台不同、脚本不同，但都放在 data/ 下，与 sync_data.sh 一一对应。"""
+def test_default_script_lives_in_script_dir() -> None:
+	"""平台不同、脚本不同，但都放在 script/ 下，与 sync_data.sh 一一对应。"""
 	path = SYNC_SCRIPT
 	expected = "sync_data.ps1" if sync_service.IS_WINDOWS else "sync_data.sh"
 
 	assert path.name == expected
-	assert path.parent.name == "data"
+	assert path.parent.name == "script"
 	assert SyncDataService().script == path
+
+
+def test_sync_skips_linpx_by_default(monkeypatch) -> None:
+	"""自动同步（不传 import_author）不抓推荐作者，也不会联网。"""
+	calls: list[bool] = []
+
+	async def fake_import():
+		calls.append(True)
+		return ImportAuthorResult(True)
+
+	async def fake_run(path, *, timeout):
+		return 0, "数据同步到私有仓库成功！"
+
+	patch_importer(monkeypatch, fake_import)
+	patch_runner(monkeypatch, fake_run)
+
+	result = run(SyncDataService(HERE).sync())
+
+	assert calls == []
+	assert result.linpx is None
+
+
+def test_sync_imports_linpx_before_running_script(monkeypatch) -> None:
+	"""/sync：先合并推荐作者，再跑脚本提交。"""
+	order: list[str] = []
+	linpx = ImportAuthorResult(
+		True, total=3, skipped=1, new_authors=(("1", "甲"), ("2", "乙")))
+
+	async def fake_import():
+		order.append("linpx")
+		return linpx
+
+	async def fake_run(path, *, timeout):
+		order.append("script")
+		return 0, "数据同步到私有仓库成功！"
+
+	patch_importer(monkeypatch, fake_import)
+	patch_runner(monkeypatch, fake_run)
+
+	result = run(SyncDataService(HERE).sync(import_author=True))
+
+	assert order == ["linpx", "script"]
+	assert result.linpx is linpx
+	assert result.ok is True
+
+
+def test_sync_pushes_when_linpx_fails(monkeypatch) -> None:
+	"""推荐作者抓不到时仍然提交本地已有数据，失败原因留在结果里。"""
+	async def fake_import():
+		return ImportAuthorResult(False, error="Linpx 暂时无法访问")
+
+	async def fake_run(path, *, timeout):
+		return 0, "数据同步到私有仓库成功！"
+
+	patch_importer(monkeypatch, fake_import)
+	patch_runner(monkeypatch, fake_run)
+
+	result = run(SyncDataService(HERE).sync(import_author=True))
+
+	assert result.ok is True
+	assert result.linpx is not None
+	assert result.linpx.ok is False
 
 
 class FakeProcess:

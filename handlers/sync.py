@@ -1,7 +1,10 @@
-"""管理员命令：`/sync` 把 `data/` 里的运营数据提交到私有仓库。
+"""管理员命令：`/sync` 抓 Linpx 推荐作者 + 把 `data/` 里的运营数据提交到私有仓库。
 
 权限与 `/review` 一致：只认**中转频道**的 `creator` / `administrator`
 （`AdminPolicy`，默认拒绝）。这样改管理员只需在 Telegram 里调频道权限。
+
+推荐作者只在这里抓：服务器定时任务直接调 `script/sync_data.sh` 提交，
+不联网，也不会碰名单。
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.telegram import transit_admin_policy
-from services import SyncDataService, SyncResult
+from services import ImportAuthorResult, SyncDataService, SyncResult
 
 
 logger = logging.getLogger(__name__)
@@ -22,20 +25,40 @@ logger = logging.getLogger(__name__)
 MAX_OUTPUT = 1500
 # 非管理员的统一回复；与 `/review` 的措辞保持一致
 DENIED = "⚠️ 仅中转频道管理员可以同步运营数据"
+# 两步（抓推荐作者 + 提交）都在同一个「⏳」消息里等，先说清楚在做什么
+NOTICE = "⏳ 正在抓取 Linpx 推荐作者并同步运营数据到私有仓库…"
 
 
 def format_sync_result(result: SyncResult) -> str:
 	"""把同步结果翻译成 Telegram HTML 文案。"""
+	head = _linpx_line(result.linpx)
 	if result.timed_out:
-		return "❌ 数据同步超时，可能正有另一个同步任务在跑，请稍后再试。" + _output(result.output)
+		return head + "❌ 数据同步超时，可能正有另一个同步任务在跑，请稍后再试。" + _output(result.output)
 	if result.ok and result.skipped:
-		return "✅ 没有数据变动，已跳过同步。"
+		return head + "✅ 没有数据变动，已跳过同步。"
 	if result.ok:
-		return "✅ 运营数据已同步到私有仓库。" + _output(result.output)
+		return head + "✅ 运营数据已同步到私有仓库。" + _output(result.output)
+	# 脚本缺失时 returncode 是 0，别回一句「退出码 0」让人以为脚本跑过了
+	detail = f"（退出码 {result.returncode}）" if result.returncode else ""
 	return (
-		f"❌ 数据同步失败（退出码 {result.returncode}），可稍后重试。"
+		head
+		+ f"❌ 数据同步失败{detail}，可稍后重试。"
 		+ _output(result.output)
 	)
+
+
+def _linpx_line(linpx: ImportAuthorResult | None) -> str:
+	"""推荐作者合并结果的提示；自动同步（不抓取）时为空串。"""
+	if linpx is None:
+		return ""
+	if not linpx.ok:
+		return (
+			f"⚠️ Linpx 推荐作者抓取失败：{html.escape(linpx.error)}。"
+			"（继续提交本地已有数据）\n"
+		)
+	if not linpx.added:
+		return f"✅ Linpx 推荐作者：共 {linpx.total} 个，没有新增。\n"
+	return f"✅ Linpx 推荐作者：共 {linpx.total} 个，新增 {linpx.added} 个。\n"
 
 
 def _output(text: str) -> str:
@@ -47,7 +70,7 @@ def _output(text: str) -> str:
 
 
 async def sync(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	"""/sync：管理员把运营数据提交到私有仓库。"""
+	"""/sync：仅限管理员，先合并 Linpx 推荐作者，再把运营数据提交到私有仓库。"""
 	message = update.effective_message
 	user = update.effective_user
 	if message is None or user is None:
@@ -60,11 +83,13 @@ async def sync(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		await message.reply_text(DENIED)
 		return
 
-	notice = await message.reply_text("⏳ 正在同步运营数据到私有仓库…")
-	result = await SyncDataService().sync()
+	notice = await message.reply_text(NOTICE)
+	result = await SyncDataService().sync(import_author=True)
+	linpx = result.linpx
 	logger.info(
-		"数据同步请求 user=%s ok=%s code=%s skipped=%s",
+		"数据同步请求 user=%s ok=%s code=%s skipped=%s linpx=%s/%s",
 		user.id, result.ok, result.returncode, result.skipped,
+		linpx.added if linpx else "-", "ok" if (linpx and linpx.ok) else "fail",
 	)
 
 	text = format_sync_result(result)
