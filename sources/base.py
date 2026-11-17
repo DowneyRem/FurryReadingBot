@@ -76,6 +76,8 @@ class Series:
 	total: int = 0
 	novel_ids: list[str] = field(default_factory=list)
 	novel_titles: list[str] = field(default_factory=list)
+	like_count: int = 0
+	read_count: int = 0
 
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)

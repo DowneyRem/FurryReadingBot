@@ -67,7 +67,9 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	novel_id = data.novels[0].id if data.novels else ""
 	novel_url = url_novel(novel_id) if novel_id else ""
 	novel_title = data.novels[0].title if data.novels else ""
-	
+	like_count = data.novels[0].pixivLikeCount if data.novels else 0
+	read_count = 0
+
 	series_id = data.novels[0].seriesId if data.novels else ""
 	series_title = data.novels[0].seriesTitle if data.novels else ""
 	series_url = url_series(series_id) if series_id else ""
@@ -105,6 +107,8 @@ def json_to_series(data: dict | JsonDict) -> Series:
 		total=total,
 		novel_ids=novel_ids,
 		novel_titles=novel_titles,
+		like_count=like_count,
+		read_count=read_count,
 		
 		source="Linpx",
 		raw=data

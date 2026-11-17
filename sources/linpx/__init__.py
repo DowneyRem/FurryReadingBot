@@ -45,7 +45,12 @@ class LinpxSource(NovelSource):
 				raise LinpxParseError("无法从文本中解析 Linpx 系列 ID", raw=link)
 		
 		data = await client.get_series(series_id)
-		return json_to_series(data)
+		series = json_to_series(data)
+		# 系列接口不带阅读量，用首篇补齐；系列为空（作者清空 / 刚建）时没有首篇可抓
+		if series.novel_url:
+			novel = await self.fetch_novel(series.novel_url)
+			series.read_count = novel.read_count
+		return series
 	
 	
 	async def fetch_author(self, link: str) -> Author:
