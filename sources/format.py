@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import re
 from html import unescape
-
-from sources.base import Novel
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+	from sources.base import Novel
 
 
 def format_caption(text: str) -> str:
@@ -67,6 +71,11 @@ def format_chapter_title(chapter_title: str, series_title: str, index: int) -> s
 	if "第" not in title and "章" not in title:
 		title = f"第{index}章 {title}"
 	return title
+
+
+def format_tags(tags: Iterable[str]) -> str:
+	"""标签列表 → "#甲 #乙"；空元素/空白自动忽略，无标签返回空串。"""
+	return " ".join(f"#{tag.strip()}" for tag in tags if tag and tag.strip())
 
 
 def format_series_text(series, novels: list[Novel]) -> str:

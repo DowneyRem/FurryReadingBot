@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from sources.format import format_tags
+
 
 @dataclass
 class Novel:
@@ -30,7 +32,6 @@ class Novel:
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
-	# ----- 别名：兼容旧代码里的 .id / .title -----
 	@property
 	def id(self) -> str:
 		return self.novel_id
@@ -44,8 +45,14 @@ class Novel:
 		return self.novel_url
 	
 	def __str__(self):
-		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
-	
+		text = [
+			f"{self.title}",
+			f"作者：{self.author_name} (#a{self.author_id})",
+		]
+		if self.tags:
+			text.append(f"标签：{format_tags(self.tags)}")
+		return "\n".join(text)
+
 	def __repr__(self):
 		return f"{self.source}Source({self.url})"
 
@@ -73,7 +80,6 @@ class Series:
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
-	# ----- 别名：兼容旧代码里的 .id / .title -----
 	@property
 	def id(self) -> str:
 		return self.series_id
@@ -87,8 +93,14 @@ class Series:
 		return self.series_url
 	
 	def __str__(self):
-		return f"{self.title}\n作者：{self.author_name}\n标签：#{" #".join(self.tags).strip()}"
-	
+		text = [
+			f"{self.title}",
+			f"作者：{self.author_name} (#a{self.author_id})",
+		]
+		if self.tags:
+			text.append(f"标签：{format_tags(self.tags)}")
+		return "\n".join(text)
+
 	def __repr__(self):
 		return f"{self.source}Source({self.url})"
 
@@ -115,8 +127,15 @@ class Author:
 	
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
-	
-	
+
+	@property
+	def id(self) -> str:
+		return self.author_id
+
+	@property
+	def title(self) -> str:
+		return self.author_name
+
 	@property
 	def url(self) -> str:
 		return self.author_url
@@ -125,8 +144,9 @@ class Author:
 		text = [
 			f"作者：{self.author_name} ({self.author_id})",
 			f"小说：共{len(self.novel_ids)}篇，系列：共{len(self.series_ids)}篇",
-			f"标签：#{" #".join(self.tags).strip()}",
 		]
+		if self.tags:
+			text.append(f"标签：{format_tags(self.tags)}")
 		return "\n".join(text)
 	
 	def __repr__(self):
