@@ -32,6 +32,47 @@ def test_remove(tmp_path) -> None:
 	assert mgr.remove_whitelist("3") is False
 
 
+def test_add_many_writes_once_and_skips_known(tmp_path) -> None:
+	"""批量导入：已存在的 key 不覆盖，整批只落盘一次。"""
+	mgr = ListManager(tmp_path)
+	mgr.add_furrylist("1", name="旧名", note="兽人阅读")
+	writes: list[int] = []
+	persist = mgr.furrylist._persist
+
+	def counting_persist():
+		writes.append(1)
+		persist()
+
+	mgr.furrylist._persist = counting_persist
+
+	added = mgr.furrylist.add_many([
+		("1", "旧名", "Linpx"),
+		("2", "乙", "Linpx"),
+		("3", "丙", "Linpx"),
+	])
+
+	assert added == 2
+	assert len(writes) == 1
+	assert mgr.furrylist.get("1")["note"] == "兽人阅读"
+	assert mgr.furrylist.get("2")["name"] == "乙"
+
+
+def test_add_many_without_new_records_does_not_write(tmp_path) -> None:
+	mgr = ListManager(tmp_path)
+	mgr.add_furrylist("1", name="甲", note="Linpx")
+	writes: list[int] = []
+	persist = mgr.furrylist._persist
+
+	def counting_persist():
+		writes.append(1)
+		persist()
+
+	mgr.furrylist._persist = counting_persist
+
+	assert mgr.furrylist.add_many([("1", "甲", "Linpx")]) == 0
+	assert writes == []
+
+
 if __name__ == "__main__":
 	import tempfile
 	from pathlib import Path
@@ -41,3 +82,5 @@ if __name__ == "__main__":
 	test_persist_across_instances(tmp)
 	test_whitelist_removes_from_blacklist(tmp)
 	test_remove(tmp)
+	test_add_many_writes_once_and_skips_known(tmp)
+	test_add_many_without_new_records_does_not_write(tmp)

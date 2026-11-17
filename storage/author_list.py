@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
@@ -53,6 +53,29 @@ class AuthorListStore(JsonStore):
 				note=note or "",
 			)
 			self._persist()
+
+	def add_many(
+		self,
+		records: Iterable[tuple[str | int, str, str]],
+	) -> int:
+		"""批量写入 (作者 ID, 名字, note)，只落盘一次，返回真正新增的条数。
+
+		已存在的 key 一律跳过：导入外部名单（Linpx 推荐作者）时不能覆盖
+		人工维护的 note（例如「兽人阅读」）。逐条 ``add()`` 会把整份名单
+		重写 N 次，名单到几百条时没必要。
+		"""
+		added = 0
+		with self._lock:
+			self._maybe_reload()
+			for author_id, name, note in records:
+				key = str(author_id)
+				if key in self._items:
+					continue
+				self._items[key] = JsonDict(name=name or "", note=note or "")
+				added += 1
+			if added:
+				self._persist()
+		return added
 
 	def remove(self, author_id: str | int) -> bool:
 		with self._lock:

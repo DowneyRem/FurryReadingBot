@@ -27,6 +27,7 @@ from services.download_service import (
 	DownloadUnsupportedActionError,
 	DownloadUnsupportedLinkError,
 )
+from services.import_author_service import ImportAuthorResult, import_authors
 from services.review_service import (
 	ReviewDecision,
 	ReviewResult,
@@ -80,6 +81,9 @@ __all__ = [
 	"ReviewResult",
 	"ReviewService",
 	"ReviewStatus",
+
+	"ImportAuthorResult",
+	"import_authors",
 
 	"ShareArtifact",
 	"ShareRequest",
