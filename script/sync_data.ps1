@@ -1,7 +1,7 @@
-﻿# Windows 版数据同步脚本：与 sync_data.sh 一一对应，供 /sync 在 Windows 上调用。
+﻿# Windows 版数据同步脚本：供 /sync 与定时任务调用。
 # 由 services/sync_service.py 以
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File sync_data.ps1
-# 执行；也可以手动在 data 目录里跑。
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File script/sync_data.ps1
+# 执行；也可以手动在仓库根目录跑同一个命令。
 #
 # 注意：本文件必须保存成「UTF-8 带 BOM」——Windows PowerShell 5.1 会把没有 BOM
 # 的文件按系统 ANSI 代码页读，中文提示会变成乱码。
@@ -13,7 +13,13 @@ $ErrorActionPreference = 'Stop'
 $env:GIT_TERMINAL_PROMPT = '0'
 $env:GCM_INTERACTIVE = 'never'
 
-$dataDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$dataDir = Join-Path $scriptDir '..\data'
+if (-not (Test-Path -LiteralPath $dataDir)) {
+    Write-Output "数据目录不存在：$dataDir"
+    exit 1
+}
+$dataDir = (Resolve-Path -LiteralPath $dataDir).Path
 Set-Location -LiteralPath $dataDir
 
 if (-not (Test-Path -LiteralPath (Join-Path $dataDir '.git'))) {

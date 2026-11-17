@@ -1,7 +1,15 @@
 #!/bin/bash
 
-# 数据目录按脚本自身位置推导
-DATA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || exit 1
+# 脚本在 <repo>/script/ 下，数据仓库是同级的 <repo>/data/
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || exit 1
+DATA_DIR="$(cd "$SCRIPT_DIR/../data" 2>/dev/null && pwd)" || {
+  echo "数据目录不存在：$SCRIPT_DIR/../data"
+  exit 1
+}
+if [[ ! -d "$DATA_DIR/.git" ]]; then
+  echo "数据目录不是 git 仓库，无法同步：$DATA_DIR"
+  exit 1
+fi
 cd "$DATA_DIR" || exit 1
 
 # 0. 互斥锁：服务器定时任务与 Bot 的 /sync 可能同时触发，用 flock 串行，
