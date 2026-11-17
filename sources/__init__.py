@@ -4,6 +4,7 @@ from sources.base import Author, Novel, NovelSource, Series
 from sources.linpx import LinpxSource
 from sources.linpx.urls import url_author, url_novel, url_series
 
+
 _SOURCES: list[NovelSource] = [
 	LinpxSource(),
 ]

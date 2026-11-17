@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 import re
-from sources.base import Series
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+	from sources.base import Series
 
 
 def get_id(link: str, pattern: str) -> str | None:
