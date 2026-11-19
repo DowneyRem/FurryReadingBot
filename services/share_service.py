@@ -79,6 +79,8 @@ class ShareResult:
 	# forbidden 时给展示层用
 	author_status: str = ""
 	author_name: str = ""
+	# 本次分流用的评分；None 表示未评分，按低分处理
+	score: float | None = None
 
 
 # 上传适配器：把产物发到一个频道，返回 message_id；失败抛异常
@@ -186,14 +188,14 @@ class ShareService:
 		避免用户重试时把已成功的频道再发一遍。
 		"""
 		share_key = ShareRecordStore.make_key(request.kind, request.item_id)
-		channels = self.channels(request.score)
 		if share_key in _inflight:
-			return ShareResult("inflight", channels=channels)
+			return ShareResult(
+				"inflight", channels=self.channels(request.score))
 
 		# 检查与发送之间有 await（补拉作者、上传），整段都要占住，避免连点重复发送
 		_inflight.add(share_key)
 		try:
-			return await self._share(request, share_key, channels, upload)
+			return await self._share(request, share_key, upload)
 		finally:
 			_inflight.discard(share_key)
 
@@ -202,15 +204,19 @@ class ShareService:
 		self,
 		request: ShareRequest,
 		share_key: str,
-		channels: tuple[str, ...],
 		upload: ShareUploadCallback,
 	) -> ShareResult:
-		# 先查缓存：作者 id 记录在缓存里，冷却要按作者查
+		# 先查缓存：作者 id 与评分都记录在缓存里，冷却按作者查、频道按评分选
 		cache_key = FileCacheStore.make_key(
 			request.kind, request.item_id, request.file_type)
 		cached = self.cache.get_valid(cache_key)
 		if not cached:
-			return ShareResult("cache_missing", channels=channels)
+			return ShareResult(
+				"cache_missing", channels=self.channels(request.score))
+
+		# 评分优先用调用方传入的，其次用下载时写进缓存的；都没有按未评分处理
+		score = request.score if request.score is not None else cached.score
+		channels = self.channels(score)
 
 		# 下载时把 target_link 写进了缓存；老数据没有就按 kind + item_id 拼
 		link = str(cached.link or "") or work_url(request.kind, request.item_id)
@@ -228,6 +234,7 @@ class ShareService:
 				channels=channels,
 				author_status=decision.status,
 				author_name=decision.author_name,
+				score=score,
 			)
 
 		remaining = self.records.remaining(
@@ -237,10 +244,11 @@ class ShareService:
 				"cooldown",
 				remaining_seconds=remaining,
 				channels=channels,
+				score=score,
 			)
 
 		if not channels:
-			return ShareResult("no_channel")
+			return ShareResult("no_channel", score=score)
 
 		caption = self._build_caption(request, cached)
 		artifact = ShareArtifact(
@@ -267,7 +275,8 @@ class ShareService:
 
 		if not targets:
 			return ShareResult(
-				"failed", channels=channels, failed_channels=tuple(failed))
+				"failed", channels=channels, failed_channels=tuple(failed),
+				score=score)
 
 		title = (cached.caption or "").splitlines()[0] if cached.caption else ""
 		work = self.records.record(
@@ -294,6 +303,7 @@ class ShareService:
 			channels=tuple(chat_id for chat_id, _ in targets),
 			failed_channels=tuple(failed),
 			artifact=artifact,
+			score=score,
 		)
 
 

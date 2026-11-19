@@ -57,6 +57,7 @@ def make_service(
 		author_id="456",
 		author_name="作者A",
 		link="",
+		score=None,
 ):
 	cache = FileCacheStore(
 		path=tmp_path / "files_cache.json", default_ttl_days=1)
@@ -76,6 +77,7 @@ def make_service(
 		file_name="a.txt", caption="标题\n作者：A",
 		link=link,
 		author_id=author_id, author_name=author_name,
+		score=score,
 	)
 	return service, cache, records
 
@@ -281,10 +283,45 @@ def test_prod_mode_splits_by_score(monkeypatch, tmp_path) -> None:
 	result = run(service.share(request(score=9), upload=uploader(message_id=7)))
 
 	assert result.status == "shared"
+	assert result.score == 9
 	assert result.channels == ("@reading", "@novels")
 	assert len(result.messages) == 2
 	assert set(records.work("456", "novel", "1").history.keys()) == {
 		"@reading", "@novels"}
+
+
+def test_share_falls_back_to_cached_score(monkeypatch, tmp_path) -> None:
+	"""下载时把评分写进了缓存；分享 handler 不传 score 也能按它分流。"""
+	monkeypatch.setattr(share_service_module, "FURRY_READING", "@reading")
+	monkeypatch.setattr(share_service_module, "FURRY_NOVELS", "@novels")
+	monkeypatch.setattr(share_service_module, "SHARE_SCORE_THRESHOLD", 7)
+	service, _cache, records = make_service(
+		tmp_path, channels=None, mode="prod", score=7.5)
+
+	result = run(service.share(request(), upload=uploader(message_id=7)))
+
+	assert result.status == "shared"
+	assert result.score == 7.5
+	assert result.channels == ("@reading", "@novels")
+	assert len(result.messages) == 2
+	assert set(records.work("456", "novel", "1").history.keys()) == {
+		"@reading", "@novels"}
+
+
+def test_request_score_overrides_cached_score(monkeypatch, tmp_path) -> None:
+	"""调用方显式给的分数优先于缓存里的旧评分。"""
+	monkeypatch.setattr(share_service_module, "FURRY_READING", "@reading")
+	monkeypatch.setattr(share_service_module, "FURRY_NOVELS", "@novels")
+	monkeypatch.setattr(share_service_module, "SHARE_SCORE_THRESHOLD", 7)
+	service, _cache, _records = make_service(
+		tmp_path, channels=None, mode="prod", score=9)
+
+	result = run(service.share(request(score=6), upload=uploader(message_id=7)))
+
+	assert result.status == "shared"
+	assert result.score == 6
+	assert result.channels == ("@novels",)
+	assert len(result.messages) == 1
 
 
 def test_share_inflight(tmp_path) -> None:
