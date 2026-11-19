@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import logging
+from telegram import LinkPreviewOptions
+from telegram.constants import ParseMode
 from telegram.ext import (
 	Application,
 	CommandHandler,
 	MessageHandler,
 	CallbackQueryHandler,
 	filters,
+	Defaults
 )
 
 from handlers import *
 from config import *
 from infra.http import close_http
 from services.packaging import clear_work_root
+
 
 logging.basicConfig(
 	format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -37,13 +41,18 @@ def main() -> None:
 	if errors:
 		raise SystemExit("配置有误，请检查 .env：\n- " + "\n- ".join(errors))
 	clear_work_root()
-
+	
+	defaults = Defaults(
+		# parse_mode=ParseMode.HTML,  # 全局默认使用 HTML 解析（可选）
+		link_preview_options=LinkPreviewOptions(is_disabled=True),  # 全局默认关闭链接预览
+	)
 	# 构建应用（v20+ 的核心对象）
 	# concurrent_updates：update 并行处理；用 config 里的有界值，不用 True（True = 256 路）
 	# post_shutdown：退出时关掉复用的 aiohttp 会话（v20+ 只能通过 builder 传，不是 setter）
 	app = (
 		Application.builder()
 		.token(BOT_TOKEN)
+		.defaults(defaults)
 		.concurrent_updates(CONCURRENT_UPDATES)
 		.post_shutdown(post_shutdown)
 		.build()
