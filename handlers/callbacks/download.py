@@ -58,8 +58,7 @@ async def download(
 			path=artifact.path,
 			file_id=artifact.file_id,
 			filename=artifact.filename,
-			reply_markup=share_novel_keyboard(
-				artifact.kind, artifact.item_id, artifact.file_type),
+			reply_markup=share_novel_keyboard(artifact.kind, artifact.item_id, artifact.file_type),
 			caption=artifact.caption,
 		)
 		return sent.file_id
