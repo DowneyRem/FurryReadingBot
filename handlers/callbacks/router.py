@@ -87,6 +87,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		return
 
 	try:
+		await query.edit_message_reply_markup(reply_markup=None)
 		await handler(update, context, data=data)
 	except FileNotFoundError:
 		await reply(update, context, "抱歉，未找到生成的文件")
