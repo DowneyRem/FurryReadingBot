@@ -26,7 +26,7 @@ def url_series_novels_title(series_id: str | int) -> str:
 
 
 def url_user(user_id: str | int) -> str:
-	return f"`{BASE}/users/{user_id}"
+	return f"{BASE}/users/{user_id}"
 
 def url_user_data(user_id: str | int) -> str:
 	return f"{BASE}/ajax/user/{user_id}"
@@ -43,7 +43,7 @@ def url_author(author_id: str | int) -> str:
 	return url_user(author_id)
 
 def url_author_data(author_id: str | int) -> str:
-	return url_author_data(author_id)
+	return url_user_data(author_id)
 
 def url_author_works_latest(author_id: str | int) -> str:
 	return url_user_works_latest(author_id)
