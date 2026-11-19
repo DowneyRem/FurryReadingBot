@@ -57,7 +57,8 @@ def make_service(
 		author_id="456",
 		author_name="作者A",
 		link="",
-		score=None,
+		# txt 的缓存一定有下载时算好的评分，分享链路按「必有值」处理
+		score=5.0,
 		caption="标题\n作者：A",
 ):
 	cache = FileCacheStore(
@@ -162,7 +163,7 @@ def test_series_artifact_link_uses_series_url(tmp_path) -> None:
 	service, cache, _records = make_service(tmp_path)
 	cache.set(
 		FileCacheStore.make_key("series", "9", "txt"), "FILE_ID",
-		author_id="456", author_name="作者A")
+		author_id="456", author_name="作者A", score=5.0)
 
 	result = run(service.share(
 		request(kind="series", item_id="9"), upload=uploader()))
@@ -201,26 +202,15 @@ def test_share_private_caption_and_record(tmp_path) -> None:
 
 
 def test_channel_caption_shows_resolved_score(tmp_path) -> None:
-	"""频道文案带本次分享的推荐指数，并替换下载时留下的占位 0 分。"""
-	service, _cache, _records = make_service(
-		tmp_path, caption="标题\n作者：A\n推荐指数：0 (仅供参考)", score=7.5)
+	"""频道文案带下载时算好的推荐指数，且只出现一次。"""
+	service, _cache, _records = make_service(tmp_path, score=7.5)
 	seen: list = []
 
 	result = run(service.share(request(), upload=uploader(seen=seen)))
 
 	assert result.status == "shared"
 	assert "📊 推荐指数：7.5" in seen[0].caption
-	assert "推荐指数：0" not in seen[0].caption
-
-
-def test_channel_caption_marks_missing_score(tmp_path) -> None:
-	"""老缓存没有评分：频道文案明确写「暂无评分」，不会退化成 0。"""
-	service, _cache, _records = make_service(tmp_path)
-	seen: list = []
-
-	run(service.share(request(), upload=uploader(seen=seen)))
-
-	assert "📊 推荐指数：暂无评分" in seen[0].caption
+	assert seen[0].caption.count("推荐指数") == 1
 
 
 def test_channel_caption_prefers_request_score(tmp_path) -> None:

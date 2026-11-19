@@ -214,7 +214,6 @@ class ShareService:
 			return ShareResult(
 				"cache_missing", channels=self.channels(request.score))
 
-		# 评分优先用调用方传入的，其次用下载时写进缓存的；都没有按未评分处理
 		score = request.score if request.score is not None else cached.score
 		channels = self.channels(score)
 
@@ -308,24 +307,15 @@ class ShareService:
 
 
 	def _build_caption(
-		self, request: ShareRequest, cached: JsonDict, score: float | None = None
+		self, request: ShareRequest, cached: JsonDict, score: float
 	) -> str:
 		"""频道文案：作品信息 + 分享者 + 本次评分 + 支持作者。
-
-		缓存里的 caption 是下载时用 `Novel.__str__` 拼的，末尾的
-		「推荐指数：0 (仅供参考)」只是模型默认值；频道里统一用本次分享
-		真正用于分流的 score，避免同一篇出现两个互相矛盾的指数。
 		"""
-		info = "\n".join(
-			line for line in (cached.caption or "").splitlines()
-			if not line.startswith("推荐指数")
-		).rstrip()
-		caption = [info, ""]
+		caption = [(cached.caption or "").strip(), ""]
 		if request.public and request.user_name:
 			caption.append(f"来自 {request.user_name} 的分享")
 		else:
 			caption.append("来自 匿名用户 的分享")
-			
 		caption.append(f"推荐指数：{float(score):g} (仅供参考)")
-		caption.append(f"喜欢还请去Pixiv收藏或评论，以支持作者 {self.support_text}")
+		caption.append(f"喜欢还请去源站收藏或评论，以支持作者 {self.support_text}")
 		return "\n".join(caption)

@@ -341,7 +341,6 @@ class DownloadService:
 				from_cache=True,
 				author_id=author_id,
 				author_name=author_name,
-				# 老缓存的 txt 可能没评分；zip 不会被分享，一律不取评分
 				score=cached.score if file_type == "txt" else None,
 			)
 

@@ -42,7 +42,6 @@ class FileCacheStore(JsonStore):
 			link=str(info.get("link") or ""),
 			author_id=str(info.get("author_id") or ""),
 			author_name=str(info.get("author_name") or ""),
-			# 下载时算好的推荐指数；老缓存没有这个字段，读成 None 按未评分处理
 			score=info.get("score"),
 			uploaded_at=str(info.get("uploaded_at") or ""),
 			expires_at=str(info.get("expires_at") or ""),

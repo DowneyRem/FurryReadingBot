@@ -64,7 +64,8 @@ def patch_handler(monkeypatch, tmp_path, *, link=""):
 	if link:
 		cache.set(
 			"novel:1:txt", "FILE_ID",
-			file_name="a.txt", caption="标题", link=link, author_id="456")
+			file_name="a.txt", caption="标题", link=link, author_id="456",
+			score=5.0)
 	service = ShareService(
 		cache=cache,
 		records=ShareRecordStore(
@@ -136,7 +137,7 @@ def test_share_without_cached_link_still_has_bookshelf(
 	cache = share_handler.ShareService().cache
 	cache.set(
 		"novel:1:txt", "FILE_ID",
-		file_name="a.txt", caption="标题", author_id="456")
+		file_name="a.txt", caption="标题", author_id="456", score=5.0)
 
 	run(share_handler.share_public(
 		FakeUpdate(), object(), data="snp;novel;1;txt"))
