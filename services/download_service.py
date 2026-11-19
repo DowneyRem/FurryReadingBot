@@ -347,7 +347,7 @@ class DownloadService:
 
 		item = await self._fetch(target_link)
 		self._ensure_allowed(str(item.author_id), str(item.author_name))
-		caption = f"{str(item)}\n{item.url}"
+		caption = str(item)
 		path = Path(await self._save(target_link, file_type))
 
 		if file_type == "auto":

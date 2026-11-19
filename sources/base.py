@@ -23,12 +23,15 @@ class Novel:
 	
 	caption: str
 	content: str
-	like_count: int
-	read_count: int
 	create_date: str
 	tags: list[str] = field(default_factory=list)
 	images: dict[str, Any] = field(default_factory=dict)
-
+	
+	like_count: int = 0
+	read_count: int = 0
+	comment_count: int = 0
+	score: int = 0
+	
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
@@ -51,6 +54,7 @@ class Novel:
 		]
 		if self.tags:
 			text.append(f"标签：{format_tags(self.tags)}")
+		text.append(self.url)
 		return "\n".join(text)
 
 	def __repr__(self):
@@ -76,8 +80,11 @@ class Series:
 	total: int = 0
 	novel_ids: list[str] = field(default_factory=list)
 	novel_titles: list[str] = field(default_factory=list)
+	
 	like_count: int = 0
 	read_count: int = 0
+	comment_count: int = 0
+	score: int = 0
 
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
@@ -101,6 +108,7 @@ class Series:
 		]
 		if self.tags:
 			text.append(f"标签：{format_tags(self.tags)}")
+		text.append(self.url)
 		return "\n".join(text)
 
 	def __repr__(self):
@@ -149,6 +157,7 @@ class Author:
 		]
 		if self.tags:
 			text.append(f"标签：{format_tags(self.tags)}")
+		text.append(self.url)
 		return "\n".join(text)
 	
 	def __repr__(self):
