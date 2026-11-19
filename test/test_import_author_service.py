@@ -154,5 +154,16 @@ def test_client_get_fav_users_reports_network_error(monkeypatch) -> None:
 		run(client.get_fav_users())
 
 
+def test_client_get_fav_users_reports_bad_json(monkeypatch) -> None:
+	"""200 但响应不是合法 JSON：按网络错误处理，不能让 /sync 直接抛异常。"""
+	async def fake_get_json(url, headers=None):
+		raise ValueError("Expecting value")
+
+	monkeypatch.setattr(client, "get_json", fake_get_json)
+
+	with pytest.raises(LinpxNetworkError):
+		run(client.get_fav_users())
+
+
 if __name__ == "__main__":
 	pytest.main([__file__, "-q"])

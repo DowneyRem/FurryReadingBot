@@ -262,6 +262,23 @@ def test_sync_shell_matches_platform() -> None:
 		assert sync_service.SYNC_SCRIPT.suffix == ".sh"
 
 
+def test_run_script_uses_new_session_outside_windows(monkeypatch) -> None:
+	"""POSIX 上脚本必须独立成组，超时才能连同 git 子进程一起杀掉。"""
+	monkeypatch.setattr(sync_service, "IS_WINDOWS", False)
+	captured: dict = {}
+
+	async def fake_exec(*args, **kwargs):
+		captured.update(kwargs)
+		return FakeProcess(output=b"ok")
+
+	monkeypatch.setattr(sync_service.asyncio, "create_subprocess_exec", fake_exec)
+
+	code, output = run(sync_service.run_script(HERE, timeout=5))
+
+	assert (code, output) == (0, "ok")
+	assert captured["start_new_session"] is True
+
+
 def test_run_script_timeout_kills_process(monkeypatch) -> None:
 	process = FakeProcess(hang=True)
 

@@ -17,6 +17,9 @@ async def _get(url: str) -> Any:
 		if e.status == 404:
 			return JsonDict()
 		raise LinpxNetworkError("Linpx 暂时无法访问，请稍后重试", raw=e.url) from e
+	except ValueError as e:
+		# 200 但响应不是合法 JSON：按传输问题处理，别让调用方直接抛异常
+		raise LinpxNetworkError("Linpx 返回的数据不是合法 JSON", raw=url) from e
 	return JsonDict.from_obj(data)
 
 

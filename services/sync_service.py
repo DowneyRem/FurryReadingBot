@@ -1,4 +1,4 @@
-"""数据同步业务：调用 `data/` 下的同步脚本把运营数据提交到私有仓库。
+"""数据同步业务：调用 `script/` 下的同步脚本把运营数据提交到私有仓库。
 
 分工：
   - 脚本负责 git add / commit / pull --rebase / push，并在内部加锁串行，
@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,7 @@ else:
 	SYNC_SCRIPT = ROOT / "script" / "sync_data.sh"
 	SYNC_SHELL = ("/bin/bash",)
 
-# 要大于脚本里 flock -w 的 240 秒，避免排队时被 Python 先杀掉
+# 要大于脚本里 flock -w 的 60 秒，避免排队时被 Python 先杀掉
 SCRIPT_TIMEOUT = 300.0
 # 超时杀掉脚本后，留给「把已经产生的输出收回来」的时间；收不到就不再等
 TAIL_TIMEOUT = 5.0
@@ -89,19 +90,25 @@ def _kill_tree(process) -> None:
 	"""杀掉脚本及其子进程。
 
 	Windows 上 `Process.kill()` 只结束 powershell，`git` 子进程会留下来继续跑、
-	继续握着仓库锁，所以先用 `taskkill /T` 清掉整棵进程树。
+	继续握着仓库锁，所以先用 `taskkill /T` 清掉整棵进程树；
+	POSIX 上脚本以独立会话启动，直接杀掉整个进程组。
 	"""
 	pid = getattr(process, "pid", None)
-	if IS_WINDOWS and pid:
+	if pid and IS_WINDOWS:
 		subprocess.run(
 			["taskkill", "/F", "/T", "/PID", str(pid)],
 			stdout=subprocess.DEVNULL,
 			stderr=subprocess.DEVNULL,
 			check=False,
 		)
+	elif pid and hasattr(os, "killpg"):
+		try:
+			os.killpg(pid, signal.SIGKILL)
+		except (ProcessLookupError, PermissionError):
+			pass
 	try:
 		process.kill()
-	except ProcessLookupError:  # 已经被 taskkill 结束
+	except ProcessLookupError:  # 已经被 taskkill / killpg 结束
 		pass
 
 
@@ -117,6 +124,8 @@ async def run_script(path: Path, *, timeout: float = SCRIPT_TIMEOUT) -> tuple[in
 		cwd=str(path.parent),
 		stdout=asyncio.subprocess.PIPE,
 		stderr=asyncio.subprocess.STDOUT,
+		# POSIX 上单独成组，超时才能连同 git 子进程一起杀掉
+		**({} if IS_WINDOWS else {"start_new_session": True}),
 	)
 	# 用 shield 保护 communicate()：Windows 上被 wait_for 取消后再调一次会等不到
 	# EOF，`/sync` 会永久卡在锁上。超时后只再给 TAIL_TIMEOUT 秒回收部分输出。
