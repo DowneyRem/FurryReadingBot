@@ -24,6 +24,7 @@ from sources import (
 from sources.base import Author, Novel, NovelSource, Series
 from services import packaging
 from policy.author import AuthorPolicy
+from policy.scoring import calculate_score
 from storage import ListManager, get_lists
 from storage.file_cache import FileCacheStore, get_file_cache
 from utils.json import JsonDict
@@ -107,6 +108,8 @@ class DownloadArtifact:
 	# 作者信息：写进 file_id 缓存，分享记录以作者为第一层 key
 	author_id: str = ""
 	author_name: str = ""
+	# 推荐指数：下载时按作品统计算好，写进缓存供分享分流；作者整包为 None
+	score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -190,6 +193,17 @@ class DownloadService:
 	def supports_action(cls, action: str) -> bool:
 		"""该 callback 动作是否属于下载。"""
 		return action in cls._ACTIONS
+
+
+	@staticmethod
+	def _score(item: Novel | Series | Author, file_type: str) -> float | None:
+		"""只有 txt 会带分享按钮，也只有小说 / 系列的 txt 需要评分。
+
+		作者整包没有阅读 / 收藏统计，直接返回 None，分享时按未评分分流。
+		"""
+		if file_type != "txt" or not isinstance(item, (Novel, Series)):
+			return None
+		return calculate_score(item.read_count, item.like_count)
 
 
 	@property
@@ -327,6 +341,8 @@ class DownloadService:
 				from_cache=True,
 				author_id=author_id,
 				author_name=author_name,
+				# 老缓存的 txt 可能没评分；zip 不会被分享，一律不取评分
+				score=cached.score if file_type == "txt" else None,
 			)
 
 		item = await self._fetch(target_link)
@@ -338,23 +354,28 @@ class DownloadService:
 			file_type = path.suffix.lstrip(".").lower() or "txt"
 			cache_key = FileCacheStore.make_key(kind, item_id, file_type)
 			cached = self.cache.get_valid(cache_key)
-			if cached:
-				# 保存期间其他人已完成上传，直接复用其 file_id
-				await self._discard(path)
-				return DownloadArtifact(
-					kind=kind,
-					item_id=item_id,
-					file_type=file_type,
-					target_link=target_link,
-					caption=caption,
-					cache_key=cache_key,
-					file_id=cached.file_id,
-					filename=cached.file_name or path.name,
-					cleanup=False,
-					from_cache=True,
-					author_id=str(cached.author_id or ""),
-					author_name=str(cached.author_name or ""),
-				)
+
+		# 格式定下来后再算：只有 txt 会带分享按钮，也只有 txt 需要评分
+		score = self._score(item, file_type)
+
+		if cached:
+			# 保存期间其他人已完成上传，直接复用其 file_id
+			await self._discard(path)
+			return DownloadArtifact(
+				kind=kind,
+				item_id=item_id,
+				file_type=file_type,
+				target_link=target_link,
+				caption=caption,
+				cache_key=cache_key,
+				file_id=cached.file_id,
+				filename=cached.file_name or path.name,
+				cleanup=False,
+				from_cache=True,
+				author_id=str(cached.author_id or ""),
+				author_name=str(cached.author_name or ""),
+				score=score,
+			)
 
 		return DownloadArtifact(
 			kind=kind,
@@ -368,6 +389,7 @@ class DownloadService:
 			cleanup=True,
 			author_id=str(getattr(item, "author_id", "") or ""),
 			author_name=str(getattr(item, "author_name", "") or ""),
+			score=score,
 		)
 
 
@@ -408,6 +430,7 @@ class DownloadService:
 					link=artifact.target_link,
 					author_id=artifact.author_id,
 					author_name=artifact.author_name,
+					score=artifact.score,
 				)
 		finally:
 			if artifact.cleanup and artifact.path is not None:

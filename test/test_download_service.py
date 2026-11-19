@@ -22,6 +22,7 @@ from services.download_service import (
 	DownloadUnsupportedLinkError,
 )
 from storage.file_cache import FileCacheStore
+from sources.base import Author, Novel, Series
 
 
 NOVEL_LINK = "https://linpx.ink/pixiv/novel/18012577"
@@ -53,6 +54,62 @@ class FakeItem:
 
 	def __str__(self) -> str:
 		return f"{self.title}\n作者：{self.author_name}"
+
+
+def make_novel(**kwargs) -> Novel:
+	"""真实 Novel：评分只认来源模型，测试替身不参与。"""
+	fields = dict(
+		novel_id="18012577",
+		novel_url=NOVEL_LINK,
+		novel_title="标题",
+		series_id=None,
+		series_url=None,
+		series_title=None,
+		author_id="42",
+		author_url=AUTHOR_LINK,
+		author_name="作者",
+		caption="",
+		content="正文",
+		like_count=0,
+		read_count=0,
+		create_date="",
+	)
+	fields.update(kwargs)
+	return Novel(**fields)
+
+
+def make_series(**kwargs) -> Series:
+	fields = dict(
+		novel_id="",
+		novel_url=SERIES_LINK,
+		novel_title="系列",
+		series_id="16181401",
+		series_url=SERIES_LINK,
+		series_title="系列",
+		author_id="42",
+		author_url=AUTHOR_LINK,
+		author_name="作者",
+		like_count=0,
+		read_count=0,
+	)
+	fields.update(kwargs)
+	return Series(**fields)
+
+
+def make_author(**kwargs) -> Author:
+	fields = dict(
+		novel_id="",
+		novel_url="",
+		novel_title="",
+		series_id=None,
+		series_url=None,
+		series_title=None,
+		author_id="42",
+		author_url=AUTHOR_LINK,
+		author_name="作者",
+	)
+	fields.update(kwargs)
+	return Author(**fields)
 
 
 class FakeSource:
@@ -203,7 +260,7 @@ def test_prepare_uses_cache_without_fetch(tmp_path) -> None:
 	service, cache = make_service(tmp_path)
 	cache.set(
 		"novel:18012577:txt", "FILE_ID",
-		file_name="cached.txt", caption="缓存说明", author_id="42")
+		file_name="cached.txt", caption="缓存说明", author_id="42", score=8)
 	fetch_calls: list[str] = []
 	save_calls: list[tuple[str, str]] = []
 	service, _ = make_service(
@@ -218,6 +275,7 @@ def test_prepare_uses_cache_without_fetch(tmp_path) -> None:
 	assert artifact.path is None
 	assert artifact.from_cache is True
 	assert artifact.cache_key == "novel:18012577:txt"
+	assert artifact.score == 8
 	assert fetch_calls == []
 	assert save_calls == []
 
@@ -323,6 +381,76 @@ def test_deliver_uploads_then_caches_and_cleans_file(tmp_path) -> None:
 	cached = cache.get_valid("novel:18012577:txt")
 	assert cached.file_id == "NEW_FILE_ID"
 	assert cached.author_id == "42"
+
+
+def test_deliver_caches_score_from_work_stats(tmp_path) -> None:
+	"""下载时算好评分写进缓存，分享分流不再重复请求源站。"""
+	service, cache = make_service(
+		tmp_path, item=make_novel(read_count=4000, like_count=180))
+
+	async def upload(artifact: DownloadArtifact) -> str:
+		return "NEW_FILE_ID"
+
+	outcome = run(service.deliver("dn", NOVEL_LINK, upload=upload))
+
+	assert outcome.artifact is not None
+	assert outcome.artifact.score == 7.0
+	cached = cache.get_valid("novel:18012577:txt")
+	assert cached.score == 7.0
+
+
+def test_author_download_has_no_score(tmp_path) -> None:
+	"""作者整包没有阅读 / 收藏统计，评分留空，分享时按未评分分流。"""
+	service, cache = make_service(
+		tmp_path, kind="author", item=make_author())
+
+	async def upload(artifact: DownloadArtifact) -> str:
+		return "ZIP_FILE_ID"
+
+	outcome = run(service.deliver("dan", AUTHOR_LINK, upload=upload))
+
+	assert outcome.artifact is not None
+	assert outcome.artifact.score is None
+	cached = cache.get_valid("author:42:zip")
+	assert cached.score is None
+
+
+def test_zip_download_has_no_score(tmp_path) -> None:
+	"""zip 不挂分享按钮，系列即使有统计也不写评分。"""
+	service, cache = make_service(
+		tmp_path, kind="series", item=make_series(read_count=4000, like_count=180))
+
+	async def upload(artifact: DownloadArtifact) -> str:
+		return "ZIP_FILE_ID"
+
+	outcome = run(service.deliver("dsz", SERIES_LINK, upload=upload))
+
+	assert outcome.artifact is not None
+	assert outcome.artifact.file_type == "zip"
+	assert outcome.artifact.score is None
+	cached = cache.get_valid("series:16181401:zip")
+	assert cached.score is None
+
+
+def test_auto_series_txt_gets_score(tmp_path) -> None:
+	"""自动选择最终落到 txt 时才需要评分。"""
+	service, cache = make_service(
+		tmp_path,
+		kind="series",
+		item=make_series(read_count=4000, like_count=180),
+		save_ext="txt",
+	)
+
+	async def upload(artifact: DownloadArtifact) -> str:
+		return "TXT_FILE_ID"
+
+	outcome = run(service.deliver("ds", SERIES_LINK, upload=upload))
+
+	assert outcome.artifact is not None
+	assert outcome.artifact.file_type == "txt"
+	assert outcome.artifact.score == 7.0
+	cached = cache.get_valid("series:16181401:txt")
+	assert cached.score == 7.0
 
 
 def test_deliver_cleans_file_when_upload_fails(tmp_path) -> None:
