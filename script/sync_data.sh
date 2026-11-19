@@ -22,7 +22,7 @@ export GCM_INTERACTIVE=never
 if command -v flock >/dev/null 2>&1; then
   LOCK_FILE="$DATA_DIR/.git/sync.lock"
   exec 9>"$LOCK_FILE" || exit 1
-  if ! flock -w 240 9; then
+  if ! flock -w 60 9; then
     echo "等待其他同步任务超时，本次跳过。"
     exit 2
   fi

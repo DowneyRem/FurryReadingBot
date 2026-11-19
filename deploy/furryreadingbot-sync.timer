@@ -1,0 +1,10 @@
+[Unit]
+Description=Run FurryReadingBot Data Sync every hour
+
+[Timer]
+Unit=furryreadingbot-sync.service
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

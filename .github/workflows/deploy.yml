@@ -84,8 +84,17 @@ jobs:
             EOF
 
 
-            # 5. 安装 / 更新 systemd 服务并重启
+            # 5. 安装 / 更新 systemd 服务（机器人 + 数据同步）
             cp deploy/furryreadingbot.service /etc/systemd/system/furryreadingbot.service
+            cp deploy/furryreadingbot-sync.service /etc/systemd/system/furryreadingbot-sync.service
+            cp deploy/furryreadingbot-sync.timer /etc/systemd/system/furryreadingbot-sync.timer
+
             systemctl daemon-reload
+
+            # 启用并启动机器人服务
             systemctl enable furryreadingbot
             systemctl restart furryreadingbot
+
+            # 启用数据同步定时器；restart 让改过的 OnCalendar 立即生效
+            systemctl enable furryreadingbot-sync.timer
+            systemctl restart furryreadingbot-sync.timer

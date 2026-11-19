@@ -31,7 +31,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $dataDir '.git'))) {
 # 0. 互斥锁：定时任务与 /sync 可能同时触发，用「独占打开锁文件」串行，等不到就跳过。
 #    锁文件放在 .git 里，不会出现在 git status 中，也就不会被提交。
 $lockPath = Join-Path $dataDir '.git\sync.lock'
-$deadline = (Get-Date).AddSeconds(240)
+$deadline = (Get-Date).AddSeconds(60)
 $lock = $null
 while (-not $lock) {
     try {
