@@ -77,6 +77,29 @@ def test_missing_link_reads_as_empty(tmp_path) -> None:
 	assert info.link == ""
 
 
+def test_score_persists(tmp_path) -> None:
+	"""评分跟着 file_id 一起缓存：分享时按它选频道。"""
+	path = tmp_path / "files_cache.json"
+	key = FileCacheStore.make_key("novel", "1", "txt")
+	FileCacheStore(path=path, default_ttl_days=1).set(
+		key, "FILE_ID", score=7.5)
+
+	info = FileCacheStore(path=path, default_ttl_days=1).get_valid(key)
+	assert info is not None
+	assert info.score == 7.5
+
+
+def test_missing_score_reads_as_none(tmp_path) -> None:
+	"""老缓存 / 作者整包没有评分，读成 None，分享按未评分处理。"""
+	key = FileCacheStore.make_key("novel", "1", "txt")
+	store = _store(tmp_path, default_ttl_days=1)
+	store.set(key, "FILE_ID")
+
+	info = store.get_valid(key)
+	assert info is not None
+	assert info.score is None
+
+
 def test_zero_ttl_means_immediately_expired(tmp_path) -> None:
 	"""default_ttl_days=0 不应被 or 兜底成默认 30 天。"""
 	store = _store(tmp_path, default_ttl_days=0)
