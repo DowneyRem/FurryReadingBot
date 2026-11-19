@@ -8,7 +8,7 @@
 > | 未收录作者 → 申请 → 中转频道 → 管理员核验 | ✅ 已实现（`apply_service` + `review_service` + `/review`） |
 > | 作者本人申请下架（截图核验） | ✅ 已实现（`blacklist_service` + `media.py`） |
 > | 拉黑后删除频道历史分享 | ✅ 已实现（`takedown_service` + `share_records` 的 `message_id`） |
-> | 分享到正式频道 | ⚠️ 部分：`SHARE_MODE=prod` 已支持，但评分还没实现，实际只发 `FURRY_NOVELS` |
+> | 分享到正式频道 | ✅ 已实现：`SHARE_MODE=prod` 下按推荐指数（`policy/scoring.py`）分流，高分同时发 `FURRY_READING` + `FURRY_NOVELS`，低分 / 未评分只发 `FURRY_NOVELS` |
 > | 标签 / 正文自动过滤 | ❌ 未实现，全靠人工核验 |
 > | 授权白名单 `white_authors.json` | ❌ 有存储、无判定（产品决定暂不接入） |
 > | 翻译 | ❌ 未实现 |
