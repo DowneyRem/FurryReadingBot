@@ -58,6 +58,7 @@ def make_service(
 		author_name="作者A",
 		link="",
 		score=None,
+		caption="标题\n作者：A",
 ):
 	cache = FileCacheStore(
 		path=tmp_path / "files_cache.json", default_ttl_days=1)
@@ -74,7 +75,7 @@ def make_service(
 	)
 	cache.set(
 		"novel:1:txt", "FILE_ID",
-		file_name="a.txt", caption="标题\n作者：A",
+		file_name="a.txt", caption=caption,
 		link=link,
 		author_id=author_id, author_name=author_name,
 		score=score,
@@ -197,6 +198,39 @@ def test_share_private_caption_and_record(tmp_path) -> None:
 	assert "来自 匿名用户 的分享" in result.artifact.caption
 	work = records.work("456", "novel", "1")
 	assert work.history["channel"][0].user_id == "42"
+
+
+def test_channel_caption_shows_resolved_score(tmp_path) -> None:
+	"""频道文案带本次分享的推荐指数，并替换下载时留下的占位 0 分。"""
+	service, _cache, _records = make_service(
+		tmp_path, caption="标题\n作者：A\n推荐指数：0 (仅供参考)", score=7.5)
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.status == "shared"
+	assert "📊 推荐指数：7.5" in seen[0].caption
+	assert "推荐指数：0" not in seen[0].caption
+
+
+def test_channel_caption_marks_missing_score(tmp_path) -> None:
+	"""老缓存没有评分：频道文案明确写「暂无评分」，不会退化成 0。"""
+	service, _cache, _records = make_service(tmp_path)
+	seen: list = []
+
+	run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert "📊 推荐指数：暂无评分" in seen[0].caption
+
+
+def test_channel_caption_prefers_request_score(tmp_path) -> None:
+	"""请求里带评分时以请求为准：频道文案与分流用同一个值。"""
+	service, _cache, _records = make_service(tmp_path, score=3)
+	seen: list = []
+
+	run(service.share(request(score=8), upload=uploader(seen=seen)))
+
+	assert "📊 推荐指数：8" in seen[0].caption
 
 
 def test_share_cooldown(tmp_path) -> None:
