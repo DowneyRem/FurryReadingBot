@@ -37,7 +37,7 @@ def format_sync_result(result: SyncResult) -> str:
 	if result.ok and result.skipped:
 		return head + "✅ 没有数据变动，已跳过同步。"
 	if result.ok:
-		return head + "✅ 运营数据已同步到私有仓库。" + _output(result.output)
+		return head + "✅ 运营数据已同步到私有仓库。"
 	# 脚本缺失时 returncode 是 0，别回一句「退出码 0」让人以为脚本跑过了
 	detail = f"（退出码 {result.returncode}）" if result.returncode else ""
 	return (

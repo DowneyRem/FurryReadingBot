@@ -101,7 +101,9 @@ def test_sync_command_reports_success(monkeypatch) -> None:
 	assert update.effective_message.replies[0][0].startswith("⏳")
 	text, kwargs = update.effective_message.notice.edits[-1]
 	assert "已同步到私有仓库" in text
-	assert "数据同步到私有仓库成功！" in text
+	# 脚本原文（「数据同步到私有仓库成功！」）与结论重复，成功时不再贴 <pre>
+	assert "数据同步到私有仓库成功！" not in text
+	assert "<pre>" not in text
 	assert kwargs["parse_mode"] == "HTML"
 
 
@@ -226,14 +228,15 @@ def test_sync_command_reports_linpx_failure(monkeypatch) -> None:
 
 
 def test_format_escapes_html_and_truncates() -> None:
-	text = format_sync_result(SyncResult(True, "<b>boom</b>"))
+	# 只有失败 / 超时才回显脚本原文，转义规则针对的就是这段输出
+	text = format_sync_result(SyncResult(False, "<b>boom</b>"))
 
 	assert "&lt;b&gt;boom&lt;/b&gt;" in text
 	assert "<b>boom</b>" not in text
 
 
 def test_format_output_is_capped() -> None:
-	text = format_sync_result(SyncResult(True, "x" * 5000))
+	text = format_sync_result(SyncResult(False, "x" * 5000))
 
 	assert "已截断" in text
 	assert len(text) < 5000
