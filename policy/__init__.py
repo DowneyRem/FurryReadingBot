@@ -10,6 +10,7 @@ from policy.author import (
 	AuthorPolicy,
 	AuthorStatus,
 )
+from policy.scoring import calculate_score
 
 __all__ = [
 	"AdminDecision",
@@ -18,4 +19,6 @@ __all__ = [
 	"AuthorPolicy",
 	"AuthorStatus",
 	"is_admin_status",
+	
+	"calculate_score",
 ]
