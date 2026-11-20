@@ -68,20 +68,28 @@ jobs:
 
 
             # 4. 自动生成 .env
-            cat > .env << EOF
-            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-            FURRY_READING=${{ secrets.FURRY_READING }}
-            FURRY_NOVELS=${{ secrets.FURRY_NOVELS }}
-            TEST_CHANNEL=${{ secrets.TEST_CHANNEL }}
-            TRANSIT_CHANNEL=${{ secrets.TRANSIT_CHANNEL }}
-            FURRY_READING_NEW_GROUP=${{ secrets.FURRY_READING_NEW_GROUP }}
-            TEST_GROUP=${{ secrets.TEST_GROUP }}
-
-            SHARE_MODE=test
-            SHARE_SCORE_THRESHOLD=7
-            SHARE_COOLDOWN_DAYS=3
-            FILE_CACHE_TTL_DAYS=7
+            #    只写「部署相关」的 token 与频道 ID；
+            #    SHARE_MODE / SHARE_SCORE_THRESHOLD / SHARE_COOLDOWN_DAYS / FILE_CACHE_TTL_DAYS
+            #    / CONCURRENT_UPDATES 都是 config.py 里的公开常量，不走 .env。
+            #    heredoc 用引号包裹的 'EOF'：避免 secret 里的 $ / 反引号被 shell 再展开一次。
+            cat > .env <<'EOF'
+            BOT_TOKEN="${{ secrets.BOT_TOKEN }}"
+            FURRY_READING="${{ secrets.FURRY_READING }}"
+            FURRY_NOVELS="${{ secrets.FURRY_NOVELS }}"
+            TEST_CHANNEL="${{ secrets.TEST_CHANNEL }}"
+            TRANSIT_CHANNEL="${{ secrets.TRANSIT_CHANNEL }}"
+            FURRY_READING_NEW_GROUP="${{ secrets.FURRY_READING_NEW_GROUP }}"
+            TEST_GROUP="${{ secrets.TEST_GROUP }}"
             EOF
+
+            # Secret 没配时上面会写成空字符串，进程起来会直接 SystemExit，
+            # 这里先拦一次，并和 config.py 里 SHARE_MODE=prod 的必需项对齐。
+            for key in BOT_TOKEN FURRY_READING FURRY_NOVELS TEST_CHANNEL; do
+              if ! grep -qE "^${key}=\"..*\"" .env; then
+                echo "错误：.env 里的 ${key} 为空，请检查仓库 Secrets。"
+                exit 1
+              fi
+            done
 
 
             # 5. 安装 / 更新 systemd 服务（机器人 + 数据同步）
