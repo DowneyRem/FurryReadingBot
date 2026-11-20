@@ -5,6 +5,11 @@ on:
     branches: [ deploy ]
   workflow_dispatch:
 
+# 连推两次时排队执行，避免两个 runner 同时 git reset / systemctl restart
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -16,7 +21,11 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          # 任一命令失败就中断：避免「装了一半 / 同步失败」也照样重启服务
+          script_stop: true
           script: |
+            set -euo pipefail
+
             # 1. 部署主代码仓库（公开仓库）
             if [ ! -d /root/FurryReadingBot ]; then
               echo "首次部署，正在克隆代码仓库..."
@@ -63,7 +72,8 @@ jobs:
               curl -LsSf https://astral.sh/uv/install.sh | sh
             fi
 
-            export PATH="/root/.local/bin:$PATH"
+            # uv 装在 $HOME/.local/bin：SSH_USER 是 root 或普通用户都能找到
+            export PATH="$HOME/.local/bin:$PATH"
             uv sync
 
 
@@ -106,3 +116,12 @@ jobs:
             # 启用数据同步定时器；restart 让改过的 OnCalendar 立即生效
             systemctl enable furryreadingbot-sync.timer
             systemctl restart furryreadingbot-sync.timer
+
+            # 6. 启动校验：配置缺失 / 代码异常会让进程立刻退出，别让 workflow 假装成功
+            sleep 5
+            if ! systemctl is-active --quiet furryreadingbot; then
+              echo "机器人服务启动失败，最近日志："
+              journalctl -u furryreadingbot -n 50 --no-pager || true
+              exit 1
+            fi
+            echo "部署完成：furryreadingbot 正在运行。"
