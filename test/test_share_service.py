@@ -203,24 +203,24 @@ def test_share_private_caption_and_record(tmp_path) -> None:
 
 def test_channel_caption_shows_resolved_score(tmp_path) -> None:
 	"""频道文案带下载时算好的推荐指数，且只出现一次。"""
-	service, _cache, _records = make_service(tmp_path, score=7.5)
+	service, _cache, _records = make_service(tmp_path, mode="test", score=7.5)
 	seen: list = []
 
 	result = run(service.share(request(), upload=uploader(seen=seen)))
 
 	assert result.status == "shared"
-	assert "📊 推荐指数：7.5" in seen[0].caption
+	assert "推荐指数：7.5" in seen[0].caption
 	assert seen[0].caption.count("推荐指数") == 1
 
 
 def test_channel_caption_prefers_request_score(tmp_path) -> None:
 	"""请求里带评分时以请求为准：频道文案与分流用同一个值。"""
-	service, _cache, _records = make_service(tmp_path, score=3)
+	service, _cache, _records = make_service(tmp_path, mode="test", score=3)
 	seen: list = []
 
 	run(service.share(request(score=8), upload=uploader(seen=seen)))
 
-	assert "📊 推荐指数：8" in seen[0].caption
+	assert "推荐指数：8" in seen[0].caption
 
 
 def test_share_cooldown(tmp_path) -> None:
@@ -287,10 +287,17 @@ def test_share_refused_after_author_blacklisted(tmp_path) -> None:
 
 def test_test_mode_uses_test_channel(monkeypatch, tmp_path) -> None:
 	monkeypatch.setattr(share_service_module, "TEST_CHANNEL", "@test")
-	service, _cache, _records = make_service(tmp_path, channels=None)
+	service, _cache, _records = make_service(tmp_path, channels=None, mode="test")
 
 	assert service.channels(9) == ("@test",)
 	assert service.channels(None) == ("@test",)
+
+
+def test_default_mode_follows_config(tmp_path) -> None:
+	"""不显式给 mode 时按 config.SHARE_MODE 走：常量改了行为要能说清。"""
+	service, _cache, _records = make_service(tmp_path, channels=None)
+
+	assert service.mode == share_service_module.SHARE_MODE
 
 
 def test_prod_mode_splits_by_score(monkeypatch, tmp_path) -> None:
