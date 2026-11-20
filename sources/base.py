@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sources.format import format_tags
+from sources.tags import canonicalize_tags
 
 
 @dataclass
@@ -34,6 +35,10 @@ class Novel:
 	
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
+	
+	def __post_init__(self) -> None:
+		"""入口即规范：来源写法换成规范名，txt 头部 / 文案 / 缓存自动一致。"""
+		self.tags = canonicalize_tags(self.tags)
 	
 	@property
 	def id(self) -> str:
@@ -89,6 +94,10 @@ class Series:
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
+	def __post_init__(self) -> None:
+		"""入口即规范：来源写法换成规范名。"""
+		self.tags = canonicalize_tags(self.tags)
+	
 	@property
 	def id(self) -> str:
 		return self.series_id
@@ -137,6 +146,10 @@ class Author:
 	
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
+
+	def __post_init__(self) -> None:
+		"""入口即规范：来源写法换成规范名。"""
+		self.tags = canonicalize_tags(self.tags)
 
 	@property
 	def id(self) -> str:

@@ -85,7 +85,9 @@ def test_json_to_novel_minimal() -> None:
 	assert str(novel.author_id) == "456"
 	assert novel.author_name == "测试作者"
 	assert novel.content == "正文内容"
-	assert novel.tags == ["兽人", "原创"]
+	# 模型层 __post_init__ 已按测试词表（data.example/tags.toml）规范化：
+	# 兽人 → Furry；原创 不在样例词表里，原样保留
+	assert novel.tags == ["Furry", "原创"]
 	assert str(novel.series_id) == "789"
 	assert novel.series_title == "系列名"
 	assert novel.source == "Linpx"
