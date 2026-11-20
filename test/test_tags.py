@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -16,13 +17,12 @@ import sources.tags as tags_module
 from sources.tags import (
 	DEFAULT_PATH,
 	Vocabulary,
-	clear_unknown_tags,
+	canonicalize_tags,
 	display_tags,
-	forget_unknown_tags,
 	get_vocabulary,
 	load_vocabulary,
 	normalize,
-	unknown_tags,
+	set_unknown_recorder,
 )
 from storage.unknown_tags import UnknownTagStore
 
@@ -177,13 +177,19 @@ def test_invalid_record_does_not_crash_resolve() -> None:
 
 # ---------- 进程内入口与未识别标签 ----------
 @pytest.fixture(autouse=True)
-def _isolated_unknown_store(
-	tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> UnknownTagStore:
-	"""未识别标签默认落盘：每条用例换成临时文件，绝不写仓库里的 data/。"""
+def _isolated_unknown_store(tmp_path: Path) -> Iterator[UnknownTagStore]:
+	"""未识别标签的留档：每条用例换成临时表，绝不写仓库里的 data/。"""
 	store = UnknownTagStore(tmp_path / "unknown_tags.json")
-	monkeypatch.setattr(tags_module, "_default_store", store)
-	return store
+	set_unknown_recorder(store.record)
+	try:
+		yield store
+	finally:
+		set_unknown_recorder(None)
+
+
+def archived(store: UnknownTagStore) -> dict[str, int]:
+	"""留档表 → {原样写法: 作品数}。"""
+	return {str(item.text): int(item.count) for item in store.top(0)}
 
 
 def test_display_tags_orders_and_limits() -> None:
@@ -227,11 +233,11 @@ def test_resolve_all_records_by_default(
 	tokens, residual = vocab.resolve_all(["兽化", "完全未知"])
 	assert tokens == ["Furry", "Transformation", "Transfur"]
 	assert residual == ["完全未知"]
-	assert unknown_tags() == {"完全未知": 1}
+	assert archived(_isolated_unknown_store) == {"完全未知": 1}
 
 	# resolve() 仍不写盘：入参是规范名，不命中属于调用方写错名
 	assert vocab.resolve("完全未知") == set()
-	assert unknown_tags() == {"完全未知": 1}
+	assert archived(_isolated_unknown_store) == {"完全未知": 1}
 
 
 def test_resolve_all_can_skip_recording(
@@ -240,7 +246,7 @@ def test_resolve_all_can_skip_recording(
 	"""`record=False` 只解析不留档（试规则 / 单测）。"""
 	vocab = make_vocab()
 	vocab.resolve_all(["完全未知"], record=False)
-	assert unknown_tags() == {}
+	assert archived(_isolated_unknown_store) == {}
 
 
 def test_resolve_unknown_name_logs_without_recording(
@@ -251,7 +257,34 @@ def test_resolve_unknown_name_logs_without_recording(
 	with caplog.at_level(logging.DEBUG, logger="sources.tags"):
 		assert vocab.resolve("NoSuchTag") == set()
 	assert "NoSuchTag" in caplog.text
-	assert unknown_tags() == {}
+	assert archived(_isolated_unknown_store) == {}
+
+
+# ---------- 入口规范化 ----------
+def test_canonicalize_tags_normalizes_source_spellings() -> None:
+	"""模型层入口：来源写法 → 规范名 + 未识别写法原样保留。"""
+	assert canonicalize_tags(["兽人", "ケモホモ", "原创"]) == ["Gay", "Furry", "原创"]
+
+
+def test_canonicalize_tags_is_idempotent() -> None:
+	assert canonicalize_tags(["Furry"]) == ["Furry"]
+
+
+def test_canonicalize_tags_skips_empty_values() -> None:
+	assert canonicalize_tags(None) == []
+	assert canonicalize_tags(["", "   "]) == []
+
+
+def test_canonicalize_tags_degrades_when_vocabulary_unavailable(
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	"""词表缺失 / 出错时不能阻断抓取：原样返回并打 warning。"""
+
+	def boom() -> Vocabulary:
+		raise FileNotFoundError("data/tags.toml 不存在")
+
+	monkeypatch.setattr(tags_module, "get_vocabulary", boom)
+	assert canonicalize_tags(["兽人", "原创"]) == ["兽人", "原创"]
 
 
 def test_unknown_tags_are_not_auto_pruned(
@@ -264,21 +297,6 @@ def test_unknown_tags_are_not_auto_pruned(
 
 	assert store.prune(10) == 590
 	assert len(store.top(0)) == 10
-
-
-def test_unknown_tags_can_be_forgotten_one_by_one(
-	_isolated_unknown_store: UnknownTagStore,
-) -> None:
-	"""人工判断 + 补完 aliases 后按条销账，不用把整张表清空。"""
-	display_tags(["未知A", "未知B"], vocab=make_vocab())
-	assert set(unknown_tags()) == {"未知A", "未知B"}
-
-	assert forget_unknown_tags(["未知A"]) == 1
-	assert unknown_tags() == {"未知B": 1}
-
-	# 归一键也能删
-	assert forget_unknown_tags([normalize("未知B")]) == 1
-	assert unknown_tags() == {}
 
 
 def test_unknown_tags_are_persisted(
@@ -298,15 +316,15 @@ def test_unknown_tags_are_persisted(
 		"text", "count", "first_seen", "last_seen"}
 
 	# 读接口按次数降序
-	assert unknown_tags() == {"未知A": 2, "未知B": 1}
+	assert archived(_isolated_unknown_store) == {"未知A": 2, "未知B": 1}
 
 	# 重启后还在：新实例读同一个文件
 	reloaded = UnknownTagStore(_isolated_unknown_store.path)
 	assert [(item.text, item.count) for item in reloaded.top()] == [
 		("未知A", 2), ("未知B", 1)]
 
-	assert clear_unknown_tags() == 2
-	assert unknown_tags() == {}
+	assert _isolated_unknown_store.clear() == 2
+	assert archived(_isolated_unknown_store) == {}
 	assert json.loads(
 		_isolated_unknown_store.path.read_text(encoding="utf-8"))["tags"] == {}
 
@@ -316,7 +334,7 @@ def test_unknown_tags_can_skip_recording(
 ) -> None:
 	"""`record=False` 只展示不记账（离线预览 / 测试用）。"""
 	assert display_tags(["未知"], vocab=make_vocab(), record=False) == ["未知"]
-	assert unknown_tags() == {}
+	assert archived(_isolated_unknown_store) == {}
 
 
 def test_unknown_tags_write_failure_keeps_display(
@@ -324,12 +342,13 @@ def test_unknown_tags_write_failure_keeps_display(
 ) -> None:
 	"""落盘失败不能影响展示：磁盘满 / 权限不对只打 warning。"""
 
-	def boom(entries):  # noqa: ANN001 - 只为触发异常
+	def boom(_entries):  # 只为触发异常，参数不用
 		raise OSError("disk full")
 
 	monkeypatch.setattr(_isolated_unknown_store, "record", boom)
+	set_unknown_recorder(_isolated_unknown_store.record)   # 重新绑定成会抛异常的实现
 	assert display_tags(["未知"], vocab=make_vocab()) == ["未知"]
-	assert unknown_tags() == {}
+	assert archived(_isolated_unknown_store) == {}
 
 
 def test_get_vocabulary_loads_file_once(monkeypatch: pytest.MonkeyPatch) -> None:

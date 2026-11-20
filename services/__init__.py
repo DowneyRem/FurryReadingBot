@@ -46,6 +46,12 @@ from services.sync_service import (
 	SyncResult,
 	SyncTimeoutError,
 )
+from services.tag_service import (
+	clear_unknown_tags,
+	forget_unknown_tags,
+	install_tag_archive,
+	unknown_tags,
+)
 from services.takedown_service import (
 	TakedownDelete,
 	TakedownResult,
@@ -94,6 +100,11 @@ __all__ = [
 	"SyncDataService",
 	"SyncResult",
 	"SyncTimeoutError",
+
+	"clear_unknown_tags",
+	"forget_unknown_tags",
+	"install_tag_archive",
+	"unknown_tags",
 
 	"TakedownDelete",
 	"TakedownResult",

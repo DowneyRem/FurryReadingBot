@@ -13,13 +13,14 @@ errors 非空应阻断启动，warnings 打日志即可。改完词表跑
 
 运行时用 `get_vocabulary()` 拿进程内唯一实例（首次加载就把 errors / warnings 写进日志）。
 
-**留档只有一个入口**：`Vocabulary.resolve_all()`（默认 `record=True`）会把未识别的来源写法
-写进 `data/unknown_tags.json`；`unknown_tags()` 读、`clear_unknown_tags()` 清、`prune` 手动瘦身。
+接线方式：**数据入口一次搞定**。`sources.base` 的 `Novel/Series/Author.__post_init__`
+调用 `canonicalize_tags()` 把来源写法换成规范名——txt 头部、私聊文案、缓存、分享都自动生效，
+新代码不需要再接线。未识别写法的留档**不在这里写盘**：
 
-	Vocabulary.resolve()      纯解析：规范名 → 标签集合，不写盘
-	Vocabulary.resolve_all()  解析 + 留档：未识别写法落盘（record=False 关掉）
-	display_tags()            展示：排序 + 截断 + 未识别写法原样带出（内部走 resolve_all）
-	storage.unknown_tags      只管持久化：计数 / 首末时间 / 显式 prune，不判断什么是"未识别"
+	set_unknown_recorder(fn)  由 services 启动时装配（services/tag_service.install_tag_archive）
+	                          fn 为空时只打 debug 日志，sources 不 import storage
+	canonicalize_tags()       入口规范化：不截断；词表缺失 / 出错时原样返回，不阻断抓取
+	display_tags()            展示：排序 + 截断 + 未识别写法原样带出（业务侧要限流时用）
 """
 
 from __future__ import annotations
@@ -28,13 +29,10 @@ import logging
 import re
 import tomllib
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-	from storage.unknown_tags import UnknownTagStore
+from typing import Any
 
 
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -50,8 +48,10 @@ LOWERCASE_GROUPS = {"format", "lang"}
 DEFAULT_PATH = Path(__file__).parent.parent.resolve() / "data" / "tags.toml"
 logger = logging.getLogger(__name__)
 
-# 未识别标签的落盘表（data/unknown_tags.json），由 storage 层负责读写
-_default_store: UnknownTagStore | None = None
+# 未识别写法的留档实现：(归一键, 原样写法) → 写入 data/unknown_tags.json
+# 由 services 层启动时注入；为空时只打日志，保证 sources 不依赖 storage
+UnknownRecorder = Callable[[Iterable[tuple[str, str]]], object]
+_recorder: UnknownRecorder | None = None
 
 
 def normalize(s: str) -> str:
@@ -377,6 +377,16 @@ def get_vocabulary() -> Vocabulary:
 
 
 # ---------- 展示与未识别记账 ----------
+def set_unknown_recorder(recorder: UnknownRecorder | None) -> None:
+	"""装配未识别写法的留档实现（services 启动时调用一次；传 None 关闭）。
+
+	sources 只调用回调，不 import storage —— 留档位置由上层决定（现在是
+	`data/unknown_tags.json`，见 `services/tag_service.install_tag_archive()`）。
+	"""
+	global _recorder
+	_recorder = recorder
+
+
 def display_tags(
 	raws: Iterable[str] | None,
 	*,
@@ -390,8 +400,7 @@ def display_tags(
 	  （`None` 不截断；未识别写法通常很少，不占这个名额，免得被截掉后看不见）；
 	- 未识别写法只做全角归一 + 去前导 `#`（大小写保持来源原样），按出现顺序去重，
 	  追加在规范标签之后；
-	- 留档不在这里做：由 `resolve_all()` 统一写 `data/unknown_tags.json`，
-	  本函数只把 `record` 透传下去，因此**一次调用只记一次**；
+	- 留档由 `resolve_all()` 触发（`record` 透传），一次调用只记一次；
 	- `record=False` 只展示不留档（试规则 / 单测 / 自定义词表）；
 	- 落盘失败只打 warning，不影响返回结果。
 	"""
@@ -401,6 +410,22 @@ def display_tags(
 	if limit is not None:
 		tokens = tokens[:limit]
 	return tokens + unknown
+
+
+def canonicalize_tags(raws: Iterable[str] | None) -> list[str]:
+	"""数据入口规范化：不截断，词表缺失 / 出错时原样返回，绝不阻断抓取。
+
+	`Novel/Series/Author.__post_init__` 用它，所以「构造即规范」：txt 头部、私聊文案、
+	file_id 缓存、分享都直接拿到规范标签。幂等：已经规范的写法再跑一遍结果不变。
+	"""
+	values = [str(raw) for raw in (raws or []) if isinstance(raw, str) and raw.strip()]
+	if not values:
+		return []
+	try:
+		return display_tags(values, limit=None)
+	except Exception:
+		logger.warning("标签规范化失败，保留原始写法", exc_info=True)
+		return values
 
 
 def _unique_surfaces(residual: Iterable[str]) -> dict[str, str]:
@@ -422,37 +447,12 @@ def _record_residual(residual: Iterable[str]) -> None:
 	surfaces = _unique_surfaces(residual)
 	if not surfaces:
 		return
-	logger.debug("标签未识别（已留档，可补 aliases）：%s", list(surfaces.values()))
+	logger.debug("标签未识别（已原样带出，可补 aliases）：%s", list(surfaces.values()))
+	recorder = _recorder
+	if recorder is None:
+		return  # 没装配：只打日志，不写盘（sources 不碰存储）
 	try:
-		unknown_tag_store().record(surfaces.items())
+		recorder(surfaces.items())
 	except Exception:
 		# 只是记账：磁盘满 / 权限不对都不该让下载和分享失败
 		logger.warning("未识别标签落盘失败（不影响解析与展示）", exc_info=True)
-
-
-def unknown_tag_store() -> UnknownTagStore:
-	"""未识别标签的落盘表；没配置过就用默认的 ``data/unknown_tags.json``。"""
-	global _default_store
-	if _default_store is None:
-		from storage.unknown_tags import UnknownTagStore
-
-		_default_store = UnknownTagStore()
-	return _default_store
-
-
-def unknown_tags(limit: int = 50) -> dict[str, int]:
-	"""已落盘的未识别标签：原样写法 → 出现次数，按次数从多到少。"""
-	return {str(item.text): int(item.count) for item in unknown_tag_store().top(limit)}
-
-
-def clear_unknown_tags() -> int:
-	"""清空未识别标签表（补完 aliases 后调用）；返回清掉的条数。"""
-	return unknown_tag_store().clear()
-
-
-def forget_unknown_tags(texts: Iterable[str]) -> int:
-	"""按写法销账：补完 aliases 后精确删掉这些记录，返回删掉的条数。
-
-	``texts`` 可以写原样写法（`unknown_tags()` 的键），也可以写 ``normalize()`` 后的写法。
-	"""
-	return unknown_tag_store().remove(texts)

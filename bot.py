@@ -16,6 +16,7 @@ from handlers import *
 from config import *
 from infra.http import close_http
 from services.packaging import clear_work_root
+from services.tag_service import install_tag_archive
 
 
 logging.basicConfig(
@@ -41,6 +42,8 @@ def main() -> None:
 	if errors:
 		raise SystemExit("配置有误，请检查 .env：\n- " + "\n- ".join(errors))
 	clear_work_root()
+	# 标签接线：未识别写法 → data/unknown_tags.json（模型构造时自动留档）
+	install_tag_archive()
 	
 	defaults = Defaults(
 		# parse_mode=ParseMode.HTML,  # 全局默认使用 HTML 解析（可选）
