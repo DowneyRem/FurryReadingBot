@@ -28,12 +28,12 @@ FILE_CACHE_TTL_DAYS = 7
 # 分享冷却：同一部作品在该时间（天）内不会重复发送到频道
 SHARE_COOLDOWN_DAYS = 3
 # prod 模式下，评分达到该值的作品同时发到兽人阅读和兽人小说；否则只发兽人小说
-SHARE_SCORE_THRESHOLD = 7
+SHARE_SCORE_THRESHOLD = 6
 
 
 # 分享模式：test 只发测试频道；prod 按评分分流到正式频道
 SHARE_MODES = ("test", "prod")
-SHARE_MODE = "test"
+SHARE_MODE = "prod"
 
 
 def config_errors() -> list[str]:
