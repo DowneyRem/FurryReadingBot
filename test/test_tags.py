@@ -488,8 +488,8 @@ _COMMON_DEMOS: dict[str, list[str] | None] = {
 	"兽化": ["Furry", "Transformation", "Transfur"],
 	"完全未知": None,
 }
-# 生产词表里 CBT 只挂在 R18G 下；示例词表还挂了 BDSM
-PRODUCTION_DEMOS = {**_COMMON_DEMOS, "CBT": ["R18", "R18G", "CBT"]}
+# 生产词表的 CBT 只挂在 R18G 下，且 R18G 当前不继承 R18；示例词表的 CBT 还挂了 BDSM
+PRODUCTION_DEMOS = {**_COMMON_DEMOS, "CBT": ["R18G", "CBT"]}
 EXAMPLE_DEMOS = {**_COMMON_DEMOS, "CBT": ["R18", "R18G", "BDSM", "CBT"]}
 
 
