@@ -9,6 +9,8 @@ WorkingDirectory=/root/FurryReadingBot
 ExecStart=/root/FurryReadingBot/.venv/bin/python bot.py
 Restart=always
 RestartSec=5
+# 不缓冲 stdout：否则 journalctl 里的日志会成块延迟出现
+Environment=PYTHONUNBUFFERED=1
 StandardOutput=journal
 StandardError=journal
 
