@@ -1,0 +1,69 @@
+# 标签词表示例（`pytest test/test_tags.py -q` 会加载它做守门与规则回归）
+#
+# 表名 = 规范标签名，输出时原样使用。
+# 匹配：NFKC + casefold（不区分大小写）。
+# 复合标签（parts）：只拆成基础标签，自身不输出。
+# 原子标签（parents）：输出自己 + 上级的传递闭包。
+# parts 与 parents 互斥。
+#
+# meta.parts_mode:
+#   split   — 拆分后不继承基础标签的上级（默认）
+#   inherit — 拆分后按普通标签继续解析，会带上各自上级
+
+[meta]
+schema = 2
+match = "casefold"
+# split：parts 原样输出，不继承 parts 的上级（默认，符合“只做拆分”）
+# inherit：parts 也按普通标签解析，会带上各自的上级
+parts_mode = "split"
+
+[Gay]
+group = "orientation"
+order = 30
+aliases = ["BL", "男同", "男男", "同性", "同性向", "ゲイ", "やおい", "yaoi", "腐向け"]
+
+[Furry]
+group = "species"
+order = 100
+aliases = ["兽人", "獸人", "獣人", "けもの", "ケモノ", "kemono"]
+
+# 明显的复合标签：只拆分，不保留 GayFurry 本身
+[GayFurry]
+group = "orientation"
+order = 32
+parts = ["Gay", "Furry"]
+aliases = ["ケモホモ", "ホモケモ", "兽人同性"]
+
+[R18]
+group = "rating"
+order = 20
+aliases = ["R-18", "NSFW", "色情", "工口", "エロ"]
+
+[R18G]
+group = "rating"
+order = 21
+parents = ["R18"]
+aliases = ["R-18G", "R18-G", "血腥"]
+
+[BDSM]
+group = "act"
+order = 400
+aliases = ["调教", "調教", "SM"]
+
+[CBT]
+group = "act"
+order = 410
+parents = ["R18G", "BDSM"]
+aliases = ["虐屌", "cock and ball torture"]
+
+[Transformation]
+group = "plot"
+order = 500
+aliases = ["变形", "變形"]
+
+# 原子标签：保留 Transfur，并加上两个上级
+[Transfur]
+group = "plot"
+order = 510
+parents = ["Transformation", "Furry"]
+aliases = ["兽化", "獸化", "TF"]
