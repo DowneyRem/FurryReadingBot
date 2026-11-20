@@ -49,3 +49,10 @@ def test_model_build_does_not_break_when_vocabulary_unavailable(
 	monkeypatch.setattr(tags_module, "get_vocabulary", boom)
 	novel = Novel(**NOVEL_FIELDS, tags=["兽人"])
 	assert novel.tags == ["兽人"]
+
+
+def test_novel_applies_rating_exclusion() -> None:
+	"""SFW 与 R18 / R18G 互斥：模型构造时就已剔除，文案 / txt 不会自相矛盾。"""
+	assert Novel(**NOVEL_FIELDS, tags=["SFW"]).tags == ["SFW"]
+	assert Novel(**NOVEL_FIELDS, tags=["SFW", "R18"]).tags == ["R18"]
+	assert Novel(**NOVEL_FIELDS, tags=["SFW", "R18G"]).tags == ["R18", "R18G"]

@@ -34,6 +34,10 @@ order = 32
 parts = ["Gay", "Furry"]
 aliases = ["ケモホモ", "ホモケモ", "兽人同性"]
 
+[SFW]
+group = "rating"
+order = 19
+
 [R18]
 group = "rating"
 order = 20

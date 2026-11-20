@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+
 import json
 import logging
 from collections.abc import Iterator
@@ -49,6 +50,7 @@ BASE: dict = {
 	"TransfurFurry": {"group": "plot", "order": 65, "parts": ["Transfur", "Furry"]},
 	"R18": {"group": "rating", "order": 5, "aliases": ["R-18"]},
 	"R18G": {"group": "rating", "order": 6, "parents": ["R18"], "aliases": ["R18-G"]},
+	"SFW": {"group": "rating", "order": 4},
 	"CBT": {"group": "act", "order": 70, "parents": ["R18G"], "aliases": ["虐屌"]},
 }
 
@@ -216,6 +218,17 @@ def test_display_tags_limit_only_caps_canonical() -> None:
 	vocab = make_vocab()
 	assert display_tags(["cbt", "gay furry", "未知"], vocab=vocab, limit=2) == [
 		"Gay", "Furry", "未知"]
+
+
+def test_rating_exclusion_drops_sfw() -> None:
+	"""评级互斥：R18 / R18G 命中时丢掉 SFW；只有 SFW 时保留。"""
+	vocab = make_vocab()
+	assert display_tags(["SFW"], vocab=vocab) == ["SFW"]
+	assert display_tags(["SFW", "R18"], vocab=vocab) == ["R18"]
+	assert display_tags(["SFW", "R18G"], vocab=vocab) == ["R18", "R18G"]
+	# 未识别写法不受影响；先互斥再截断，SFW 不会白占一个名额
+	assert display_tags(["SFW", "R18", "完全未知"], vocab=vocab) == ["R18", "完全未知"]
+	assert display_tags(["SFW", "gay furry", "R18"], vocab=vocab, limit=1) == ["Gay"]
 
 
 def test_unknown_tags_are_logged(caplog: pytest.LogCaptureFixture) -> None:

@@ -49,9 +49,15 @@ DEFAULT_PATH = Path(__file__).parent.parent.resolve() / "data" / "tags.toml"
 logger = logging.getLogger(__name__)
 
 # 未识别写法的留档实现：(归一键, 原样写法) → 写入 data/unknown_tags.json
-# 由 services 层启动时注入；为空时只打日志，保证 sources 不依赖 storage
+# 由 services 层启动时注入；默认是空实现，保证 sources 不依赖 storage
 UnknownRecorder = Callable[[Iterable[tuple[str, str]]], object]
-_recorder: UnknownRecorder | None = None
+
+
+def _ignore_unknown(_entries: Iterable[tuple[str, str]]) -> None:
+	"""默认留档实现：什么都不做（没装配时 sources 不碰存储）。"""
+
+
+_recorder: UnknownRecorder = _ignore_unknown
 
 
 def normalize(s: str) -> str:
@@ -377,14 +383,27 @@ def get_vocabulary() -> Vocabulary:
 
 
 # ---------- 展示与未识别记账 ----------
+# 评级互斥（业务约定，见 docs/08 §7）：命中 R18 / R18G 时 SFW 不成立。
+# 词表里 R18G 的 parents 是 R18，闭包已经带上 R18，所以只看这两个规范名。
+EXCLUSIVE_RATINGS = frozenset({"R18", "R18G"})
+EXCLUDED_BY_EXCLUSIVE = frozenset({"SFW"})
+
+
 def set_unknown_recorder(recorder: UnknownRecorder | None) -> None:
-	"""装配未识别写法的留档实现（services 启动时调用一次；传 None 关闭）。
+	"""装配未识别写法的留档实现（services 启动时调用一次；传 None 恢复空实现）。
 
 	sources 只调用回调，不 import storage —— 留档位置由上层决定（现在是
 	`data/unknown_tags.json`，见 `services/tag_service.install_tag_archive()`）。
 	"""
 	global _recorder
-	_recorder = recorder
+	_recorder = recorder or _ignore_unknown
+
+
+def _apply_rating_exclusion(tokens: list[str]) -> list[str]:
+	"""评级互斥：出现 R18 / R18G 时丢掉 SFW（来源两者都标时按 R18 优先）。"""
+	if EXCLUSIVE_RATINGS.isdisjoint(tokens):
+		return tokens
+	return [tag for tag in tokens if tag not in EXCLUDED_BY_EXCLUSIVE]
 
 
 def display_tags(
@@ -400,12 +419,14 @@ def display_tags(
 	  （`None` 不截断；未识别写法通常很少，不占这个名额，免得被截掉后看不见）；
 	- 未识别写法只做全角归一 + 去前导 `#`（大小写保持来源原样），按出现顺序去重，
 	  追加在规范标签之后；
+	- 评级互斥：规范标签里同时出现 `R18` / `R18G` 时丢掉 `SFW`（先互斥再截断）；
 	- 留档由 `resolve_all()` 触发（`record` 透传），一次调用只记一次；
 	- `record=False` 只展示不留档（试规则 / 单测 / 自定义词表）；
 	- 落盘失败只打 warning，不影响返回结果。
 	"""
 	vocabulary = vocab if vocab is not None else get_vocabulary()
 	tokens, residual = vocabulary.resolve_all(raws or [], record=record)
+	tokens = _apply_rating_exclusion(tokens)
 	unknown = list(_unique_surfaces(residual).values())
 	if limit is not None:
 		tokens = tokens[:limit]
@@ -448,11 +469,8 @@ def _record_residual(residual: Iterable[str]) -> None:
 	if not surfaces:
 		return
 	logger.debug("标签未识别（已原样带出，可补 aliases）：%s", list(surfaces.values()))
-	recorder = _recorder
-	if recorder is None:
-		return  # 没装配：只打日志，不写盘（sources 不碰存储）
 	try:
-		recorder(surfaces.items())
+		_recorder(surfaces.items())
 	except Exception:
 		# 只是记账：磁盘满 / 权限不对都不该让下载和分享失败
 		logger.warning("未识别标签落盘失败（不影响解析与展示）", exc_info=True)
