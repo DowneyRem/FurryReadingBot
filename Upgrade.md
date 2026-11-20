@@ -9,7 +9,7 @@
 > | 作者本人申请下架（截图核验） | ✅ 已实现（`blacklist_service` + `media.py`） |
 > | 拉黑后删除频道历史分享 | ✅ 已实现（`takedown_service` + `share_records` 的 `message_id`） |
 > | 分享到正式频道 | ✅ 已实现：`SHARE_MODE=prod` 下按推荐指数（`policy/scoring.py`）分流，高分同时发 `FURRY_READING` + `FURRY_NOVELS`，低分 / 未评分只发 `FURRY_NOVELS` |
-> | 标签 / 正文自动过滤 | ⏳ 标签受控词表已就绪（`data/tags.toml` + `sources/tags.py`，见 [docs/08](docs/08-标签词表.md)），尚未接线；正文关键词与自动过滤未实现 |
+> | 标签 / 正文自动过滤 | ⏳ 标签受控词表已就绪（`data/tags.toml` + `sources/tags.py`，见 [docs/08](docs/08-标签词表.md)），尚未接线；未识别写法会自动留档到 `data/unknown_tags.json` 供补 aliases；正文关键词与自动过滤未实现 |
 > | 授权白名单 `white_authors.json` | ❌ 有存储、无判定（产品决定暂不接入） |
 > | 翻译 | ❌ 未实现 |
 > | 即传即删 | ✅ 每次下载独立工作目录（`files/work/dl-*`），交付后整目录删除 |
