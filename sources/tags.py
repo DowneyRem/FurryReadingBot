@@ -10,16 +10,32 @@
 校验在 `Vocabulary` 构造时完成，结果读 `errors` / `warnings`：
 errors 非空应阻断启动，warnings 打日志即可。改完词表跑
 `pytest test/test_tags.py -q`（含两份词表的守门用例）就能确认没写坏。
+
+运行时用 `get_vocabulary()` 拿进程内唯一实例（首次加载就把 errors / warnings 写进日志）。
+
+**留档只有一个入口**：`Vocabulary.resolve_all()`（默认 `record=True`）会把未识别的来源写法
+写进 `data/unknown_tags.json`；`unknown_tags()` 读、`clear_unknown_tags()` 清、`prune` 手动瘦身。
+
+	Vocabulary.resolve()      纯解析：规范名 → 标签集合，不写盘
+	Vocabulary.resolve_all()  解析 + 留档：未识别写法落盘（record=False 关掉）
+	display_tags()            展示：排序 + 截断 + 未识别写法原样带出（内部走 resolve_all）
+	storage.unknown_tags      只管持久化：计数 / 首末时间 / 显式 prune，不判断什么是"未识别"
 """
 
 from __future__ import annotations
 
+import logging
 import re
 import tomllib
 import unicodedata
 from collections.abc import Iterable
+from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+	from storage.unknown_tags import UnknownTagStore
+
 
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 SPLIT_RE = re.compile(r"[\s/,，、|;；]+")
@@ -32,6 +48,10 @@ DEFAULT_ORDER = 10**6
 # 这些组的规范名惯例是全小写（#en #zh #txt），其余组建议 PascalCase
 LOWERCASE_GROUPS = {"format", "lang"}
 DEFAULT_PATH = Path(__file__).parent.parent.resolve() / "data" / "tags.toml"
+logger = logging.getLogger(__name__)
+
+# 未识别标签的落盘表（data/unknown_tags.json），由 storage 层负责读写
+_default_store: UnknownTagStore | None = None
 
 
 def normalize(s: str) -> str:
@@ -40,6 +60,12 @@ def normalize(s: str) -> str:
 	s = s.lstrip("#＃").strip()
 	s = re.sub(r"\s+", " ", s)
 	return s.casefold()
+
+
+def _surface(raw: str) -> str:
+	"""展示用的原样写法：NFKC + 去前导 #，其余保持来源大小写。"""
+	text = unicodedata.normalize("NFKC", raw).strip()
+	return text.lstrip("#＃").strip()
 
 
 def _is_str_list(value: Any) -> bool:
@@ -61,18 +87,22 @@ class Vocabulary:
 		self.alias_index: dict[str, str] = {}
 		# 组 → 序号，决定输出顺序的第一关键字
 		self.group_rank: dict[str, int] = {}
-		self._resolved: dict[str, set[str]] = {}
+		# 只存顶层解析结果，且是不可变集合：对外一律给副本
+		self._resolved: dict[str, frozenset[str]] = {}
 		self._validate()
 		self._build_index()
 		self._build_group_rank()
 		self._check_cycles()
 
+
 	# ---------- 校验 ----------
 	def _err(self, msg: str) -> None:
 		self.errors.append(msg)
 
+
 	def _warn(self, msg: str) -> None:
 		self.warnings.append(msg)
+
 
 	def _validate(self) -> None:
 		schema = self.meta.get("schema")
@@ -139,6 +169,7 @@ class Vocabulary:
 			if any(normalize(alias) == name.casefold() for alias in aliases):
 				self._warn(f"{name}: 不必把规范名自己写进 aliases")
 
+
 	# ---------- 索引 ----------
 	def _build_index(self) -> None:
 		"""规范名 + 别名 → 匹配键索引；归一后全局唯一。"""
@@ -155,6 +186,7 @@ class Vocabulary:
 				if prev is not None and prev != name:
 					self._err(f"别名冲突 {surface!r}: {prev!r} 与 {name!r}")
 				self.alias_index[key] = name
+
 
 	def _build_group_rank(self) -> None:
 		"""组顺序：meta.groups 显式声明，否则按词表里 group 首次出现的顺序。"""
@@ -173,6 +205,7 @@ class Vocabulary:
 			if isinstance(group, str) and group and group not in derived:
 				derived.append(group)
 		self.group_rank = {group: index for index, group in enumerate(derived)}
+
 
 	def _check_cycles(self) -> None:
 		color = {name: 0 for name in self.tags}
@@ -200,12 +233,15 @@ class Vocabulary:
 			if color[name] == 0:
 				dfs(name, [])
 
+
 	# ---------- 解析 ----------
 	def _atoms(self, name: str, stack: tuple[str, ...]) -> set[str]:
 		"""复合标签拆到原子标签；不继承原子标签的 parents。"""
 		if name in stack or name not in self.tags:
 			return set()  # 循环已在校验阶段报告
 		rec = self.tags[name]
+		if not isinstance(rec, dict):
+			return set()  # 记录结构非法，已在校验阶段报 ERROR
 		parts = rec.get("parts") if _is_str_list(rec.get("parts")) else []
 		if not parts:
 			return {name}
@@ -214,30 +250,51 @@ class Vocabulary:
 			out |= self._atoms(ref, (*stack, name))
 		return out
 
-	def resolve(self, name: str, stack: tuple[str, ...] = ()) -> set[str]:
-		"""规范名 → 输出集合（只有原子标签）。"""
+
+	def resolve(self, name: str) -> set[str]:
+		"""规范名 → 输出集合（只有原子标签）。
+
+		纯函数：不排序、不落盘。未知名只返回空集合（打 debug，不写进
+		`unknown_tags`——入参已经是规范名，不命中说明调用方写了词表里没有的名字）。
+
+		返回的是副本：调用方随便 `add` / `|=` 都改不到内部缓存。
+		"""
+		if name not in self.tags:
+			logger.debug("resolve() 收到词表里没有的规范名：%r", name)
+		return set(self._resolve(name, ()))
+
+	def _resolve(self, name: str, stack: tuple[str, ...]) -> set[str]:
+		"""带防环栈的递归实现：只有顶层结果（stack 为空）才写缓存。
+
+		递归中途的局部结果会被 `stack` 截断（环已在校验阶段报 ERROR），
+		写进缓存会把错误结果永久留下来，所以一律不缓存、不改缓存。
+		"""
 		cached = self._resolved.get(name)
 		if cached is not None:
-			return cached
+			return set(cached)
 		if name in stack or name not in self.tags:
 			return set()
 		rec = self.tags[name]
+		if not isinstance(rec, dict):
+			return set()
 		parts = rec.get("parts") if _is_str_list(rec.get("parts")) else []
 		out: set[str]
 		if parts:
 			out = set()
 			for ref in parts:
 				if self.parts_mode == "inherit":
-					out |= self.resolve(ref, (*stack, name))
+					out |= self._resolve(ref, (*stack, name))
 				else:
 					out |= self._atoms(ref, (*stack, name))
 		else:
 			out = {name}
 			parents = rec.get("parents") if _is_str_list(rec.get("parents")) else []
 			for ref in parents:
-				out |= self.resolve(ref, (*stack, name))
-		self._resolved[name] = out
-		return out
+				out |= self._resolve(ref, (*stack, name))
+		if not stack:
+			self._resolved[name] = frozenset(out)
+		return out.copy()
+
 
 	def resolve_one(self, raw: str) -> list[str] | None:
 		"""任意来源写法 → 命中的规范名；完全不命中返回 None。"""
@@ -254,8 +311,16 @@ class Vocabulary:
 				return list(dict.fromkeys(names))  # 去重：gay/gay 只算一次
 		return None
 
-	def resolve_all(self, raws: Iterable[str]) -> tuple[list[str], list[str]]:
-		"""批量解析 → （已排序的规范名，未识别的原始串）。"""
+
+	def resolve_all(
+		self, raws: Iterable[str], *, record: bool = True
+	) -> tuple[list[str], list[str]]:
+		"""批量解析 → （已排序的规范名，未识别的原始串）。
+
+		解析到此为止：这是**唯一的留档点**——未识别写法默认写进
+		`data/unknown_tags.json`（同一次调用内去重，`count` 记「作品数」）。
+		`record=False` 只解析不留档（试规则 / 单测）。
+		"""
 		out: set[str] = set()
 		rest: list[str] = []
 		for raw in raws:
@@ -265,7 +330,10 @@ class Vocabulary:
 				continue
 			for name in hits:
 				out |= self.resolve(name)
+		if record and rest:
+			_record_residual(rest)
 		return sorted(out, key=self.sort_key), rest
+
 
 	def sort_key(self, name: str) -> tuple[int, int, str]:
 		"""输出顺序：group（声明序/首次出现序）→ order → 名字。"""
@@ -280,6 +348,7 @@ class Vocabulary:
 		return rank, order, name
 
 
+# ---------- 加载 ----------
 def load_vocabulary(path: str | Path | None = None) -> Vocabulary:
 	"""读一份 tags.toml 并完成校验。
 
@@ -289,3 +358,101 @@ def load_vocabulary(path: str | Path | None = None) -> Vocabulary:
 	target = Path(path) if path is not None else DEFAULT_PATH
 	with target.open("rb") as file:
 		return Vocabulary(tomllib.load(file))
+
+
+@lru_cache(maxsize=1)
+def get_vocabulary() -> Vocabulary:
+	"""进程内共享一份词表：首次调用时加载 + 校验，之后只读。
+
+	docs/08 §7 要求「只加载一次」；errors / warnings 在这里直接写日志，
+	启动流程只需要检查 `get_vocabulary().errors` 是否为空。
+	文件缺失或 TOML 语法错误照旧抛异常（`lru_cache` 不会缓存异常）。
+	"""
+	vocab = load_vocabulary()
+	for error in vocab.errors:
+		logger.error("标签词表：%s", error)
+	for warning in vocab.warnings:
+		logger.warning("标签词表：%s", warning)
+	return vocab
+
+
+# ---------- 展示与未识别记账 ----------
+def display_tags(
+	raws: Iterable[str] | None,
+	*,
+	limit: int | None = 8,
+	vocab: Vocabulary | None = None,
+	record: bool = True,
+) -> list[str]:
+	"""来源写法 → 可直接展示的标签列表（排序 + 截断 + 未识别写法原样带出）。
+
+	- 规范标签按 group / order 排序，`limit` 只约束**规范标签**的数量
+	  （`None` 不截断；未识别写法通常很少，不占这个名额，免得被截掉后看不见）；
+	- 未识别写法只做全角归一 + 去前导 `#`（大小写保持来源原样），按出现顺序去重，
+	  追加在规范标签之后；
+	- 留档不在这里做：由 `resolve_all()` 统一写 `data/unknown_tags.json`，
+	  本函数只把 `record` 透传下去，因此**一次调用只记一次**；
+	- `record=False` 只展示不留档（试规则 / 单测 / 自定义词表）；
+	- 落盘失败只打 warning，不影响返回结果。
+	"""
+	vocabulary = vocab if vocab is not None else get_vocabulary()
+	tokens, residual = vocabulary.resolve_all(raws or [], record=record)
+	unknown = list(_unique_surfaces(residual).values())
+	if limit is not None:
+		tokens = tokens[:limit]
+	return tokens + unknown
+
+
+def _unique_surfaces(residual: Iterable[str]) -> dict[str, str]:
+	"""residual → {归一键: 原样写法}，保持首次出现顺序；空写法直接跳过。"""
+	surfaces: dict[str, str] = {}
+	for raw in residual:
+		if not isinstance(raw, str):
+			continue
+		surface = _surface(raw)
+		key = normalize(surface)
+		if not key:
+			continue
+		surfaces.setdefault(key, surface)
+	return surfaces
+
+
+def _record_residual(residual: Iterable[str]) -> None:
+	"""未识别写法留档：同一次解析内按归一写法去重（`count` = 作品数）。"""
+	surfaces = _unique_surfaces(residual)
+	if not surfaces:
+		return
+	logger.debug("标签未识别（已留档，可补 aliases）：%s", list(surfaces.values()))
+	try:
+		unknown_tag_store().record(surfaces.items())
+	except Exception:
+		# 只是记账：磁盘满 / 权限不对都不该让下载和分享失败
+		logger.warning("未识别标签落盘失败（不影响解析与展示）", exc_info=True)
+
+
+def unknown_tag_store() -> UnknownTagStore:
+	"""未识别标签的落盘表；没配置过就用默认的 ``data/unknown_tags.json``。"""
+	global _default_store
+	if _default_store is None:
+		from storage.unknown_tags import UnknownTagStore
+
+		_default_store = UnknownTagStore()
+	return _default_store
+
+
+def unknown_tags(limit: int = 50) -> dict[str, int]:
+	"""已落盘的未识别标签：原样写法 → 出现次数，按次数从多到少。"""
+	return {str(item.text): int(item.count) for item in unknown_tag_store().top(limit)}
+
+
+def clear_unknown_tags() -> int:
+	"""清空未识别标签表（补完 aliases 后调用）；返回清掉的条数。"""
+	return unknown_tag_store().clear()
+
+
+def forget_unknown_tags(texts: Iterable[str]) -> int:
+	"""按写法销账：补完 aliases 后精确删掉这些记录，返回删掉的条数。
+
+	``texts`` 可以写原样写法（`unknown_tags()` 的键），也可以写 ``normalize()`` 后的写法。
+	"""
+	return unknown_tag_store().remove(texts)
