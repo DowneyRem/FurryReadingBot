@@ -67,7 +67,7 @@ def test_link_persists(tmp_path) -> None:
 
 
 def test_missing_link_reads_as_empty(tmp_path) -> None:
-	"""老缓存没有 link 字段，读出来是空串而不是 KeyError。"""
+	"""缺少 link 字段时读成空串，而不是 KeyError。"""
 	key = FileCacheStore.make_key("novel", "1", "txt")
 	store = _store(tmp_path, default_ttl_days=1)
 	store.set(key, "FILE_ID")
@@ -90,7 +90,7 @@ def test_score_persists(tmp_path) -> None:
 
 
 def test_missing_score_reads_as_none(tmp_path) -> None:
-	"""老缓存 / 作者整包没有评分，读成 None，分享按未评分处理。"""
+	"""没有评分（作者整包 / zip 本来就没有统计）时读成 None，分享按未评分处理。"""
 	key = FileCacheStore.make_key("novel", "1", "txt")
 	store = _store(tmp_path, default_ttl_days=1)
 	store.set(key, "FILE_ID")
@@ -113,7 +113,7 @@ def test_tags_persist(tmp_path) -> None:
 
 
 def test_missing_tags_read_as_empty(tmp_path) -> None:
-	"""老缓存没有 tags 字段：读成空元组，分享时按未确认处理。"""
+	"""缺少 tags 字段时读成空元组，分享时按未确认处理。"""
 	key = FileCacheStore.make_key("novel", "1", "txt")
 	store = _store(tmp_path, default_ttl_days=1)
 	store.set(key, "FILE_ID")

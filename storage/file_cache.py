@@ -43,7 +43,7 @@ class FileCacheStore(JsonStore):
 			link=str(info.get("link") or ""),
 			author_id=str(info.get("author_id") or ""),
 			author_name=str(info.get("author_name") or ""),
-			# 规范标签：分享时按它判断是否兽人小说（老缓存没有，读成空元组）
+			# 规范标签：分享时按它判断作品是否为兽人小说
 			tags=tuple(
 				tag.strip() for tag in (info.get("tags") or [])
 				if isinstance(tag, str) and tag.strip()
