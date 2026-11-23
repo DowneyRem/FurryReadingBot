@@ -1,14 +1,31 @@
-"""分享类 callback：snp / sna / snn（Telegram 展示层）。"""
+"""分享类 callback（Telegram 展示层）。
+
+用户侧：snp / sna / snn（公开 / 私密 / 拒绝分享）。
+中转频道：cfy（放行到兽人小说频道）/ cfn（不通过，结掉卡片）。
+"""
 
 from __future__ import annotations
+
+import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from keyboards import import_to_legado_keyboard
+from config import FURRY_NOVELS
 from handlers.callbacks.download import forbidden_text
+from handlers.callbacks.review import close_transit_message, ensure_transit_admin
 from handlers.telegram import reply, upload_file
+from keyboards import check_furry_keyboard, import_to_legado_keyboard
+from policy.author import AuthorPolicy
 from services import ShareRequest, ShareResult, ShareService
+from services.share_service import TRANSIT_NOTICE
+from sources import resolve_source
+from storage.file_cache import FileCacheStore, get_file_cache
+from storage.share_records import get_share_records
+from utils.links import get_id
+
+
+logger = logging.getLogger(__name__)
 
 
 def format_remaining(seconds: float) -> str:
@@ -30,10 +47,7 @@ def format_channels(channels: tuple[str, ...]) -> str:
 
 def shared_text(result: ShareResult, *, public: bool) -> str:
 	if result.transit:
-		text = (
-			f"标签未命中兽人，已转入中转频道 {format_channels(result.channels)}"
-			" 等待核验"
-		)
+		text = f"暂时无法判断是否为兽人小说\n现已转入中转频道 {format_channels(result.channels)}\n等待核验"
 	else:
 		text = f"已经{'公开' if public else '匿名'}分享至 {format_channels(result.channels)}"
 	if result.failed_channels:
@@ -66,14 +80,19 @@ async def share(
 	)
 
 	async def send(artifact, chat_id: str) -> int:
-		"""发到一个频道，回传 message_id，供服务层写下架句柄。"""
+		"""发到一个频道：中转挂核验键盘，正式频道挂开源阅读键盘。"""
+		markup = (
+			check_furry_keyboard(artifact.link)
+			if artifact.transit
+			else import_to_legado_keyboard(artifact.link)
+		)
 		sent = await upload_file(
 			update, context,
 			file_id=artifact.file_id,
 			filename=artifact.filename,
 			chat_id=chat_id,
 			caption=artifact.caption,
-			reply_markup=import_to_legado_keyboard(artifact.link),
+			reply_markup=markup,
 		)
 		return sent.message_id
 
@@ -125,3 +144,153 @@ async def share_reject(
 	query = update.callback_query
 	if query is not None:
 		await query.edit_message_reply_markup(reply_markup=None)
+
+
+# ----- 中转频道核验：cfy / cfn -----
+def official_caption(caption: str) -> str:
+	"""去掉中转 caption 顶部的「待核验」提示，得到正式频道用的文案。"""
+	text = (caption or "").strip()
+	if text.startswith(TRANSIT_NOTICE):
+		text = text[len(TRANSIT_NOTICE):].lstrip("\n")
+	return text
+
+
+def link_from_data(data: str) -> str:
+	"""解析 `cfy;{link}` / `cfn;{link}` 里的作品链接。"""
+	parts = data.split(";", 1)
+	return parts[1].strip() if len(parts) > 1 else ""
+
+
+def work_from_link(link: str) -> tuple[str, str] | None:
+	"""作品链接 → (kind, item_id)；来源不认识 / 解析不出 id 时返回 None。"""
+	source = resolve_source(link)
+	if source is None:
+		return None
+	if source.is_series_link(link):
+		kind = "series"
+	elif source.is_novel_link(link):
+		kind = "novel"
+	elif source.is_author_link(link):
+		kind = "author"
+	else:
+		return None
+	item_id = get_id(link)
+	return (kind, item_id) if item_id else None
+
+
+def transit_receipt(
+		*, approved: bool, link: str, user) -> str:
+	"""结掉中转卡片后，留在频道里的回执。"""
+	lines = [
+		"✅ #兽人小说已放行" if approved else "❌ #兽人小说未通过",
+		f"🔗 {link}" if link else "🔗 （链接缺失）",
+	]
+	if user is not None:
+		user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
+		lines.append(f"👤 操作人：{user_name}（#u{user.id}）")
+	return "\n".join(lines)
+
+
+def drop_transit_record(
+		kind: str, item_id: str, author_id: str, message) -> None:
+	"""卡片即将删除：先把这条中转消息从分享记录里摘掉。
+
+	不摘的话，作者日后被下架时 `TakedownService` 会去删一条已经删掉的消息，
+	在回执里留下永远失败的「删除失败」。
+	"""
+	if message is None or not author_id:
+		return
+	chat_id = getattr(message, "chat_id", None)
+	message_id = getattr(message, "message_id", None)
+	if not chat_id or not message_id:
+		return
+	get_share_records().remove_message(
+		author_id, kind, item_id, chat_id, message_id)
+
+
+async def share_transit_approve(
+		update: Update, context: ContextTypes.DEFAULT_TYPE,
+		*, data: str) -> None:
+	"""cfy：把中转卡片里的作品发到兽人小说频道，并结掉卡片。"""
+	if not await ensure_transit_admin(update, context, "cfy"):
+		return
+
+	link = link_from_data(data)
+	work = work_from_link(link)
+	if work is None:
+		await close_transit_message(update, context, "链接无法解析，未转发")
+		return
+	kind, item_id = work
+
+	# 分享按钮只挂在 txt 上，中转卡片也只会是 txt
+	cached = get_file_cache().get_valid(
+		FileCacheStore.make_key(kind, item_id, "txt"))
+	if not cached:
+		await close_transit_message(
+			update, context, "缓存已失效，无法转发；请让分享者重新下载后再分享")
+		return
+	if not AuthorPolicy().check(cached.author_id, cached.author_name).can_download:
+		await close_transit_message(update, context, "该作者当前已不可分享，未转发")
+		return
+	if not FURRY_NOVELS:
+		await close_transit_message(update, context, "未配置兽人小说频道")
+		return
+
+	query = update.callback_query
+	message = query.message if query else None
+	caption = official_caption(getattr(message, "caption", "") or "")
+	try:
+		sent = await upload_file(
+			update, context,
+			file_id=cached.file_id,
+			filename=cached.file_name or None,
+			chat_id=FURRY_NOVELS,
+			caption=caption,
+			reply_markup=import_to_legado_keyboard(str(cached.link or "")),
+		)
+	except Exception:
+		logger.exception("中转放行转发失败 %s:%s", kind, item_id)
+		await close_transit_message(
+			update, context, "转发到兽人小说频道失败，请稍后重试")
+		return
+
+	# 正式频道的消息也要进分享记录，作者下架时才删得到
+	get_share_records().record(
+		author_id=cached.author_id,
+		author_name=cached.author_name,
+		kind=kind,
+		item_id=item_id,
+		messages=[(FURRY_NOVELS, sent.message_id)],
+		title=(caption.splitlines()[0] if caption else ""),
+	)
+	drop_transit_record(kind, item_id, str(cached.author_id or ""), message)
+	await close_transit_message(
+		update, context,
+		transit_receipt(
+			approved=True, link=link, user=update.effective_user))
+
+
+async def share_transit_reject(
+		update: Update, context: ContextTypes.DEFAULT_TYPE,
+		*, data: str) -> None:
+	"""cfn：不通过，结掉中转卡片，不发布到正式频道。"""
+	if not await ensure_transit_admin(update, context, "cfn"):
+		return
+
+	link = link_from_data(data)
+	work = work_from_link(link)
+
+	query = update.callback_query
+	message = query.message if query else None
+	if work is not None:
+		kind, item_id = work
+		cached = get_file_cache().get_valid(
+			FileCacheStore.make_key(kind, item_id, "txt"))
+		drop_transit_record(
+			kind, item_id,
+			str(cached.author_id or "") if cached else "",
+			message)
+	await close_transit_message(
+		update, context,
+		transit_receipt(
+			approved=False, link=link, user=update.effective_user))

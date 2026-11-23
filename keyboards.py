@@ -127,11 +127,11 @@ def share_novel_keyboard(kind: str, item_id: str, file_type: str = "txt") -> Inl
 	)
 
 
-def check_novel_keyboard(link: str) -> InlineKeyboardMarkup:
+def check_furry_keyboard(link: str) -> InlineKeyboardMarkup:
 	return InlineKeyboardMarkup(
 		[[
-			InlineKeyboardButton(text="🉑 允许分享", callback_data=f"csna;{link}"),
-			InlineKeyboardButton(text="🈲 禁止分享", callback_data=f"csnf;{link}"),
+			InlineKeyboardButton(text="🉑 允许分享", callback_data=f"cfy;{link}"),
+			InlineKeyboardButton(text="🈲 禁止分享", callback_data=f"cfn;{link}"),
 		]]
 	)
 

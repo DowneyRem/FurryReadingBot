@@ -75,6 +75,8 @@ class ShareArtifact:
 	public: bool
 	# 作品链接：分享到频道后「添加本文至书架」按钮要用
 	link: str = ""
+	# True = 这次发的是中转频道；handler 据此挂核验键盘（cfy / cfn）
+	transit: bool = False
 
 
 @dataclass(frozen=True)
@@ -281,6 +283,7 @@ class ShareService:
 			caption=caption,
 			public=request.public,
 			link=link,
+			transit=transit,
 		)
 
 		targets: list[tuple[str, int]] = []

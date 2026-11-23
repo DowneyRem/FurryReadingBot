@@ -18,7 +18,13 @@ from handlers.callbacks.blacklist import (
 )
 from handlers.callbacks.review import apply_approve, apply_reject
 from handlers.callbacks.download import download
-from handlers.callbacks.share import share_private, share_public, share_reject
+from handlers.callbacks.share import (
+	share_private,
+	share_public,
+	share_reject,
+	share_transit_approve,
+	share_transit_reject,
+)
 from handlers.callbacks.author import back_to_author
 from sources.linpx.errors import LinpxError
 
@@ -31,7 +37,7 @@ CANCEL_ACTIONS = {
 }
 
 # 中转频道核验按钮：handler 自己 answer，非管理员要弹窗提示且不能动卡片
-REVIEW_ACTIONS = {"rfy", "rfn", "rby", "rbn", "rbt"}
+REVIEW_ACTIONS = {"rfy", "rfn", "rby", "rbn", "rbt", "cfy", "cfn"}
 
 # action -> handler：keyboards.py 产出的 action 必须在这里或 CANCEL_ACTIONS 中
 HANDLERS = {
@@ -61,6 +67,9 @@ HANDLERS = {
 	"snp": share_public,
 	"sna": share_private,
 	"snn": share_reject,
+	# 中转频道核验兽人小说：cfy 放行到兽人小说频道，cfn 不通过并结掉卡片
+	"cfy": share_transit_approve,
+	"cfn": share_transit_reject,
 }
 
 
