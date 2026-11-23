@@ -243,20 +243,11 @@ class ShareService:
 		author_name = str(request.author_name or cached.author_name or "")
 		tags = tuple(cached.tags or ())
 		if not author_id:
-			# 老缓存没记作者：补拉一次，权限判定与下架回溯都要靠作者 id
+			# 老缓存没记作者：补拉一次，权限判定与下架回溯都要靠作者 id；
+			# 既然已经拉到，标签也顺手用上，不额外请求。
 			item = await self._fetch(link)
 			author_id, author_name = str(item.author_id), str(item.author_name)
 			if not tags:
-				tags = tuple(getattr(item, "tags", None) or ())
-		elif not tags:
-			# 老缓存没记标签：补拉一次做作品级判定；失败就按「未确认」走中转。
-			# 过渡用：缓存 TTL（FILE_CACHE_TTL_DAYS）到期后老条目自然消失，这段可以删。
-			try:
-				item = await self._fetch(link)
-			except Exception:
-				logger.warning(
-					"补拉标签失败，按未确认兽人小说处理 %s", link, exc_info=True)
-			else:
 				tags = tuple(getattr(item, "tags", None) or ())
 
 		# 作品级判定：命中 Furry 才发正式频道，其余转中转频道人工核验

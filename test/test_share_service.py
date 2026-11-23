@@ -505,29 +505,15 @@ def test_transit_missing_returns_no_channel(monkeypatch, tmp_path) -> None:
 	assert seen == []
 
 
-def test_old_cache_backfills_tags_before_routing(monkeypatch, tmp_path) -> None:
-	"""老缓存没有 tags：分享时补拉一次，命中 Furry 才发正式频道。"""
-	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
-	service, _cache, _records = make_service(tmp_path, tags=None)
-	seen: list = []
-
-	result = run(service.share(request(), upload=uploader(seen=seen)))
-
-	assert result.status == "shared"
-	assert result.transit is False
-	assert result.channels == ("channel",)
-	assert len(seen) == 1
-
-
-def test_tag_backfill_failure_routes_to_transit(monkeypatch, tmp_path) -> None:
-	"""补拉标签失败时按「未确认」处理：进中转频道，不误发正式频道。"""
+def test_old_cache_without_tags_goes_to_transit(monkeypatch, tmp_path) -> None:
+	"""老缓存没有 tags：不再补拉，直接按「未确认」发中转频道。"""
 	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
 	service, _cache, _records = make_service(tmp_path, tags=None)
 
-	async def boom(link: str):
-		raise RuntimeError("network down")
+	async def no_fetch(link: str):
+		raise AssertionError("分享不应该为了标签再请求源站")
 
-	service._fetch = boom
+	service._fetch = no_fetch
 	seen: list = []
 
 	result = run(service.share(request(), upload=uploader(seen=seen)))

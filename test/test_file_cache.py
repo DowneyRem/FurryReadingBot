@@ -113,7 +113,7 @@ def test_tags_persist(tmp_path) -> None:
 
 
 def test_missing_tags_read_as_empty(tmp_path) -> None:
-	"""老缓存没有 tags 字段：读成空元组，分享时再补拉标签。"""
+	"""老缓存没有 tags 字段：读成空元组，分享时按未确认处理。"""
 	key = FileCacheStore.make_key("novel", "1", "txt")
 	store = _store(tmp_path, default_ttl_days=1)
 	store.set(key, "FILE_ID")
