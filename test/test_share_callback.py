@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 
+import services.share_service as share_service_module
 from handlers.callbacks import share as share_handler
 from handlers.telegram import SentDocument
 from policy.author import AuthorPolicy
@@ -65,7 +66,7 @@ def patch_handler(monkeypatch, tmp_path, *, link=""):
 		cache.set(
 			"novel:1:txt", "FILE_ID",
 			file_name="a.txt", caption="标题", link=link, author_id="456",
-			score=5.0)
+			score=5.0, tags=("Furry", "Gay"))
 	service = ShareService(
 		cache=cache,
 		records=ShareRecordStore(
@@ -137,7 +138,8 @@ def test_share_without_cached_link_still_has_bookshelf(
 	cache = share_handler.ShareService().cache
 	cache.set(
 		"novel:1:txt", "FILE_ID",
-		file_name="a.txt", caption="标题", author_id="456", score=5.0)
+		file_name="a.txt", caption="标题", author_id="456", score=5.0,
+		tags=("Furry", "Gay"))
 
 	run(share_handler.share_public(
 		FakeUpdate(), object(), data="snp;novel;1;txt"))
@@ -154,3 +156,21 @@ def test_share_missing_cache_does_not_upload(monkeypatch, tmp_path) -> None:
 
 	assert uploads == []
 	assert replies == ["缓存已失效，请重新下载后再分享"]
+
+
+def test_share_non_furry_replies_transit(monkeypatch, tmp_path) -> None:
+	"""标签没命中 Furry：发到中转频道，提示文案说明在等核验。"""
+	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
+	uploads, replies = patch_handler(monkeypatch, tmp_path, link=NOVEL_LINK)
+	# 覆盖缓存里的标签：同一部作品但没有兽人标签
+	share_handler.ShareService().cache.set(
+		"novel:1:txt", "FILE_ID",
+		file_name="a.txt", caption="标题", link=NOVEL_LINK,
+		author_id="456", score=5.0, tags=("Original",))
+
+	run(share_handler.share_public(
+		FakeUpdate(), object(), data="snp;novel;1;txt"))
+
+	assert uploads[0]["chat_id"] == "@transit"
+	assert "已转入中转频道 @transit" in replies[0]
+	assert "待核验" in uploads[0]["caption"]

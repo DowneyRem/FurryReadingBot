@@ -45,6 +45,8 @@ class FakeLists:
 class FakeWork:
 	author_id = "456"
 	author_name = "作者A"
+	# 默认当成兽人小说；需要测中转时把 cache 里的 tags 换成非 Furry
+	tags: tuple[str, ...] = ("Furry", "Gay")
 
 
 def make_service(
@@ -60,6 +62,7 @@ def make_service(
 		# txt 的缓存一定有下载时算好的评分，分享链路按「必有值」处理
 		score=5.0,
 		caption="标题\n作者：A",
+		tags=("Furry", "Gay"),
 ):
 	cache = FileCacheStore(
 		path=tmp_path / "files_cache.json", default_ttl_days=1)
@@ -80,6 +83,7 @@ def make_service(
 		link=link,
 		author_id=author_id, author_name=author_name,
 		score=score,
+		tags=tags,
 	)
 	return service, cache, records
 
@@ -453,4 +457,82 @@ def test_share_inflight_while_fetching_author(tmp_path) -> None:
 
 	assert first.status == "shared"
 	assert second.status == "inflight"
+	assert len(seen) == 1
+
+
+def test_furry_tag_routes_to_official_channel(monkeypatch, tmp_path) -> None:
+	"""标签命中 Furry：按评分走正式频道，caption 不带核验提示。"""
+	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
+	service, _cache, _records = make_service(
+		tmp_path, tags=("Furry", "Bear"), score=7)
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.status == "shared"
+	assert result.transit is False
+	assert result.channels == ("channel",)
+	assert share_service_module.TRANSIT_NOTICE not in seen[0].caption
+
+
+def test_non_furry_tag_goes_to_transit(monkeypatch, tmp_path) -> None:
+	"""标签没命中 Furry：不发言频道，转中转频道等人工核验。"""
+	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
+	service, _cache, records = make_service(
+		tmp_path, channels=("channel",), tags=("Original", "R18"))
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.status == "shared"
+	assert result.transit is True
+	assert result.channels == ("@transit",)
+	assert share_service_module.TRANSIT_NOTICE in seen[0].caption
+	assert "来自 Alice 的分享" in seen[0].caption
+	# 中转也要记录 message_id：下架时能一并清掉
+	assert records.by_author("456")[0].message_id == 903
+
+
+def test_transit_missing_returns_no_channel(monkeypatch, tmp_path) -> None:
+	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "")
+	service, _cache, _records = make_service(tmp_path, tags=("Original",))
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.status == "no_channel"
+	assert result.transit is True
+	assert seen == []
+
+
+def test_old_cache_backfills_tags_before_routing(monkeypatch, tmp_path) -> None:
+	"""老缓存没有 tags：分享时补拉一次，命中 Furry 才发正式频道。"""
+	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
+	service, _cache, _records = make_service(tmp_path, tags=None)
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.status == "shared"
+	assert result.transit is False
+	assert result.channels == ("channel",)
+	assert len(seen) == 1
+
+
+def test_tag_backfill_failure_routes_to_transit(monkeypatch, tmp_path) -> None:
+	"""补拉标签失败时按「未确认」处理：进中转频道，不误发正式频道。"""
+	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
+	service, _cache, _records = make_service(tmp_path, tags=None)
+
+	async def boom(link: str):
+		raise RuntimeError("network down")
+
+	service._fetch = boom
+	seen: list = []
+
+	result = run(service.share(request(), upload=uploader(seen=seen)))
+
+	assert result.status == "shared"
+	assert result.transit is True
+	assert result.channels == ("@transit",)
 	assert len(seen) == 1

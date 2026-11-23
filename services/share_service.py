@@ -1,9 +1,13 @@
-"""分享业务：冷却、并发去重、缓存校验、频道选择、caption、上传与记录。
+"""分享业务：冷却、并发去重、缓存校验、兽人判定、频道选择、caption、上传与记录。
 
 Telegram 相关部分留在 handlers：
   - 本模块不 import telegram；
   - 上传通过 `share(..., upload=...)` 注入；
   - handler 只负责解析 callback、渲染状态文案。
+
+分流规则：
+  - 标签命中 `Furry`（下载时写进缓存，见 `FURRY_TAG`）→ 正式频道（`channels()`，按评分决定范围）；
+  - 标签信息不足 → `TRANSIT_CHANNEL` 中转频道，等管理员人工核验。
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from config import (
 	SHARE_MODE,
 	SHARE_SCORE_THRESHOLD,
 	TEST_CHANNEL,
+	TRANSIT_CHANNEL,
 )
 from policy.author import AuthorPolicy
 from sources import fetch as sources_fetch, work_url
@@ -34,6 +39,14 @@ ShareStatus = Literal[
 	# 所有频道都发送失败
 	"failed",
 ]
+
+# 未确认兽人小说时挂在频道 caption 顶部：中转频道管理员据此判断要不要放行
+TRANSIT_NOTICE = "⚠️ 待核验：标签未命中 #Furry，先转中转频道，确认后再发正式频道"
+
+# 作品级兽人判定只认这一个规范标签：`Novel/Series/Author.__post_init__` 已经用
+# `canonicalize_tags()` 把「兽人」「ケモノ」「Bear」等写法归一（species 子类的
+# parents 闭包也会带上 Furry），所以这里直接看值即可，不再重复跑词表。
+FURRY_TAG = "Furry"
 
 
 @dataclass(frozen=True)
@@ -81,6 +94,8 @@ class ShareResult:
 	author_name: str = ""
 	# 本次分流用的评分；None 表示未评分，按低分处理
 	score: float | None = None
+	# True = 本次发的是中转频道（标签未确认兽人小说），文案要按核验提示渲染
+	transit: bool = False
 
 
 # 上传适配器：把产物发到一个频道，返回 message_id；失败抛异常
@@ -169,6 +184,11 @@ class ShareService:
 		return tuple(chat_id for chat_id in candidates if chat_id)
 
 
+	def transit_channels(self) -> tuple[str, ...]:
+		"""标签未确认兽人小说时的目标：中转频道，等管理员人工核验。"""
+		return (TRANSIT_CHANNEL,) if TRANSIT_CHANNEL else ()
+
+
 	@property
 	def support_text(self) -> str:
 		if self._support_text is None:
@@ -206,7 +226,8 @@ class ShareService:
 		share_key: str,
 		upload: ShareUploadCallback,
 	) -> ShareResult:
-		# 先查缓存：作者 id 与评分都记录在缓存里，冷却按作者查、频道按评分选
+		# 先查缓存：作者 id / 评分 / 标签都在缓存里，
+		# 冷却按作者查，频道按「是否兽人小说 + 评分」选
 		cache_key = FileCacheStore.make_key(
 			request.kind, request.item_id, request.file_type)
 		cached = self.cache.get_valid(cache_key)
@@ -215,16 +236,32 @@ class ShareService:
 				"cache_missing", channels=self.channels(request.score))
 
 		score = request.score if request.score is not None else cached.score
-		channels = self.channels(score)
 
 		# 下载时把 target_link 写进了缓存；老数据没有就按 kind + item_id 拼
 		link = str(cached.link or "") or work_url(request.kind, request.item_id)
 		author_id = str(request.author_id or cached.author_id or "")
 		author_name = str(request.author_name or cached.author_name or "")
+		tags = tuple(cached.tags or ())
 		if not author_id:
 			# 老缓存没记作者：补拉一次，权限判定与下架回溯都要靠作者 id
 			item = await self._fetch(link)
 			author_id, author_name = str(item.author_id), str(item.author_name)
+			if not tags:
+				tags = tuple(getattr(item, "tags", None) or ())
+		elif not tags:
+			# 老缓存没记标签：补拉一次做作品级判定；失败就按「未确认」走中转。
+			# 过渡用：缓存 TTL（FILE_CACHE_TTL_DAYS）到期后老条目自然消失，这段可以删。
+			try:
+				item = await self._fetch(link)
+			except Exception:
+				logger.warning(
+					"补拉标签失败，按未确认兽人小说处理 %s", link, exc_info=True)
+			else:
+				tags = tuple(getattr(item, "tags", None) or ())
+
+		# 作品级判定：命中 Furry 才发正式频道，其余转中转频道人工核验
+		transit = FURRY_TAG not in tags
+		channels = self.transit_channels() if transit else self.channels(score)
 
 		decision = self.policy.check(author_id, author_name)
 		if not decision.can_download:
@@ -234,6 +271,7 @@ class ShareService:
 				author_status=decision.status,
 				author_name=decision.author_name,
 				score=score,
+				transit=transit,
 			)
 
 		remaining = self.records.remaining(
@@ -244,12 +282,14 @@ class ShareService:
 				remaining_seconds=remaining,
 				channels=channels,
 				score=score,
+				transit=transit,
 			)
 
 		if not channels:
-			return ShareResult("no_channel", score=score)
+			return ShareResult("no_channel", score=score, transit=transit)
 
-		caption = self._build_caption(request, cached, score)
+		caption = self._build_caption(
+			request, cached, score, furry=not transit)
 		artifact = ShareArtifact(
 			kind=request.kind,
 			item_id=request.item_id,
@@ -275,7 +315,7 @@ class ShareService:
 		if not targets:
 			return ShareResult(
 				"failed", channels=channels, failed_channels=tuple(failed),
-				score=score)
+				score=score, transit=transit)
 
 		title = (cached.caption or "").splitlines()[0] if cached.caption else ""
 		work = self.records.record(
@@ -289,8 +329,9 @@ class ShareService:
 			user_name=request.user_name,
 		)
 		logger.info(
-			"分享记录 %s 消息 %s 条，累计 %s 次",
+			"分享记录 %s 消息 %s 条，累计 %s 次（%s）",
 			share_key, len(targets), work.share_count,
+			"中转频道" if transit else "正式频道",
 		)
 		return ShareResult(
 			"shared",
@@ -303,15 +344,24 @@ class ShareService:
 			failed_channels=tuple(failed),
 			artifact=artifact,
 			score=score,
+			transit=transit,
 		)
 
 
 	def _build_caption(
-		self, request: ShareRequest, cached: JsonDict, score: float
+		self,
+		request: ShareRequest,
+		cached: JsonDict,
+		score: float,
+		*,
+		furry: bool = True,
 	) -> str:
-		"""频道文案：作品信息 + 分享者 + 本次评分 + 支持作者。
+		"""频道文案：核验提示（仅中转）+ 作品信息 + 分享者 + 本次评分 + 支持作者。
 		"""
-		caption = [(cached.caption or "").strip(), ""]
+		caption: list[str] = []
+		if not furry:
+			caption.extend([TRANSIT_NOTICE, ""])
+		caption.extend([(cached.caption or "").strip(), ""])
 		if request.public and request.user_name:
 			caption.append(f"来自 {request.user_name} 的分享")
 		else:

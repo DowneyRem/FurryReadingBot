@@ -29,7 +29,13 @@ def format_channels(channels: tuple[str, ...]) -> str:
 
 
 def shared_text(result: ShareResult, *, public: bool) -> str:
-	text = f"已经{'公开' if public else '匿名'}分享至 {format_channels(result.channels)}"
+	if result.transit:
+		text = (
+			f"标签未命中兽人，已转入中转频道 {format_channels(result.channels)}"
+			" 等待核验"
+		)
+	else:
+		text = f"已经{'公开' if public else '匿名'}分享至 {format_channels(result.channels)}"
 	if result.failed_channels:
 		text += f"\n{format_channels(result.failed_channels)} 发送失败"
 	return text
@@ -87,7 +93,9 @@ async def share(
 		await reply(update, context, forbidden_text(result.author_status, result.author_name))
 		return None
 	if result.status == "no_channel":
-		await reply(update, context, "未配置分享频道")
+		await reply(
+			update, context,
+			"未配置中转频道" if result.transit else "未配置分享频道")
 		return None
 	if result.status == "failed":
 		await reply(update, context, "分享失败，请稍后重试")
