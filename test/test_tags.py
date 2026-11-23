@@ -56,8 +56,8 @@ BASE: dict = {
 
 
 def make_vocab(records: dict | None = None, **meta) -> Vocabulary:
-	"""组一份词表：meta 默认 schema=2 / casefold / split，可按关键字覆盖。"""
-	data: dict = {"meta": {"schema": 2, "match": "casefold", "parts_mode": "split"}}
+	"""组一份词表：meta 默认 schema=2 / casefold，可按关键字覆盖。"""
+	data: dict = {"meta": {"schema": 2, "match": "casefold"}}
 	data["meta"].update(meta)
 	data.update(BASE)
 	data.update(records or {})
@@ -81,15 +81,10 @@ def test_normalize_fullwidth_hash_and_case() -> None:
 
 
 # ---------- 拆分与闭包 ----------
-def test_compound_splits_to_atoms_without_parents() -> None:
+def test_compound_expands_parts_and_inherits_parents() -> None:
 	vocab = make_vocab()
 	assert vocab.resolve("GayFurry") == {"Gay", "Furry"}
-	# split 模式：拆出来的原子不再继承上级
-	assert vocab.resolve("TransfurFurry") == {"Transfur", "Furry"}
-
-
-def test_compound_inherit_mode_keeps_parents() -> None:
-	vocab = make_vocab(parts_mode="inherit")
+	# parts 内的标签继续按自身规则解析，parents 会继承
 	assert vocab.resolve("TransfurFurry") == {"Transfur", "Transformation", "Furry"}
 
 
@@ -123,14 +118,14 @@ def test_hidden_parent_is_transparent_for_child() -> None:
 	assert vocab.resolve("Child") == {"Child", "Furry"}
 
 
-def test_hidden_tag_as_part_contributes_nothing_in_split_mode() -> None:
+def test_hidden_tag_as_part_inherits_parents() -> None:
 	vocab = make_vocab(
 		{
 			"Hidden": {"group": "species", "order": 80, "parents": ["Furry"], "print": False},
 			"Combo": {"group": "plot", "order": 81, "parts": ["Hidden"]},
 		}
 	)
-	assert vocab.resolve("Combo") == set()
+	assert vocab.resolve("Combo") == {"Furry"}
 
 
 def test_resolve_never_returns_compound() -> None:
@@ -195,8 +190,8 @@ def test_recursion_does_not_poison_cache() -> None:
 	assert vocab.resolve("GayFurry") == {"Gay", "Furry"}
 
 
-def test_recursion_does_not_poison_cache_in_inherit_mode() -> None:
-	vocab = make_vocab(parts_mode="inherit")
+def test_recursion_does_not_poison_cache_for_compound_with_parents() -> None:
+	vocab = make_vocab()
 	vocab._resolve("TransfurFurry", ("Furry",))
 	assert vocab.resolve("TransfurFurry") == {"Transfur", "Transformation", "Furry"}
 
@@ -204,7 +199,7 @@ def test_recursion_does_not_poison_cache_in_inherit_mode() -> None:
 def test_invalid_record_does_not_crash_resolve() -> None:
 	"""结构非法的记录只报 ERROR，解析路径不能抛 AttributeError。"""
 	vocab = Vocabulary(
-		{"meta": {"schema": 2, "match": "casefold", "parts_mode": "split"}, "Bad": "oops"}
+		{"meta": {"schema": 2, "match": "casefold"}, "Bad": "oops"}
 	)
 	assert vocab.errors
 	assert vocab.resolve("Bad") == set()
@@ -504,11 +499,6 @@ def test_order_must_be_int() -> None:
 def test_unsupported_schema_is_error() -> None:
 	errors = errors_of(schema=1)
 	assert has_error(errors, "meta.schema")
-
-
-def test_bad_parts_mode_is_error() -> None:
-	errors = errors_of(parts_mode="merge")
-	assert has_error(errors, "parts_mode")
 
 
 def test_bad_match_is_error() -> None:

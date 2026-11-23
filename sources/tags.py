@@ -2,11 +2,11 @@
 
 设计见 docs/08-标签词表.md：
 	- 复合标签（有 parts）：只拆成基础标签，自身不输出；不能写 print；
+	- parts 内的标签按其自身规则继续解析：有 parents 就继续继承；
 	- 分类标签（有 parents）：默认输出自己 + parents 的传递闭包；
 	  print = false 时只输出父集（自身透明）；print = true 等价默认；
 	- 纯原子标签（无 parts、无 parents）：输出自己；不能写 print；
 	- parts 与 parents 互斥，且上级只能是原子标签；
-	- parts_mode = "split" 拆分后不继承上级（默认）；"inherit" 拆分后按普通标签继续解析；
 	- TOML 字段 print 在 Python 内读取为 print_self，避免遮蔽内置 print。
 
 本模块不碰网络与 Telegram：给一份 TOML 数据，得到规范标签集合。
@@ -42,7 +42,6 @@ NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 SPLIT_RE = re.compile(r"[\s/,，、|;；]+")
 # 顶层非标签的保留键
 RESERVED = {"meta"}
-PARTS_MODES = {"split", "inherit"}
 MATCH_MODES = {"casefold"}
 SUPPORTED_SCHEMA = 2
 DEFAULT_ORDER = 10**6
@@ -90,7 +89,6 @@ class Vocabulary:
 		self.tags: dict[str, Any] = {
 			str(key): value for key, value in data.items() if key not in RESERVED
 		}
-		self.parts_mode: str = str(self.meta.get("parts_mode") or "split")
 		self.errors: list[str] = []
 		self.warnings: list[str] = []
 		self.alias_index: dict[str, str] = {}
@@ -122,8 +120,6 @@ class Vocabulary:
 		match = self.meta.get("match")
 		if match is not None and match not in MATCH_MODES:
 			self._err(f"meta.match 只支持 {sorted(MATCH_MODES)}；归一规则写死在 normalize() 里")
-		if self.parts_mode not in PARTS_MODES:
-			self._err(f"meta.parts_mode 必须是 {sorted(PARTS_MODES)} 之一")
 
 		seen: dict[str, str] = {}
 		for name, rec in self.tags.items():
@@ -252,23 +248,6 @@ class Vocabulary:
 
 
 	# ---------- 解析 ----------
-	def _atoms(self, name: str, stack: tuple[str, ...]) -> set[str]:
-		"""复合标签拆到原子标签；不继承原子标签的 parents；print=false 的原子部分不输出。"""
-		if name in stack or name not in self.tags:
-			return set()  # 循环已在校验阶段报告
-		rec = self.tags[name]
-		if not isinstance(rec, dict):
-			return set()  # 记录结构非法，已在校验阶段报 ERROR
-		parts = rec.get("parts") if _is_str_list(rec.get("parts")) else []
-		if not parts:
-			print_self = rec.get("print", True)
-			return {name} if print_self is not False else set()
-		out: set[str] = set()
-		for ref in parts:
-			out |= self._atoms(ref, (*stack, name))
-		return out
-
-
 	def resolve(self, name: str) -> set[str]:
 		"""规范名 → 输出集合（只有原子标签）。
 
@@ -300,10 +279,7 @@ class Vocabulary:
 		if parts:
 			out = set()
 			for ref in parts:
-				if self.parts_mode == "inherit":
-					out |= self._resolve(ref, (*stack, name))
-				else:
-					out |= self._atoms(ref, (*stack, name))
+				out |= self._resolve(ref, (*stack, name))
 		else:
 			print_self = rec.get("print", True)
 			out = {name} if print_self is not False else set()

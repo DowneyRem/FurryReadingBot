@@ -2,20 +2,14 @@
 #
 # 表名 = 规范标签名，输出时原样使用。
 # 匹配：NFKC + casefold（不区分大小写）。
-# 复合标签（parts）：只拆成基础标签，自身不输出。
+# 复合标签（parts）：只拆成基础标签，自身不输出；parts 内的标签会继续继承 parents。
 # 原子标签（parents）：输出自己 + 上级的传递闭包。
-# parts 与 parents 互斥。
-#
-# meta.parts_mode:
-#   split   — 拆分后不继承基础标签的上级（默认）
-#   inherit — 拆分后按普通标签继续解析，会带上各自上级
+# parts 与 parents 互斥；分类标签可用 print = false 隐藏自身。
+# 简繁/多语言写法一律写在 aliases，运行时不做互转。
 
 [meta]
 schema = 2
 match = "casefold"
-# split：parts 原样输出，不继承 parts 的上级（默认，符合“只做拆分”）
-# inherit：parts 也按普通标签解析，会带上各自的上级
-parts_mode = "split"
 
 [Gay]
 group = "orientation"
