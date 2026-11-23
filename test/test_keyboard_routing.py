@@ -12,6 +12,7 @@ from __future__ import annotations
 from handlers.callbacks.router import CANCEL_ACTIONS, HANDLERS
 from keyboards import (
 	apply_author_keyboard,
+	check_furry_keyboard,
 	confirm_black_keyboard,
 	confirm_furry_keyboard,
 	down_author_keyboard,
@@ -30,7 +31,7 @@ NOVEL_URL = "https://linpx.ink/pixiv/novel/7"
 
 
 def all_keyboards() -> list:
-	"""当前真正会发出去的键盘（`check_novel_keyboard` 是 0 引用死代码，不计入）。"""
+	"""当前真正会发出去的键盘。"""
 	return [
 		apply_author_keyboard(AUTHOR_URL),
 		confirm_furry_keyboard("42"),
@@ -42,6 +43,7 @@ def all_keyboards() -> list:
 		down_series_keyboard(NOVEL_URL),
 		down_author_keyboard(AUTHOR_URL),
 		share_novel_keyboard("novel", "7"),
+		check_furry_keyboard(NOVEL_URL),
 		import_to_legado_keyboard(NOVEL_URL),
 	]
 
