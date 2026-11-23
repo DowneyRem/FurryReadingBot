@@ -382,7 +382,7 @@ def test_review_approve_reports_takedown_failures(monkeypatch) -> None:
 	assert "已删除：1 条历史分享" in closed[0]
 	assert "没有消息 ID" in closed[0]
 	assert "1 条删除失败" in closed[0]
-	assert retry_data(closed.markups[0]) == ["rbt;42"]
+	assert retry_data(closed.markups[0]) == ["rbt;42", "ignore"]
 
 
 def test_review_approve_keeps_result_when_takedown_raises(monkeypatch) -> None:
@@ -399,7 +399,7 @@ def test_review_approve_keeps_result_when_takedown_raises(monkeypatch) -> None:
 	assert takedowns == ["42"]
 	assert "🚫 已下架：作者（#a42）" in closed[0]
 	assert "删除失败" in closed[0]
-	assert retry_data(closed.markups[0]) == ["rbt;42"]
+	assert retry_data(closed.markups[0]) == ["rbt;42", "ignore"]
 	assert len(notified) == 1
 
 

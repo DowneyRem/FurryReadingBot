@@ -58,7 +58,10 @@ def review_black_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 def retry_takedown_keyboard(author_id: str | int) -> InlineKeyboardMarkup:
 	"""下架有删除失败时挂在回执上：再点一次重跑删除。"""
 	return InlineKeyboardMarkup(
-		[[InlineKeyboardButton(text="🔁 重试删除", callback_data=f"rbt;{author_id}")]]
+		[[
+			InlineKeyboardButton(text="🔁 重试删除", callback_data=f"rbt;{author_id}"),
+			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
+		]]
 	)
 
 
