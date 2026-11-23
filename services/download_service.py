@@ -108,6 +108,8 @@ class DownloadArtifact:
 	# 作者信息：写进 file_id 缓存，分享记录以作者为第一层 key
 	author_id: str = ""
 	author_name: str = ""
+	# 规范标签：写进 file_id 缓存，分享时按它判断是否兽人小说（走正式频道还是中转）
+	tags: tuple[str, ...] = ()
 	# 推荐指数：下载时按作品统计算好，写进缓存供分享分流；作者整包为 None
 	score: float | None = None
 
@@ -341,6 +343,7 @@ class DownloadService:
 				from_cache=True,
 				author_id=author_id,
 				author_name=author_name,
+				tags=tuple(cached.tags or ()),
 				score=cached.score if file_type == "txt" else None,
 			)
 
@@ -373,6 +376,7 @@ class DownloadService:
 				from_cache=True,
 				author_id=str(cached.author_id or ""),
 				author_name=str(cached.author_name or ""),
+				tags=tuple(cached.tags or ()),
 				score=score,
 			)
 
@@ -388,6 +392,7 @@ class DownloadService:
 			cleanup=True,
 			author_id=str(getattr(item, "author_id", "") or ""),
 			author_name=str(getattr(item, "author_name", "") or ""),
+			tags=tuple(getattr(item, "tags", None) or ()),
 			score=score,
 		)
 
@@ -430,6 +435,7 @@ class DownloadService:
 					author_id=artifact.author_id,
 					author_name=artifact.author_name,
 					score=artifact.score,
+					tags=artifact.tags,
 				)
 		finally:
 			if artifact.cleanup and artifact.path is not None:

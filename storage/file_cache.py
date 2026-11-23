@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,11 @@ class FileCacheStore(JsonStore):
 			link=str(info.get("link") or ""),
 			author_id=str(info.get("author_id") or ""),
 			author_name=str(info.get("author_name") or ""),
+			# 规范标签：分享时按它判断是否兽人小说（老缓存没有，读成空元组）
+			tags=tuple(
+				tag.strip() for tag in (info.get("tags") or [])
+				if isinstance(tag, str) and tag.strip()
+			),
 			score=info.get("score"),
 			uploaded_at=str(info.get("uploaded_at") or ""),
 			expires_at=str(info.get("expires_at") or ""),
@@ -85,6 +91,7 @@ class FileCacheStore(JsonStore):
 		author_id: str | int = "",
 		author_name: str = "",
 		score: float | None = None,
+		tags: Iterable[str] | None = None,
 	) -> None:
 		if not file_id:
 			return
@@ -99,6 +106,10 @@ class FileCacheStore(JsonStore):
 				link=link or "",
 				author_id=str(author_id or ""),
 				author_name=author_name or "",
+				tags=[
+					tag.strip() for tag in (tags or [])
+					if isinstance(tag, str) and tag.strip()
+				],
 				score=score,
 				uploaded_at=now.strftime("%Y-%m-%dT%H:%M:%S%z"),
 				expires_at=expires.strftime("%Y-%m-%dT%H:%M:%S%z"),

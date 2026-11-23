@@ -100,6 +100,29 @@ def test_missing_score_reads_as_none(tmp_path) -> None:
 	assert info.score is None
 
 
+def test_tags_persist(tmp_path) -> None:
+	"""规范标签跟着 file_id 一起缓存：分享时按它判断是否兽人小说。"""
+	path = tmp_path / "files_cache.json"
+	key = FileCacheStore.make_key("novel", "1", "txt")
+	FileCacheStore(path=path, default_ttl_days=1).set(
+		key, "FILE_ID", tags=("Furry", "Gay"))
+
+	info = FileCacheStore(path=path, default_ttl_days=1).get_valid(key)
+	assert info is not None
+	assert tuple(info.tags) == ("Furry", "Gay")
+
+
+def test_missing_tags_read_as_empty(tmp_path) -> None:
+	"""老缓存没有 tags 字段：读成空元组，分享时再补拉标签。"""
+	key = FileCacheStore.make_key("novel", "1", "txt")
+	store = _store(tmp_path, default_ttl_days=1)
+	store.set(key, "FILE_ID")
+
+	info = store.get_valid(key)
+	assert info is not None
+	assert tuple(info.tags) == ()
+
+
 def test_zero_ttl_means_immediately_expired(tmp_path) -> None:
 	"""default_ttl_days=0 不应被 or 兜底成默认 30 天。"""
 	store = _store(tmp_path, default_ttl_days=0)

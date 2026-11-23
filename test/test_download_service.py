@@ -432,6 +432,21 @@ def test_zip_download_has_no_score(tmp_path) -> None:
 	assert cached.score is None
 
 
+def test_download_writes_canonical_tags_to_cache(tmp_path) -> None:
+	"""下载时把规范标签写进 file_id 缓存：分享按它判断是否兽人小说。"""
+	service, cache = make_service(tmp_path, item=make_novel(tags=["兽人"]))
+
+	async def upload(artifact: DownloadArtifact) -> str:
+		return "FILE_ID"
+
+	outcome = run(service.deliver("dn", NOVEL_LINK, upload=upload))
+
+	assert outcome.artifact is not None
+	assert "Furry" in outcome.artifact.tags
+	cached = cache.get_valid("novel:18012577:txt")
+	assert "Furry" in cached.tags
+
+
 def test_auto_series_txt_gets_score(tmp_path) -> None:
 	"""自动选择最终落到 txt 时才需要评分。"""
 	service, cache = make_service(
