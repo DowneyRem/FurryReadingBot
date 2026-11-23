@@ -325,10 +325,6 @@ class DownloadService:
 			logger.info("命中缓存 %s %s", cache_key, cached.file_name)
 			author_id = str(cached.author_id or "")
 			author_name = str(cached.author_name or "")
-			if not author_id:
-				# 老缓存没记作者：拉一次元信息再判定，不能跳过权限
-				item = await self._fetch(target_link)
-				author_id, author_name = str(item.author_id), str(item.author_name)
 			self._ensure_allowed(author_id, author_name)
 			return DownloadArtifact(
 				kind=kind,

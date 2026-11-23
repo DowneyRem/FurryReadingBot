@@ -307,7 +307,9 @@ def test_prepare_series_auto_both_formats_needs_choice(tmp_path) -> None:
 
 def test_prepare_series_auto_single_format_reuses_cache(tmp_path) -> None:
 	service, cache = make_service(tmp_path, kind="series")
-	cache.set("series:16181401:zip", "ZIP_ID", file_name="s.zip")
+	cache.set(
+		"series:16181401:zip", "ZIP_ID",
+		file_name="s.zip", author_id="42", author_name="作者")
 
 	result = run(service.prepare("ds", SERIES_LINK))
 
