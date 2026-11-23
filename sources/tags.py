@@ -1,10 +1,13 @@
 """标签词表（tags.toml）：加载 / 校验 / 解析。
 
 设计见 docs/08-标签词表.md：
-	- 复合标签（有 parts）：只拆成基础标签，自身不输出；
-	- 原子标签（无 parts）：输出自己 + parents 的传递闭包；
+	- 复合标签（有 parts）：只拆成基础标签，自身不输出；不能写 print；
+	- 分类标签（有 parents）：默认输出自己 + parents 的传递闭包；
+	  print = false 时只输出父集（自身透明）；print = true 等价默认；
+	- 纯原子标签（无 parts、无 parents）：输出自己；不能写 print；
 	- parts 与 parents 互斥，且上级只能是原子标签；
-	- parts_mode = "split" 拆分后不继承上级（默认）；"inherit" 拆分后按普通标签继续解析。
+	- parts_mode = "split" 拆分后不继承上级（默认）；"inherit" 拆分后按普通标签继续解析；
+	- TOML 字段 print 在 Python 内读取为 print_self，避免遮蔽内置 print。
 
 本模块不碰网络与 Telegram：给一份 TOML 数据，得到规范标签集合。
 校验在 `Vocabulary` 构造时完成，结果读 `errors` / `warnings`：
@@ -152,6 +155,14 @@ class Vocabulary:
 			parents = rec.get("parents") if _is_str_list(rec.get("parents")) else []
 			if parts and parents:
 				self._err(f"{name}: parts 与 parents 互斥（复合标签只拆分，原子标签才加上级）")
+			if "print" in rec:
+				print_self = rec["print"]
+				if not isinstance(print_self, bool):
+					self._err(f"{name}.print: 必须是布尔值")
+				if parts:
+					self._err(f"{name}: parts 节点不能设置 print（parts 永不输出自身）")
+				elif not parents:
+					self._err(f"{name}: print 只能用于有 parents 的标签")
 			for field in ("parts", "parents"):
 				refs = rec.get(field) if _is_str_list(rec.get(field)) else []
 				for ref in refs:
@@ -242,7 +253,7 @@ class Vocabulary:
 
 	# ---------- 解析 ----------
 	def _atoms(self, name: str, stack: tuple[str, ...]) -> set[str]:
-		"""复合标签拆到原子标签；不继承原子标签的 parents。"""
+		"""复合标签拆到原子标签；不继承原子标签的 parents；print=false 的原子部分不输出。"""
 		if name in stack or name not in self.tags:
 			return set()  # 循环已在校验阶段报告
 		rec = self.tags[name]
@@ -250,7 +261,8 @@ class Vocabulary:
 			return set()  # 记录结构非法，已在校验阶段报 ERROR
 		parts = rec.get("parts") if _is_str_list(rec.get("parts")) else []
 		if not parts:
-			return {name}
+			print_self = rec.get("print", True)
+			return {name} if print_self is not False else set()
 		out: set[str] = set()
 		for ref in parts:
 			out |= self._atoms(ref, (*stack, name))
@@ -293,10 +305,11 @@ class Vocabulary:
 				else:
 					out |= self._atoms(ref, (*stack, name))
 		else:
-			out = {name}
-			parents = rec.get("parents") if _is_str_list(rec.get("parents")) else []
-			for ref in parents:
-				out |= self._resolve(ref, (*stack, name))
+			print_self = rec.get("print", True)
+			out = {name} if print_self is not False else set()
+		parents = rec.get("parents") if _is_str_list(rec.get("parents")) else []
+		for ref in parents:
+			out |= self._resolve(ref, (*stack, name))
 		if not stack:
 			self._resolved[name] = frozenset(out)
 		return out.copy()

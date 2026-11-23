@@ -99,6 +99,40 @@ def test_atomic_tag_adds_parent_closure() -> None:
 	assert vocab.resolve("Transfur") == {"Transfur", "Transformation", "Furry"}
 
 
+def test_parents_print_self_by_default() -> None:
+	vocab = make_vocab(
+		{"Hidden": {"group": "species", "order": 80, "parents": ["Furry"]}}
+	)
+	assert vocab.resolve("Hidden") == {"Hidden", "Furry"}
+
+
+def test_parents_can_hide_self_with_print_false() -> None:
+	vocab = make_vocab(
+		{"Hidden": {"group": "species", "order": 80, "parents": ["Furry"], "print": False}}
+	)
+	assert vocab.resolve("Hidden") == {"Furry"}
+
+
+def test_hidden_parent_is_transparent_for_child() -> None:
+	vocab = make_vocab(
+		{
+			"Hidden": {"group": "species", "order": 80, "parents": ["Furry"], "print": False},
+			"Child": {"group": "species", "order": 81, "parents": ["Hidden"]},
+		}
+	)
+	assert vocab.resolve("Child") == {"Child", "Furry"}
+
+
+def test_hidden_tag_as_part_contributes_nothing_in_split_mode() -> None:
+	vocab = make_vocab(
+		{
+			"Hidden": {"group": "species", "order": 80, "parents": ["Furry"], "print": False},
+			"Combo": {"group": "plot", "order": 81, "parts": ["Hidden"]},
+		}
+	)
+	assert vocab.resolve("Combo") == set()
+
+
 def test_resolve_never_returns_compound() -> None:
 	vocab = make_vocab()
 	compounds = {
@@ -398,6 +432,33 @@ def test_parts_and_parents_are_exclusive() -> None:
 		{"Both": {"group": "act", "order": 80, "parts": ["Gay"], "parents": ["Furry"]}}
 	)
 	assert has_error(errors, "互斥")
+
+
+def test_print_on_parts_is_error() -> None:
+	errors = errors_of(
+		{"Bad": {"group": "act", "order": 80, "parts": ["Gay", "Furry"], "print": True}}
+	)
+	assert has_error(errors, "parts 节点不能设置 print")
+
+
+def test_print_on_atomic_is_error() -> None:
+	errors = errors_of({"Bad": {"group": "act", "order": 80, "print": False}})
+	assert has_error(errors, "print 只能用于有 parents 的标签")
+
+
+def test_print_must_be_bool() -> None:
+	errors = errors_of(
+		{"Bad": {"group": "act", "order": 80, "parents": ["Furry"], "print": "false"}}
+	)
+	assert has_error(errors, "必须是布尔值")
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_print_on_parents_is_allowed(flag: bool) -> None:
+	errors = errors_of(
+		{"Good": {"group": "act", "order": 80, "parents": ["Furry"], "print": flag}}
+	)
+	assert not has_error(errors, "print")
 
 
 def test_undefined_reference_is_error() -> None:
