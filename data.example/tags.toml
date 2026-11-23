@@ -4,7 +4,7 @@
 # 匹配：NFKC + casefold（不区分大小写）。
 # 复合标签（parts）：只拆成基础标签，自身不输出；parts 内的标签会继续继承 parents。
 # 原子标签（parents）：输出自己 + 上级的传递闭包。
-# parts 与 parents 互斥；分类标签可用 print = false 隐藏自身。
+# parts 与 parents 互斥；print 控制任意标签自身是否输出（省略时 parts 默认 false，其余 true）。
 # 简繁/多语言写法一律写在 aliases，运行时不做互转。
 
 [meta]

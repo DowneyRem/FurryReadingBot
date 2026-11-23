@@ -1,11 +1,12 @@
 """标签词表（tags.toml）：加载 / 校验 / 解析。
 
 设计见 docs/08-标签词表.md：
-	- 复合标签（有 parts）：只拆成基础标签，自身不输出；不能写 print；
+	- 复合标签（有 parts）：拆成基础标签，自身默认不输出；print = true 时也输出自身；
 	- parts 内的标签按其自身规则继续解析：有 parents 就继续继承；
 	- 分类标签（有 parents）：默认输出自己 + parents 的传递闭包；
-	  print = false 时只输出父集（自身透明）；print = true 等价默认；
-	- 纯原子标签（无 parts、无 parents）：输出自己；不能写 print；
+	- 纯原子标签（无 parts、无 parents）：默认输出自己；
+	- print 是所有标签通用的自身输出开关：false 隐藏自身，true 强制输出自身；
+	  省略时按类型取默认值（parts 默认 false，其余默认 true）；
 	- parts 与 parents 互斥，且上级只能是原子标签；
 	- TOML 字段 print 在 Python 内读取为 print_self，避免遮蔽内置 print。
 
@@ -155,10 +156,6 @@ class Vocabulary:
 				print_self = rec["print"]
 				if not isinstance(print_self, bool):
 					self._err(f"{name}.print: 必须是布尔值")
-				if parts:
-					self._err(f"{name}: parts 节点不能设置 print（parts 永不输出自身）")
-				elif not parents:
-					self._err(f"{name}: print 只能用于有 parents 的标签")
 			for field in ("parts", "parents"):
 				refs = rec.get(field) if _is_str_list(rec.get(field)) else []
 				for ref in refs:
@@ -249,7 +246,7 @@ class Vocabulary:
 
 	# ---------- 解析 ----------
 	def resolve(self, name: str) -> set[str]:
-		"""规范名 → 输出集合（只有原子标签）。
+		"""规范名 → 输出集合（默认只有原子标签；print=true 可包含 compound 自身）。
 
 		纯函数：不排序、不落盘。未知名只返回空集合（打 debug，不写进
 		`unknown_tags`——入参已经是规范名，不命中说明调用方写了词表里没有的名字）。
@@ -275,14 +272,12 @@ class Vocabulary:
 		if not isinstance(rec, dict):
 			return set()
 		parts = rec.get("parts") if _is_str_list(rec.get("parts")) else []
-		out: set[str]
-		if parts:
-			out = set()
-			for ref in parts:
-				out |= self._resolve(ref, (*stack, name))
-		else:
-			print_self = rec.get("print", True)
-			out = {name} if print_self is not False else set()
+		print_self = rec.get("print")
+		if print_self is None:
+			print_self = not parts
+		out: set[str] = {name} if print_self is not False else set()
+		for ref in parts:
+			out |= self._resolve(ref, (*stack, name))
 		parents = rec.get("parents") if _is_str_list(rec.get("parents")) else []
 		for ref in parents:
 			out |= self._resolve(ref, (*stack, name))

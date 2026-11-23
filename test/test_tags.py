@@ -88,6 +88,25 @@ def test_compound_expands_parts_and_inherits_parents() -> None:
 	assert vocab.resolve("TransfurFurry") == {"Transfur", "Transformation", "Furry"}
 
 
+def test_parts_can_print_self_with_print_true() -> None:
+	vocab = make_vocab(
+		{
+			"GayFurry": {
+				"group": "orientation",
+				"order": 30,
+				"parts": ["Gay", "Furry"],
+				"print": True,
+			}
+		}
+	)
+	assert vocab.resolve("GayFurry") == {"GayFurry", "Gay", "Furry"}
+
+
+def test_atomic_can_hide_self_with_print_false() -> None:
+	vocab = make_vocab({"SFW": {"group": "rating", "order": 4, "print": False}})
+	assert vocab.resolve("SFW") == set()
+
+
 def test_atomic_tag_adds_parent_closure() -> None:
 	vocab = make_vocab()
 	assert vocab.resolve("CBT") == {"CBT", "R18G", "R18"}
@@ -128,7 +147,7 @@ def test_hidden_tag_as_part_inherits_parents() -> None:
 	assert vocab.resolve("Combo") == {"Furry"}
 
 
-def test_resolve_never_returns_compound() -> None:
+def test_resolve_never_returns_compound_by_default() -> None:
 	vocab = make_vocab()
 	compounds = {
 		name for name, rec in vocab.tags.items() if isinstance(rec, dict) and rec.get("parts")
@@ -429,16 +448,18 @@ def test_parts_and_parents_are_exclusive() -> None:
 	assert has_error(errors, "互斥")
 
 
-def test_print_on_parts_is_error() -> None:
+@pytest.mark.parametrize("flag", [True, False])
+def test_print_on_parts_is_allowed(flag: bool) -> None:
 	errors = errors_of(
-		{"Bad": {"group": "act", "order": 80, "parts": ["Gay", "Furry"], "print": True}}
+		{"Good": {"group": "plot", "order": 80, "parts": ["Gay", "Furry"], "print": flag}}
 	)
-	assert has_error(errors, "parts 节点不能设置 print")
+	assert not has_error(errors, "print")
 
 
-def test_print_on_atomic_is_error() -> None:
-	errors = errors_of({"Bad": {"group": "act", "order": 80, "print": False}})
-	assert has_error(errors, "print 只能用于有 parents 的标签")
+@pytest.mark.parametrize("flag", [True, False])
+def test_print_on_atomic_is_allowed(flag: bool) -> None:
+	errors = errors_of({"Good": {"group": "act", "order": 80, "print": flag}})
+	assert not has_error(errors, "print")
 
 
 def test_print_must_be_bool() -> None:
@@ -536,12 +557,20 @@ _COMMON_DEMOS: dict[str, list[str] | None] = {
 	"Ｒ１８": ["R18"],
 	"r-18": ["R18"],
 	"獸人": ["Furry"],
-	"兽化": ["Furry", "Transformation", "Transfur"],
 	"完全未知": None,
 }
+# 生产词表：Transformation print=false；示例词表没有隐藏 Transformation
 # 生产词表的 CBT 只挂在 R18G 下，且 R18G 当前不继承 R18；示例词表的 CBT 还挂了 BDSM
-PRODUCTION_DEMOS = {**_COMMON_DEMOS, "CBT": ["R18G", "CBT"]}
-EXAMPLE_DEMOS = {**_COMMON_DEMOS, "CBT": ["R18", "R18G", "BDSM", "CBT"]}
+PRODUCTION_DEMOS = {
+	**_COMMON_DEMOS,
+	"兽化": ["Furry", "Transfur"],
+	"CBT": ["R18G", "CBT"],
+}
+EXAMPLE_DEMOS = {
+	**_COMMON_DEMOS,
+	"兽化": ["Furry", "Transformation", "Transfur"],
+	"CBT": ["R18", "R18G", "BDSM", "CBT"],
+}
 
 
 @pytest.mark.parametrize(
