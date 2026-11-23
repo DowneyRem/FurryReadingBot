@@ -42,13 +42,6 @@ class FakeLists:
 		return str(author_id) in self.furry
 
 
-class FakeWork:
-	author_id = "456"
-	author_name = "作者A"
-	# 默认当成兽人小说；需要测中转时把 cache 里的 tags 换成非 Furry
-	tags: tuple[str, ...] = ("Furry", "Gay")
-
-
 def make_service(
 		tmp_path,
 		*,
@@ -75,7 +68,6 @@ def make_service(
 		support_text=support,
 		mode=mode,
 		policy=AuthorPolicy(lists or FakeLists()),
-		fetch_fn=fetch_work,
 	)
 	cache.set(
 		"novel:1:txt", "FILE_ID",
@@ -86,10 +78,6 @@ def make_service(
 		tags=tags,
 	)
 	return service, cache, records
-
-
-async def fetch_work(link: str) -> FakeWork:
-	return FakeWork()
 
 
 def request(**kwargs) -> ShareRequest:
@@ -153,21 +141,12 @@ def test_artifact_link_comes_from_cache(tmp_path) -> None:
 	assert seen[0].link == "https://linpx.ink/pixiv/novel/1"
 
 
-def test_artifact_link_falls_back_to_work_url(tmp_path) -> None:
-	"""老缓存没存 link：按 kind + item_id 拼作品链接，按钮照样能用。"""
-	service, _cache, _records = make_service(tmp_path)
-
-	result = run(service.share(request(), upload=uploader()))
-
-	assert result.artifact is not None
-	assert result.artifact.link == "https://linpx.ink/pixiv/novel/1"
-
-
-def test_series_artifact_link_uses_series_url(tmp_path) -> None:
+def test_series_artifact_link_comes_from_cache(tmp_path) -> None:
 	service, cache, _records = make_service(tmp_path)
 	cache.set(
 		FileCacheStore.make_key("series", "9", "txt"), "FILE_ID",
-		author_id="456", author_name="作者A", score=5.0)
+		author_id="456", author_name="作者A", score=5.0,
+		link="https://linpx.ink/pixiv/series/9")
 
 	result = run(service.share(
 		request(kind="series", item_id="9"), upload=uploader()))
@@ -262,17 +241,17 @@ def test_share_no_channel(tmp_path) -> None:
 	assert seen == []
 	assert records.by_author("456") == []
 
-def test_share_without_author_fetches_author(tmp_path) -> None:
-	"""老缓存没有 author_id：补拉作者再判定与记录，下架才能找到这条分享。"""
+def test_share_requires_cached_author(tmp_path) -> None:
+	"""分享只信缓存里的作者：拿不到作者就不发，不能绕过名单。"""
 	service, _cache, records = make_service(
 		tmp_path, author_id="", author_name="")
+	seen: list = []
 
-	first = run(service.share(request(), upload=uploader()))
-	second = run(service.share(request(), upload=uploader()))
+	result = run(service.share(request(), upload=uploader(seen=seen)))
 
-	assert first.status == "shared"
-	assert second.status == "cooldown"
-	assert records.by_author("456")[0].message_id == 903
+	assert result.status == "forbidden"
+	assert seen == []
+	assert records.by_author("456") == []
 
 
 def test_share_refused_after_author_blacklisted(tmp_path) -> None:
@@ -431,35 +410,6 @@ def test_partial_failure_records_delivered_channels(tmp_path) -> None:
 	assert [m.message_id for m in records.by_author("456")] == [77]
 
 
-def test_share_inflight_while_fetching_author(tmp_path) -> None:
-	"""老缓存补拉作者期间连点：第二次必须被拦下，不能发两遍。"""
-	service, _cache, _records = make_service(
-		tmp_path, author_id="", author_name="")
-	started = asyncio.Event()
-	gate = asyncio.Event()
-
-	async def slow_fetch(link):
-		started.set()
-		await gate.wait()
-		return FakeWork()
-
-	service._fetch = slow_fetch
-	seen: list = []
-
-	async def scenario():
-		task = asyncio.create_task(service.share(request(), upload=uploader(seen=seen)))
-		await started.wait()
-		second = await service.share(request(), upload=uploader(seen=seen))
-		gate.set()
-		return await task, second
-
-	first, second = run(scenario())
-
-	assert first.status == "shared"
-	assert second.status == "inflight"
-	assert len(seen) == 1
-
-
 def test_furry_tag_routes_to_official_channel(monkeypatch, tmp_path) -> None:
 	"""标签命中 Furry：按评分走正式频道，caption 不带核验提示。"""
 	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
@@ -505,15 +455,10 @@ def test_transit_missing_returns_no_channel(monkeypatch, tmp_path) -> None:
 	assert seen == []
 
 
-def test_old_cache_without_tags_goes_to_transit(monkeypatch, tmp_path) -> None:
-	"""老缓存没有 tags：不再补拉，直接按「未确认」发中转频道。"""
+def test_share_without_cached_tags_goes_to_transit(monkeypatch, tmp_path) -> None:
+	"""缓存里没有 tags：按「未确认」发中转频道。"""
 	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
 	service, _cache, _records = make_service(tmp_path, tags=None)
-
-	async def no_fetch(link: str):
-		raise AssertionError("分享不应该为了标签再请求源站")
-
-	service._fetch = no_fetch
 	seen: list = []
 
 	result = run(service.share(request(), upload=uploader(seen=seen)))

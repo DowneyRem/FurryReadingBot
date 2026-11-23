@@ -131,23 +131,6 @@ def test_share_private_attaches_legado_keyboard(monkeypatch, tmp_path) -> None:
 	assert "已经匿名分享至 channel" in replies[0]
 
 
-def test_share_without_cached_link_still_has_bookshelf(
-		monkeypatch, tmp_path) -> None:
-	"""老缓存没存 link：服务层按 kind + item_id 兜底，按钮不能空着。"""
-	uploads, _replies = patch_handler(monkeypatch, tmp_path)
-	cache = share_handler.ShareService().cache
-	cache.set(
-		"novel:1:txt", "FILE_ID",
-		file_name="a.txt", caption="标题", author_id="456", score=5.0,
-		tags=("Furry", "Gay"))
-
-	run(share_handler.share_public(
-		FakeUpdate(), object(), data="snp;novel;1;txt"))
-
-	urls = keyboard_urls(uploads[0]["reply_markup"])
-	assert any(NOVEL_LINK in url for url in urls)
-
-
 def test_share_missing_cache_does_not_upload(monkeypatch, tmp_path) -> None:
 	uploads, replies = patch_handler(monkeypatch, tmp_path)
 

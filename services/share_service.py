@@ -25,8 +25,6 @@ from config import (
 	TRANSIT_CHANNEL,
 )
 from policy.author import AuthorPolicy
-from sources import fetch as sources_fetch, work_url
-from sources.base import Author, Novel, Series
 from storage.file_cache import FileCacheStore, get_file_cache
 from storage.share_records import ShareRecordStore, get_share_records
 from utils.json import JsonDict
@@ -119,11 +117,9 @@ class ShareService:
 		mode: str | None = None,
 		score_threshold: float | None = None,
 		policy: AuthorPolicy | None = None,
-		fetch_fn: Callable[[str], Awaitable[Novel | Series | Author]] | None = None,
 	) -> None:
 		self._cache = cache
 		self._policy = policy
-		self._fetch = fetch_fn or sources_fetch
 		self._records = records
 		self._channels = channels
 		self._support_text = support_text
@@ -212,7 +208,7 @@ class ShareService:
 			return ShareResult(
 				"inflight", channels=self.channels(request.score))
 
-		# 检查与发送之间有 await（补拉作者、上传），整段都要占住，避免连点重复发送
+		# 检查与发送之间有 await（上传），整段都要占住，避免连点重复发送
 		_inflight.add(share_key)
 		try:
 			return await self._share(request, share_key, upload)
@@ -237,18 +233,11 @@ class ShareService:
 
 		score = request.score if request.score is not None else cached.score
 
-		# 下载时把 target_link 写进了缓存；老数据没有就按 kind + item_id 拼
-		link = str(cached.link or "") or work_url(request.kind, request.item_id)
+		# 缓存由下载时写入：link / 作者 / 标签 / 评分都在里面
+		link = str(cached.link or "")
 		author_id = str(request.author_id or cached.author_id or "")
 		author_name = str(request.author_name or cached.author_name or "")
 		tags = tuple(cached.tags or ())
-		if not author_id:
-			# 老缓存没记作者：补拉一次，权限判定与下架回溯都要靠作者 id；
-			# 既然已经拉到，标签也顺手用上，不额外请求。
-			item = await self._fetch(link)
-			author_id, author_name = str(item.author_id), str(item.author_name)
-			if not tags:
-				tags = tuple(getattr(item, "tags", None) or ())
 
 		# 作品级判定：命中 Furry 才发正式频道，其余转中转频道人工核验
 		transit = FURRY_TAG not in tags
