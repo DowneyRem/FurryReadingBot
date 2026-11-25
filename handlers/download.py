@@ -16,7 +16,7 @@ from services import (
 	DownloadInvalidLinkError,
 	DownloadUnsupportedLinkError,
 )
-from sources.linpx.errors import LinpxError
+from sources.errors import SourceError
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,9 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		await message.reply_text("请发送一个有效的小说、系列或作者链接。")
 		return
 	except DownloadUnsupportedLinkError:
-		await message.reply_text("暂不支持该链接，请发送 Linpx 小说、系列或作者链接。")
+		await message.reply_text("暂不支持该链接，请发送 Pixiv / Linpx 的小说、系列或作者链接。")
 		return
-	except LinpxError as e:
+	except SourceError as e:
 		await message.reply_text(str(e))
 		return
 	except Exception:

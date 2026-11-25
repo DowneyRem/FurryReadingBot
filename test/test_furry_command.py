@@ -108,6 +108,20 @@ def test_furry_author_url_sends_confirm_keyboard(monkeypatch) -> None:
 	assert markup.inline_keyboard[0][0].callback_data == f"afy;{AUTHOR_URL}"
 
 
+def test_furry_pixiv_author_url_normalizes_to_linpx(monkeypatch) -> None:
+	"""Pixiv 原站作者链接同样接受，统一归一到 Linpx 主页再走申请流程。"""
+	service = patch_service(
+		monkeypatch,
+		inspection=ApplyInspection("needs_confirm", AUTHOR_ID, "某作者", AUTHOR_URL),
+	)
+
+	replies = call(f"https://www.pixiv.net/users/{AUTHOR_ID}")
+
+	assert service.inspected == AUTHOR_URL
+	markup = replies[-1][1]["reply_markup"]
+	assert markup.inline_keyboard[0][0].callback_data == f"afy;{AUTHOR_URL}"
+
+
 def test_furry_already_furry_has_no_keyboard(monkeypatch) -> None:
 	patch_service(
 		monkeypatch,

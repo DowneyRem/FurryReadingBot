@@ -56,7 +56,7 @@ def test_black_without_args_sends_usage() -> None:
 
 	assert len(replies) == 1
 	text, kwargs = replies[0]
-	assert "发送 Linpx 主页链接即可申请下架" in text
+	assert "发送 Linpx / Pixiv 作者主页链接即可申请下架" in text
 	assert "reply_markup" not in kwargs
 
 
@@ -88,11 +88,22 @@ def test_black_author_url_with_cache_suffix() -> None:
 		assert confirm_callback_data(replies) == f"aby;{AUTHOR_URL}"
 
 
+def test_black_pixiv_author_url_normalizes_to_linpx() -> None:
+	"""Pixiv 原站作者链接同样接受：两家共用作者 ID，归一成 Linpx 主页便于核验。"""
+	replies = call(f"https://www.pixiv.net/users/{AUTHOR_ID}")
+
+	assert confirm_callback_data(replies) == f"aby;{AUTHOR_URL}"
+
+
 def test_black_rejects_non_author_arg() -> None:
-	for arg in ("https://linpx.ink/pixiv/novel/123", "hello"):
+	for arg in (
+		"https://linpx.ink/pixiv/novel/123",
+		"https://www.pixiv.net/novel/show.php?id=123",
+		"hello",
+	):
 		replies = call(arg)
 
 		assert len(replies) == 1
 		text, kwargs = replies[0]
-		assert "发送 Linpx 主页链接即可申请下架" in text
+		assert "发送 Linpx / Pixiv 作者主页链接即可申请下架" in text
 		assert "reply_markup" not in kwargs

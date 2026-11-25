@@ -26,7 +26,7 @@ from handlers.callbacks.share import (
 	share_transit_reject,
 )
 from handlers.callbacks.author import back_to_author
-from sources.linpx.errors import LinpxError
+from sources.errors import SourceError
 
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		await handler(update, context, data=data)
 	except FileNotFoundError:
 		await reply(update, context, "抱歉，未找到生成的文件")
-	except (NotImplementedError, LinpxError) as e:
+	except (NotImplementedError, SourceError) as e:
 		await reply(update, context, str(e))
 	except Exception:
 		logger.exception("callback 失败 action=%s", action)

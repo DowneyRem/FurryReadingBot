@@ -7,7 +7,7 @@ from config import FURRY_READING
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	text = [
 		f"你好,我是 {FURRY_READING} 的小说分享投稿 Bot",
-		f"向我发送 Linpx 小说链接即可分享小说",
+		f"向我发送 Pixiv / Linpx 小说、系列或作者链接即可下载",
 		f"查看命令可用 /help"
 	]
 	await update.message.reply_text("\n".join(text))
