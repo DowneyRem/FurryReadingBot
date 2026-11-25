@@ -9,18 +9,16 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import Any, Iterable
+from typing import Any
 
 from infra.http import HttpError, get_json
 from sources.pixiv.config import (
-	DEFAULT_SERIES_LIMIT,
 	ENV_COOKIE,
 	HEADERS,
 	LANG,
 	MIN_INTERVAL,
 )
 from sources.pixiv.errors import (
-	PixivAPIError,
 	PixivAuthError,
 	PixivNetworkError,
 	PixivNotFoundError,
@@ -29,8 +27,6 @@ from sources.pixiv.errors import (
 )
 from sources.pixiv.urls import (
 	url_novel_data,
-	url_novels_data,
-	url_series_content,
 	url_series_data,
 	url_series_novels_title,
 	url_user_data,
@@ -136,19 +132,6 @@ class PixivClient:
 		except ValueError as e:
 			raise PixivParseError("Pixiv 返回的数据不是合法 JSON", raw=url) from e
 		return data
-		# return self._unwrap(data)
-
-
-	@staticmethod
-	def _unwrap(data: Any) -> Any:
-		"""拆掉 `{error, message, body}` 外壳；error 为 true 时抛业务错误。"""
-		payload = JsonDict.from_obj(data)
-		if not isinstance(payload, dict):
-			raise PixivParseError("Pixiv 返回结构异常", raw=payload)
-		if payload.error:
-			message = str(payload.message or "Pixiv 接口返回错误")
-			raise PixivAPIError(message, raw=payload)
-		return payload.get("body")
 
 
 	async def get_novel(self, novel_id: str | int) -> JsonDict:
@@ -159,40 +142,12 @@ class PixivClient:
 		return JsonDict.from_obj(body)
 
 
-	async def get_novels(
-		self,
-		user_id: str | int,
-		novel_ids: Iterable[str | int],
-	) -> JsonDict:
-		"""批量小说元数据（不含正文），返回 `{novel_id: {...}}`。"""
-		ids = [str(novel_id) for novel_id in novel_ids]
-		if not ids:
-			return JsonDict()
-		body = await self._get(url_novels_data(user_id, ids))
-		return JsonDict.from_obj(body or {})
-
-
 	async def get_series(self, series_id: str | int) -> JsonDict:
 		"""系列详情（元信息，不含章节正文）。"""
 		body = await self._get(url_series_data(series_id))
 		if not body:
 			raise PixivNotFoundError(f"Pixiv 上不存在系列 {series_id}")
 		return JsonDict.from_obj(body)
-
-
-	async def get_series_content(
-		self,
-		series_id: str | int,
-		*,
-		limit: int = DEFAULT_SERIES_LIMIT,
-		last_order: int | str | None = None,
-		order_by: str = "asc",
-	) -> JsonDict:
-		"""系列章节分页；下一页的 `last_order` 取最后一项的 `series.contentOrder`。"""
-		url = url_series_content(
-			series_id, limit=limit, last_order=last_order, order_by=order_by, lang=self.lang)
-		body = await self._get(url)
-		return JsonDict.from_obj(body or {})
 
 
 	async def get_series_titles(self, series_id: str | int) -> list[JsonDict]:

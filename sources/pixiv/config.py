@@ -20,7 +20,6 @@ HEADERS = {
 
 # 全局限流：两次请求之间的最小间隔（秒）。服务端账号比本地阅读器更容易触发风控。
 MIN_INTERVAL = 0.5
-DEFAULT_SERIES_LIMIT = 30
 
 # 链接识别：只负责从文本里抓 ID，具体归一化在 source 层。
 NOVEL_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/novel/show\.php\?id=(\d+)"

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -11,7 +10,6 @@ import sources.pixiv.client as client_module
 from infra.http import HttpError
 from sources.pixiv.client import PixivClient
 from sources.pixiv.errors import (
-	PixivAPIError,
 	PixivAuthError,
 	PixivNetworkError,
 	PixivNotFoundError,
@@ -20,8 +18,6 @@ from sources.pixiv.errors import (
 )
 from sources.pixiv.urls import (
 	url_novel_data,
-	url_novels_data,
-	url_series_content,
 	url_series_data,
 	url_series_novels_title,
 	url_user_works_all,
@@ -58,31 +54,8 @@ def test_url_novel_data() -> None:
 	assert url_novel_data(123) == "https://www.pixiv.net/ajax/novel/123"
 
 
-def test_url_novels_data_encodes_ids() -> None:
-	url = url_novels_data("42", ["1", 2])
-	query = parse_qs(urlparse(url).query)
-	assert query["ids[]"] == ["1", "2"]
-	assert url.startswith("https://www.pixiv.net/ajax/user/42/novels?")
-
-
 def test_url_series_data() -> None:
 	assert url_series_data(7) == "https://www.pixiv.net/ajax/novel/series/7"
-
-
-def test_url_series_content_includes_pagination() -> None:
-	url = url_series_content("7", limit=50, last_order=30)
-	query = parse_qs(urlparse(url).query)
-	assert query == {
-		"limit": ["50"],
-		"order_by": ["asc"],
-		"lang": ["zh"],
-		"last_order": ["30"],
-	}
-
-
-def test_url_series_content_omits_last_order() -> None:
-	url = url_series_content("7")
-	assert "last_order" not in parse_qs(urlparse(url).query)
 
 
 def test_url_series_titles_and_author_all() -> None:
@@ -133,12 +106,6 @@ def test_get_novel_returns_envelope(monkeypatch) -> None:
 	assert headers["Cookie"] == "PHPSESSID=abc"
 
 
-def test_unwrap_raises_api_error() -> None:
-	payload = {"error": True, "message": "作品不存在", "body": None}
-	with pytest.raises(PixivAPIError, match="作品不存在"):
-		PixivClient._unwrap(payload)
-
-
 def test_empty_body_is_returned_as_is(monkeypatch) -> None:
 	"""body 为空不在这里报错：解析层才知道这是「作品不存在」。"""
 	monkeypatch.setattr(
@@ -172,13 +139,6 @@ def test_invalid_json_is_parse_error(monkeypatch) -> None:
 		run(_client().get_novel("1"))
 
 
-def test_get_novels_empty_ids_skips_request(monkeypatch) -> None:
-	async def fail(*args, **kwargs):
-		raise AssertionError("空 ID 列表不应发请求")
-	monkeypatch.setattr(client_module, "get_json", fail)
-	assert run(_client().get_novels(42, [])) == {}
-
-
 def test_get_series_titles(monkeypatch) -> None:
 	calls: list = []
 	payload = {
@@ -192,19 +152,6 @@ def test_get_series_titles(monkeypatch) -> None:
 	assert [title.id for title in titles] == ["1", "2"]
 	assert [title.title for title in titles] == ["A", "B"]
 	assert calls[0][0].endswith("/ajax/novel/series/7/content_titles")
-
-
-def test_get_series_content_builds_url(monkeypatch) -> None:
-	calls: list = []
-	payload = {"error": False, "body": {"page": {"seriesContents": []}}}
-	monkeypatch.setattr(client_module, "get_json", _fake(payload, calls))
-
-	data = run(_client().get_series_content(7, limit=50, last_order=30))
-
-	assert data.body.page.seriesContents == []
-	query = parse_qs(urlparse(calls[0][0]).query)
-	assert query["limit"] == ["50"]
-	assert query["last_order"] == ["30"]
 
 
 def test_get_author_all(monkeypatch) -> None:

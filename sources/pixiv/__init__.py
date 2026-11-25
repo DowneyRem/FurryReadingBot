@@ -61,7 +61,6 @@ class PixivSource(NovelSource):
 			series.like_count = novel.like_count
 			series.read_count = novel.read_count
 			series.comment_count = novel.comment_count
-
 		return series
 
 

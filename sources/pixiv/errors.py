@@ -29,7 +29,3 @@ class PixivNetworkError(PixivError):
 
 class PixivParseError(PixivError):
 	"""响应不是合法 JSON，或结构与预期不符。"""
-
-
-class PixivAPIError(PixivError):
-	"""Pixiv 返回 error: true 时的业务错误。"""
