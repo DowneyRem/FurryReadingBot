@@ -25,4 +25,4 @@ DEFAULT_SERIES_LIMIT = 30
 # 链接识别：只负责从文本里抓 ID，具体归一化在 source 层。
 NOVEL_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/novel/show\.php\?id=(\d+)"
 SERIES_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/novel/series/(\d+)"
-AUTHOR_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/user/(\d+)"
+AUTHOR_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/users?/(\d+)"
