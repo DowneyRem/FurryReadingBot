@@ -1,0 +1,220 @@
+"""Pixiv Web API 异步客户端：URL、Cookie/Header、body 解包与错误映射。"""
+
+from __future__ import annotations
+
+import asyncio
+from urllib.parse import parse_qs, urlparse
+
+import pytest
+
+import sources.pixiv.client as client_module
+from infra.http import HttpError
+from sources.pixiv.client import PixivClient
+from sources.pixiv.errors import (
+	PixivAPIError,
+	PixivAuthError,
+	PixivNetworkError,
+	PixivNotFoundError,
+	PixivParseError,
+	PixivRateLimitError,
+)
+from sources.pixiv.urls import (
+	url_novel_data,
+	url_novels_data,
+	url_series_content,
+	url_series_data,
+	url_series_novels_title,
+	url_user_works_all,
+)
+
+
+def run(coro):
+	return asyncio.run(coro)
+
+
+def _client(**kwargs) -> PixivClient:
+	return PixivClient(
+		cookie=kwargs.pop("cookie", ""),
+		min_interval=kwargs.pop("min_interval", 0),
+		**kwargs,
+	)
+
+
+def _fake(payload, calls: list | None = None):
+	async def fake(url, headers=None):
+		if calls is not None:
+			calls.append((url, dict(headers or {})))
+		return payload
+	return fake
+
+
+def _failing(status):
+	async def fake(url, headers=None):
+		raise HttpError(url, status)
+	return fake
+
+
+def test_url_novel_data() -> None:
+	assert url_novel_data(123) == "https://www.pixiv.net/ajax/novel/123"
+
+
+def test_url_novels_data_encodes_ids() -> None:
+	url = url_novels_data("42", ["1", 2])
+	query = parse_qs(urlparse(url).query)
+	assert query["ids[]"] == ["1", "2"]
+	assert url.startswith("https://www.pixiv.net/ajax/user/42/novels?")
+
+
+def test_url_series_data() -> None:
+	assert url_series_data(7) == "https://www.pixiv.net/ajax/novel/series/7"
+
+
+def test_url_series_content_includes_pagination() -> None:
+	url = url_series_content("7", limit=50, last_order=30)
+	query = parse_qs(urlparse(url).query)
+	assert query == {
+		"limit": ["50"],
+		"order_by": ["asc"],
+		"lang": ["zh"],
+		"last_order": ["30"],
+	}
+
+
+def test_url_series_content_omits_last_order() -> None:
+	url = url_series_content("7")
+	assert "last_order" not in parse_qs(urlparse(url).query)
+
+
+def test_url_series_titles_and_author_all() -> None:
+	assert url_series_novels_title(7).endswith("/ajax/novel/series/7/content_titles")
+	assert url_user_works_all(42).endswith("/ajax/user/42/profile/all")
+
+
+def test_headers_add_php_session_id() -> None:
+	headers = _client(cookie="12345_abc").headers()
+	assert headers["Cookie"] == "PHPSESSID=12345_abc"
+	assert headers["Referer"] == "https://www.pixiv.net/"
+	assert "Mozilla" in headers["User-Agent"]
+
+
+def test_headers_keep_full_cookie_string() -> None:
+	headers = _client(cookie="PHPSESSID=abc; device_token=xyz").headers()
+	assert headers["Cookie"] == "PHPSESSID=abc; device_token=xyz"
+
+
+def test_set_cookie_normalizes_and_clears() -> None:
+	client = _client()
+	client.set_cookie("new_token")
+	assert client.cookie == "PHPSESSID=new_token"
+	client.set_cookie("")
+	assert client.has_cookie is False
+	assert "Cookie" not in client.headers()
+
+
+def test_cookie_from_env(monkeypatch) -> None:
+	monkeypatch.setenv("PIXIV_COOKIE", "999_env")
+	client = PixivClient(min_interval=0)
+	assert client.cookie == "PHPSESSID=999_env"
+
+
+def test_get_novel_unwraps_body(monkeypatch) -> None:
+	calls: list = []
+	payload = {"error": False, "message": "", "body": {"id": "1", "content": "正文"}}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload, calls))
+
+	novel = run(_client(cookie="abc").get_novel("1"))
+
+	assert novel.id == "1"
+	assert novel.content == "正文"
+	url, headers = calls[0]
+	assert url == "https://www.pixiv.net/ajax/novel/1"
+	assert headers["Cookie"] == "PHPSESSID=abc"
+
+
+def test_error_true_raises_api_error(monkeypatch) -> None:
+	payload = {"error": True, "message": "作品不存在", "body": None}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload))
+	with pytest.raises(PixivAPIError, match="作品不存在"):
+		run(_client().get_novel("1"))
+
+
+def test_empty_body_raises_not_found(monkeypatch) -> None:
+	monkeypatch.setattr(
+		client_module, "get_json", _fake({"error": False, "body": None}))
+	with pytest.raises(PixivNotFoundError):
+		run(_client().get_novel("1"))
+
+
+@pytest.mark.parametrize(
+	("status", "error"),
+	[
+		(404, PixivNotFoundError),
+		(401, PixivAuthError),
+		(403, PixivAuthError),
+		(429, PixivRateLimitError),
+		(500, PixivNetworkError),
+		(None, PixivNetworkError),
+	],
+)
+def test_http_errors_are_mapped(monkeypatch, status, error) -> None:
+	monkeypatch.setattr(client_module, "get_json", _failing(status))
+	with pytest.raises(error):
+		run(_client().get_novel("1"))
+
+
+def test_invalid_json_is_parse_error(monkeypatch) -> None:
+	async def fake(url, headers=None):
+		raise ValueError("not json")
+	monkeypatch.setattr(client_module, "get_json", fake)
+	with pytest.raises(PixivParseError):
+		run(_client().get_novel("1"))
+
+
+def test_get_novels_empty_ids_skips_request(monkeypatch) -> None:
+	async def fail(*args, **kwargs):
+		raise AssertionError("空 ID 列表不应发请求")
+	monkeypatch.setattr(client_module, "get_json", fail)
+	assert run(_client().get_novels(42, [])) == {}
+
+
+def test_get_series_titles(monkeypatch) -> None:
+	calls: list = []
+	payload = {
+		"error": False,
+		"body": [{"id": "1", "title": "A"}, {"id": "2", "title": "B"}],
+	}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload, calls))
+
+	titles = run(_client().get_series_titles(7))
+
+	assert [title.id for title in titles] == ["1", "2"]
+	assert [title.title for title in titles] == ["A", "B"]
+	assert calls[0][0].endswith("/ajax/novel/series/7/content_titles")
+
+
+def test_get_series_content_builds_url(monkeypatch) -> None:
+	calls: list = []
+	payload = {"error": False, "body": {"page": {"seriesContents": []}}}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload, calls))
+
+	data = run(_client().get_series_content(7, limit=50, last_order=30))
+
+	assert data.page.seriesContents == []
+	query = parse_qs(urlparse(calls[0][0]).query)
+	assert query["limit"] == ["50"]
+	assert query["last_order"] == ["30"]
+
+
+def test_get_author_all(monkeypatch) -> None:
+	calls: list = []
+	payload = {
+		"error": False,
+		"body": {"novels": {"1": None}, "novelSeries": []},
+	}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload, calls))
+
+	data = run(_client().get_author_all(42))
+
+	assert list(data.novels) == ["1"]
+	assert calls[0][0].endswith("/ajax/user/42/profile/all")
+
