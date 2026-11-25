@@ -1,3 +1,5 @@
+from sources.utils import IdRule
+
 BASE = "https://www.pixiv.net"
 API_BASE = f"{BASE}/ajax"
 REFERER = f"{BASE}/"
@@ -25,3 +27,8 @@ MIN_INTERVAL = 0.5
 NOVEL_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/novel/show\.php\?id=(\d+)"
 SERIES_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/novel/series/(\d+)"
 AUTHOR_PATTERN = r"(?:https?://)?(?:www\.)?pixiv\.net/users?/(\d+)"
+
+# 提取规则：pattern 负责抓 ID，label 用于解析失败的提示文案。
+NOVEL = IdRule(NOVEL_PATTERN, "小说")
+SERIES = IdRule(SERIES_PATTERN, "系列")
+AUTHOR = IdRule(AUTHOR_PATTERN, "作者")
