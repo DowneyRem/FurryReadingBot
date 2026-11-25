@@ -90,6 +90,16 @@ def test_cookie_from_env(monkeypatch) -> None:
 	assert client.cookie == "PHPSESSID=999_env"
 
 
+def test_cookie_is_read_lazily_from_env(monkeypatch) -> None:
+	"""构造时不读环境变量：`sources` 先于 `.env` 加载也能拿到 Cookie。"""
+	monkeypatch.delenv("PIXIV_COOKIE", raising=False)
+	client = PixivClient(min_interval=0)
+	assert client.has_cookie is False
+
+	monkeypatch.setenv("PIXIV_COOKIE", "late_token")
+	assert client.cookie == "PHPSESSID=late_token"
+
+
 def test_get_novel_returns_envelope(monkeypatch) -> None:
 	"""client 只负责传输：`{error, message, body}` 外壳原样返回，解包交给解析层。"""
 	calls: list = []
@@ -162,8 +172,49 @@ def test_get_author_all(monkeypatch) -> None:
 	}
 	monkeypatch.setattr(client_module, "get_json", _fake(payload, calls))
 
-	data = run(_client().get_author_all(42))
+	data = run(_client().get_author_works(42))
 
 	assert list(data.body.novels) == ["1"]
 	assert calls[0][0].endswith("/ajax/user/42/profile/all")
+
+
+def test_error_envelope_raises_not_found(monkeypatch) -> None:
+	"""200 但 `error: true`：按「不存在」处理（以前这里会对 dict 取 .error 报 AttributeError）。"""
+	monkeypatch.setattr(
+		client_module, "get_json",
+		_fake({"error": True, "message": "作品不存在", "body": None}))
+
+	with pytest.raises(PixivNotFoundError):
+		run(_client().get_novel("1"))
+
+
+def test_r18_novel_without_cookie_raises_auth(monkeypatch) -> None:
+	"""未登录时 R18 正文是空串（接口不报错）：必须拦成登录错误，不能产出空 txt。"""
+	payload = {"error": False, "body": {"id": "1", "xRestrict": 1, "content": ""}}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload))
+
+	with pytest.raises(PixivAuthError):
+		run(_client().get_novel("1"))
+
+
+def test_r18_novel_with_cookie_passes(monkeypatch) -> None:
+	payload = {"error": False, "body": {"id": "1", "xRestrict": 1, "content": "正文"}}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload))
+
+	data = run(_client(cookie="abc").get_novel("1"))
+
+	assert data.body.content == "正文"
+
+
+def test_r18_series_without_cookie_raises_auth(monkeypatch) -> None:
+	"""未登录时 R18 系列的章节会打码 / 标成不可用，提前报登录错误。"""
+	payload = {"error": False, "body": {"id": "9", "xRestrict": 2}}
+	monkeypatch.setattr(client_module, "get_json", _fake(payload))
+
+	with pytest.raises(PixivAuthError):
+		run(_client().get_series("9"))
+
+	# 配了 Cookie 就按正常系列返回
+	series = run(_client(cookie="abc").get_series("9"))
+	assert series.body.id == "9"
 

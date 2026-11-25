@@ -29,7 +29,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	
 	novel_id = data.id
 	novel_url = url_novel(novel_id)
-	novel_title = data.title
+	novel_title = data.title or ""
 	
 	series_nav = data.seriesNavData
 	series_id = (series_nav.seriesId if series_nav else None) or None
@@ -38,10 +38,10 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	
 	author_id = data.userId
 	author_url = url_author(author_id)
-	author_name = data.userName
+	author_name = data.userName or ""
 	
 	caption = format_caption(data.description)
-	content = data.content
+	content = data.content or ""
 	tags = _tag_names(data.tags)
 	
 	like_count = int(data.bookmarkCount or 0)
@@ -50,8 +50,6 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	
 	images = data.coverUrl
 	create_date = data.createDate
-	update_date = data.updateDate
-	lang = data.language
 	
 	return Novel(
 		novel_id = novel_id,
@@ -96,11 +94,11 @@ def json_to_series(data: dict | JsonDict) -> Series:
 
 	series_id = data.id
 	series_url = url_series(series_id)
-	series_title = data.title
+	series_title = data.title or ""
 	
 	author_id = data.userId
 	author_url = url_author(author_id)
-	author_name = data.userName
+	author_name = data.userName or ""
 	
 	caption = format_caption(data.caption)
 	tags = _tag_names(data.tags)

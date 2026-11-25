@@ -37,7 +37,8 @@ class PixivSource(NovelSource):
 
 	async def fetch_series(self, link: str) -> Series:
 		series_id = self.require_id(link, SERIES)
-		series = json_to_series(await self.client.get_series(series_id))
+		data = await self.client.get_series(series_id)
+		series = json_to_series(data)
 
 		# 系列详情不带章节列表：content_titles 一次拿全 ID + 标题，比逐页拉正文省请求
 		titles = await self.client.get_series_titles(series_id)
@@ -59,6 +60,6 @@ class PixivSource(NovelSource):
 		author_id = self.require_id(link, AUTHOR)
 		# 资料（名字 / 头像 / 简介）和全部作品 ID 是两个接口，合并交给解析层
 		profile = await self.client.get_author(author_id)
-		works = await self.client.get_author_all(author_id)
+		works = await self.client.get_author_works(author_id)
 		return json_to_author(profile, works)
 	

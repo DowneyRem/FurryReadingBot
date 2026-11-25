@@ -2,14 +2,20 @@
 
 运行（在项目根目录）:
 	.venv\\Scripts\\python.exe -m pytest test/test_pixiv.py -q
+
+需要真实网络时先设环境变量（live 用例只取公开作品，不依赖 PIXIV_COOKIE）:
+	$env:PIXIV_LIVE = "1"
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 
 import pytest
 
+from sources import fetch, resolve_source
+from sources.linpx import LinpxSource
 from sources.pixiv import PixivSource
 from sources.pixiv.errors import PixivNotFoundError, PixivParseError
 from sources.pixiv.parse import json_to_author, json_to_novel, json_to_series
@@ -23,6 +29,9 @@ AUTHOR_ID = "13572468"
 NOVEL_LINK = f"https://www.pixiv.net/novel/show.php?id={NOVEL_ID}"
 SERIES_LINK = f"https://www.pixiv.net/novel/series/{SERIES_ID}"
 AUTHOR_LINK = f"https://www.pixiv.net/users/{AUTHOR_ID}"
+
+LIVE = os.getenv("PIXIV_LIVE") == "1"
+live = pytest.mark.skipif(not LIVE, reason="需要真实 Pixiv API：PIXIV_LIVE=1")
 
 
 def run(coro):
@@ -122,7 +131,7 @@ class FakeClient:
 		self.calls.append(("author", str(author_id)))
 		return JsonDict.from_obj(self.profile)
 
-	async def get_author_all(self, author_id):
+	async def get_author_works(self, author_id):
 		self.calls.append(("works", str(author_id)))
 		return JsonDict.from_obj(self.works)
 
@@ -139,6 +148,15 @@ def test_can_handle() -> None:
 	assert src.can_handle(AUTHOR_LINK) is True
 	assert src.can_handle(NOVEL_ID) is False  # 纯数字 ID 不是链接，先归一化再进来
 	assert src.can_handle("不是链接") is False
+
+
+def test_registered_in_sources() -> None:
+	"""接入 bot：`resolve_source` 用注册表里的实例认出 Pixiv 三类链接。"""
+	for link in (NOVEL_LINK, SERIES_LINK, AUTHOR_LINK):
+		assert isinstance(resolve_source(link), PixivSource)
+	# 顺序不影响：Linpx 链接仍然归 Linpx
+	linpx = f"https://linpx.ink/pixiv/novel/{NOVEL_ID}"
+	assert isinstance(resolve_source(linpx), LinpxSource)
 
 
 def test_fetch_novel_accepts_link_and_id() -> None:
@@ -200,11 +218,30 @@ def test_fetch_author_merges_profile_and_works() -> None:
 	assert client.calls == [("author", AUTHOR_ID), ("works", AUTHOR_ID)]
 
 
+def test_json_to_novel_fills_series_from_series_nav() -> None:
+	"""单篇属于系列时，seriesNavData 提供 ID / 标题，下载菜单才能给出「下载系列」。"""
+	novel = json_to_novel(_envelope(_novel_body(seriesNavData={
+		"seriesType": "novel", "seriesId": int(SERIES_ID), "title": "系列名"})))
+
+	assert str(novel.series_id) == SERIES_ID
+	assert novel.series_url == f"https://www.pixiv.net/novel/series/{SERIES_ID}"
+	assert novel.series_title == "系列名"
+
+
 def test_json_to_novel_missing_body() -> None:
 	with pytest.raises(PixivNotFoundError):
 		json_to_novel(_envelope(None))
 	with pytest.raises(PixivNotFoundError):
 		json_to_novel({"error": True, "message": "作品不存在", "body": None})
+
+
+def test_json_to_novel_tolerates_missing_text_fields() -> None:
+	"""缺标题 / 作者名 / 正文时补空串：别把 None 带进文件名、文案和缓存。"""
+	novel = json_to_novel(_envelope(_novel_body(
+		title=None, userName=None, content=None)))
+	assert novel.title == ""
+	assert novel.author_name == ""
+	assert novel.content == ""
 
 
 def test_json_to_series_allows_empty_series() -> None:
@@ -226,6 +263,26 @@ def test_json_to_author_without_works() -> None:
 def test_json_to_author_missing_profile() -> None:
 	with pytest.raises(PixivNotFoundError):
 		json_to_author(_envelope(None))
+
+
+@live
+def test_live_fetch_public_novel() -> None:
+	"""公开作品：走注册表 → Pixiv client → 解析，正文不应为空。"""
+	novel = run(fetch("https://www.pixiv.net/novel/show.php?id=29588542"))
+	assert novel.id == "29588542"
+	assert novel.title
+	assert novel.content
+	assert novel.author_id
+	assert novel.source == "Pixiv"
+
+
+@live
+def test_live_fetch_public_series() -> None:
+	series = run(fetch("https://www.pixiv.net/novel/series/16181401"))
+	assert series.id == "16181401"
+	assert series.novel_ids
+	assert series.total == len(series.novel_ids)
+	assert series.title
 
 
 if __name__ == "__main__":

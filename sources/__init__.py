@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from sources.base import Author, Novel, NovelSource, Series
 from sources.linpx import LinpxSource
+from sources.pixiv import PixivSource
 
 
+# 注册顺序 = 匹配优先级；两家的链接域名不重叠，顺序只影响将来兼容别名的场景。
+# Pixiv 原站链接（pixiv.net）与 Linpx 代理链接（linpx.ink / furrynovel.ink）指向同一批作品，
+# ID 也是同一套，所以缓存 / 名单 / 分享记录天然互通。
 _SOURCES: list[NovelSource] = [
 	LinpxSource(),
+	PixivSource(),
 ]
 
 
