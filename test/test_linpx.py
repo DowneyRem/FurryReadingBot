@@ -19,8 +19,8 @@ from sources.linpx import LinpxSource
 from infra.http import HttpError
 from sources.linpx import client
 from sources.linpx.client import get_novel
-from sources.linpx.config import NOVEL_PATTERN
-from sources.linpx.errors import LinpxNetworkError, LinpxNotFoundError
+from sources.linpx.config import NOVEL, NOVEL_PATTERN
+from sources.linpx.errors import LinpxNetworkError, LinpxNotFoundError, LinpxParseError
 from sources.linpx.parse import json_to_novel
 from sources.utils import get_id
 
@@ -111,6 +111,25 @@ def test_missing_work_reports_not_found(monkeypatch) -> None:
 	monkeypatch.setattr(client, "get_json", _failing_get_json(404))
 	with pytest.raises(LinpxNotFoundError):
 		run(LinpxSource().fetch_novel(SAMPLE_LINPX))
+
+
+def test_require_id_rejects_text_without_id() -> None:
+	with pytest.raises(LinpxParseError):
+		LinpxSource().require_id("不是链接", NOVEL)
+
+
+def test_fetch_novel_accepts_raw_id(monkeypatch) -> None:
+	"""纯数字 ID 与链接共用 get_id：跳过链接解析，直接发给 client。"""
+	called: list[str] = []
+
+	async def fake_get_novel(novel_id):
+		called.append(str(novel_id))
+		raise LinpxNetworkError("拿到 ID 后中止，避免真构造 Novel")
+
+	monkeypatch.setattr(client, "get_novel", fake_get_novel)
+	with pytest.raises(LinpxNetworkError):
+		run(LinpxSource().fetch_novel(SAMPLE_ID))
+	assert called == [SAMPLE_ID]
 
 
 @pytest.mark.parametrize("status", [None, 500])
