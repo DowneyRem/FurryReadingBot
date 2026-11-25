@@ -13,7 +13,9 @@ from utils.links import get_id
 
 
 AUTHOR_ID = "10809330"
-AUTHOR_URL = f"https://linpx.ink/pixiv/user/{AUTHOR_ID}"
+LINPX_URL = f"https://linpx.ink/pixiv/user/{AUTHOR_ID}"
+# handlers/author.py 统一把作者链接归一化成 Pixiv 原站主页
+AUTHOR_URL = f"https://www.pixiv.net/users/{AUTHOR_ID}"
 
 
 def run(coro):
@@ -56,7 +58,7 @@ def test_black_without_args_sends_usage() -> None:
 
 	assert len(replies) == 1
 	text, kwargs = replies[0]
-	assert "发送 Linpx / Pixiv 作者主页链接即可申请下架" in text
+	assert "发送 Pixiv 或 Linpx 作者主页链接即可申请下架" in text
 	assert "reply_markup" not in kwargs
 
 
@@ -75,22 +77,22 @@ def test_black_author_id_sends_confirm_keyboard() -> None:
 
 
 def test_black_author_url_sends_confirm_keyboard() -> None:
-	replies = call(AUTHOR_URL)
+	replies = call(LINPX_URL)
 
 	assert confirm_callback_data(replies) == f"aby;{AUTHOR_URL}"
 
 
 def test_black_author_url_with_cache_suffix() -> None:
 	"""非标准写法（/cache、www.）归一化成标准作者链接，控件数据不会超长。"""
-	for link in (f"{AUTHOR_URL}/cache", f"https://www.linpx.ink/pixiv/user/{AUTHOR_ID}"):
+	for link in (f"{LINPX_URL}/cache", f"https://www.linpx.ink/pixiv/user/{AUTHOR_ID}"):
 		replies = call(link)
 
 		assert confirm_callback_data(replies) == f"aby;{AUTHOR_URL}"
 
 
-def test_black_pixiv_author_url_normalizes_to_linpx() -> None:
-	"""Pixiv 原站作者链接同样接受：两家共用作者 ID，归一成 Linpx 主页便于核验。"""
-	replies = call(f"https://www.pixiv.net/users/{AUTHOR_ID}")
+def test_black_pixiv_author_url_normalizes_to_pixiv() -> None:
+	"""Pixiv 原站作者链接同样接受：两家共用作者 ID，统一归一成 Pixiv 主页便于核验。"""
+	replies = call(AUTHOR_URL)
 
 	assert confirm_callback_data(replies) == f"aby;{AUTHOR_URL}"
 
@@ -105,5 +107,5 @@ def test_black_rejects_non_author_arg() -> None:
 
 		assert len(replies) == 1
 		text, kwargs = replies[0]
-		assert "发送 Linpx / Pixiv 作者主页链接即可申请下架" in text
+		assert "发送 Pixiv 或 Linpx 作者主页链接即可申请下架" in text
 		assert "reply_markup" not in kwargs

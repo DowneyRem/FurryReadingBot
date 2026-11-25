@@ -18,7 +18,9 @@ from services.apply_service import ApplyInspection
 
 
 AUTHOR_ID = "10809330"
-AUTHOR_URL = f"https://linpx.ink/pixiv/user/{AUTHOR_ID}"
+LINPX_URL = f"https://linpx.ink/pixiv/user/{AUTHOR_ID}"
+# handlers/author.py 统一把作者链接归一化成 Pixiv 原站主页
+AUTHOR_URL = f"https://www.pixiv.net/users/{AUTHOR_ID}"
 
 
 def run(coro):
@@ -101,21 +103,21 @@ def test_furry_author_url_sends_confirm_keyboard(monkeypatch) -> None:
 		inspection=ApplyInspection("needs_confirm", AUTHOR_ID, "某作者", AUTHOR_URL),
 	)
 
-	replies = call(f"{AUTHOR_URL}/cache")
+	replies = call(f"{LINPX_URL}/cache")
 
 	assert service.inspected == AUTHOR_URL
 	markup = replies[-1][1]["reply_markup"]
 	assert markup.inline_keyboard[0][0].callback_data == f"afy;{AUTHOR_URL}"
 
 
-def test_furry_pixiv_author_url_normalizes_to_linpx(monkeypatch) -> None:
-	"""Pixiv 原站作者链接同样接受，统一归一到 Linpx 主页再走申请流程。"""
+def test_furry_pixiv_author_url_normalizes_to_pixiv(monkeypatch) -> None:
+	"""Pixiv 原站作者链接同样接受，统一归一成 Pixiv 主页再走申请流程。"""
 	service = patch_service(
 		monkeypatch,
 		inspection=ApplyInspection("needs_confirm", AUTHOR_ID, "某作者", AUTHOR_URL),
 	)
 
-	replies = call(f"https://www.pixiv.net/users/{AUTHOR_ID}")
+	replies = call(AUTHOR_URL)
 
 	assert service.inspected == AUTHOR_URL
 	markup = replies[-1][1]["reply_markup"]

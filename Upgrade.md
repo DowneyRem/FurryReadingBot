@@ -99,7 +99,7 @@
 | `/review` 重推待审申请 | ✅ | 仅中转频道管理员 |
 | `/sync` 推荐作者 + 运营数据同步 | ✅ | 仅中转频道管理员 |
 | systemd 服务 + 定时同步 | ✅ | `deploy/` + `script/` |
-| 单元测试 | ✅ | 394 项：391 passed / 3 skipped |
+| 单元测试 | ✅ | 443 项：438 passed / 5 skipped |
 | 部署前 CI 自动跑测试 | ❌ | `deploy.yml` 只部署，不跑 pytest |
 | Dockerfile | ❌ | |
 | 健康检查 / 指标 / 告警 | ❌ | |
