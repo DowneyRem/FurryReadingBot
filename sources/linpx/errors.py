@@ -1,13 +1,11 @@
 # sources/linpx/errors.py
 from __future__ import annotations
 
+from sources.errors import SourceError
 
-class LinpxError(Exception):
+
+class LinpxError(SourceError):
 	"""Linpx 源相关错误的基类。上层可统一 catch。"""
-
-	def __init__(self, message: str = "", *, raw: object | None = None):
-		self.raw = raw  # 可选：保留接口原始返回，便于调试
-		super().__init__(message or self.__class__.__doc__ or "Linpx 错误")
 
 
 class LinpxNotFoundError(LinpxError):

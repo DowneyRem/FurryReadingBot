@@ -1,14 +1,12 @@
-"""Pixiv 源错误：上层统一 catch PixivError。"""
+"""Pixiv 源错误：上层统一 catch PixivError（或更宽的 SourceError）。"""
 
 from __future__ import annotations
 
+from sources.errors import SourceError
 
-class PixivError(Exception):
+
+class PixivError(SourceError):
 	"""Pixiv 源相关错误的基类。"""
-
-	def __init__(self, message: str = "", *, raw: object | None = None):
-		self.raw = raw
-		super().__init__(message or self.__class__.__doc__ or "Pixiv 错误")
 
 
 class PixivNotFoundError(PixivError):
