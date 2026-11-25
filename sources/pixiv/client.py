@@ -135,7 +135,8 @@ class PixivClient:
 			raise PixivNetworkError("Pixiv 暂时无法访问，请稍后重试", raw=url) from e
 		except ValueError as e:
 			raise PixivParseError("Pixiv 返回的数据不是合法 JSON", raw=url) from e
-		return self._unwrap(data)
+		return data
+		# return self._unwrap(data)
 
 
 	@staticmethod
@@ -196,10 +197,15 @@ class PixivClient:
 
 	async def get_series_titles(self, series_id: str | int) -> list[JsonDict]:
 		"""系列全部章节 ID + 标题，一次拿完，比逐页拉 content 更省。"""
-		body = await self._get(url_series_novels_title(series_id))
-		if not isinstance(body, list):
+		payload = await self._get(url_series_novels_title(series_id))
+		payload = JsonDict.from_obj(payload)
+		# 外壳异常或 error: true 时按「没有章节」处理，交给上层决定要不要报错
+		if not isinstance(payload, dict) or payload.error:
 			return []
-		return [JsonDict.from_obj(item) for item in body if isinstance(item, dict)]
+		items = payload.get("body") or []
+		if not isinstance(items, list):
+			return []
+		return [JsonDict.from_obj(item) for item in items if isinstance(item, dict)]
 
 
 	async def get_author(self, user_id: str | int) -> JsonDict:

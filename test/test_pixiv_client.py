@@ -117,32 +117,34 @@ def test_cookie_from_env(monkeypatch) -> None:
 	assert client.cookie == "PHPSESSID=999_env"
 
 
-def test_get_novel_unwraps_body(monkeypatch) -> None:
+def test_get_novel_returns_envelope(monkeypatch) -> None:
+	"""client 只负责传输：`{error, message, body}` 外壳原样返回，解包交给解析层。"""
 	calls: list = []
 	payload = {"error": False, "message": "", "body": {"id": "1", "content": "正文"}}
 	monkeypatch.setattr(client_module, "get_json", _fake(payload, calls))
 
-	novel = run(_client(cookie="abc").get_novel("1"))
+	data = run(_client(cookie="abc").get_novel("1"))
 
-	assert novel.id == "1"
-	assert novel.content == "正文"
+	assert data.error is False
+	assert data.body.id == "1"
+	assert data.body.content == "正文"
 	url, headers = calls[0]
 	assert url == "https://www.pixiv.net/ajax/novel/1"
 	assert headers["Cookie"] == "PHPSESSID=abc"
 
 
-def test_error_true_raises_api_error(monkeypatch) -> None:
+def test_unwrap_raises_api_error() -> None:
 	payload = {"error": True, "message": "作品不存在", "body": None}
-	monkeypatch.setattr(client_module, "get_json", _fake(payload))
 	with pytest.raises(PixivAPIError, match="作品不存在"):
-		run(_client().get_novel("1"))
+		PixivClient._unwrap(payload)
 
 
-def test_empty_body_raises_not_found(monkeypatch) -> None:
+def test_empty_body_is_returned_as_is(monkeypatch) -> None:
+	"""body 为空不在这里报错：解析层才知道这是「作品不存在」。"""
 	monkeypatch.setattr(
 		client_module, "get_json", _fake({"error": False, "body": None}))
-	with pytest.raises(PixivNotFoundError):
-		run(_client().get_novel("1"))
+	data = run(_client().get_novel("1"))
+	assert data.body is None
 
 
 @pytest.mark.parametrize(
@@ -199,7 +201,7 @@ def test_get_series_content_builds_url(monkeypatch) -> None:
 
 	data = run(_client().get_series_content(7, limit=50, last_order=30))
 
-	assert data.page.seriesContents == []
+	assert data.body.page.seriesContents == []
 	query = parse_qs(urlparse(calls[0][0]).query)
 	assert query["limit"] == ["50"]
 	assert query["last_order"] == ["30"]
@@ -215,6 +217,6 @@ def test_get_author_all(monkeypatch) -> None:
 
 	data = run(_client().get_author_all(42))
 
-	assert list(data.novels) == ["1"]
+	assert list(data.body.novels) == ["1"]
 	assert calls[0][0].endswith("/ajax/user/42/profile/all")
 
