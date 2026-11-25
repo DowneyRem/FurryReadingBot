@@ -49,7 +49,9 @@ class LinpxSource(NovelSource):
 		# 系列接口不带阅读量，用首篇补齐；系列为空（作者清空 / 刚建）时没有首篇可抓
 		if series.novel_url:
 			novel = await self.fetch_novel(series.novel_url)
+			series.like_count = novel.like_count
 			series.read_count = novel.read_count
+			
 		return series
 	
 	
