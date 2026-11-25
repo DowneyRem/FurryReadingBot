@@ -83,6 +83,7 @@ class Series:
 	caption: str = ""
 	tags: list[str] = field(default_factory=list)
 	total: int = 0
+	
 	novel_ids: list[str] = field(default_factory=list)
 	novel_titles: list[str] = field(default_factory=list)
 	

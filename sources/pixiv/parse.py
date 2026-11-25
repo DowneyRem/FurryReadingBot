@@ -65,3 +65,49 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		source="Pixiv",
 		raw=data
 	)
+
+
+def json_to_series(data: dict | JsonDict) -> Series:
+	data = JsonDict.from_obj(data)
+	if not data or data.error:
+		raise PixivNotFoundError("Pixiv 上不存在该小说数据", raw=data)
+	data = data.body
+	
+	novel_id = data.firstNovelId
+	novel_url = url_novel(novel_id)
+	novel_title = ""
+
+	series_id = data.id
+	series_url = url_series(series_id)
+	series_title = data.title
+	
+	author_id = data.userId
+	author_url = url_author(author_id)
+	author_name = data.userName
+	
+	caption = format_caption(data.caption)
+	tags = list(data.tags or [])
+	# total = data.total
+	total = data.publishedContentCount
+	
+	return Series(
+		novel_id = novel_id,
+		novel_url = novel_url,
+		novel_title = novel_title,
+		
+		series_id = series_id,
+		series_url = series_url,
+		series_title = series_title,
+		
+		author_id = author_id,
+		author_url = author_url,
+		author_name = author_name,
+		
+		caption=caption,
+		tags=tags,
+		total=total,
+		
+		source="Pixiv",
+		raw=data
+	)
+	
