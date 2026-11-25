@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
 	from sources.base import Series
 
 
+@dataclass(frozen=True)
+class IdRule:
+	"""一条 ID 提取规则：用哪条正则抓，失败提示里该资源叫什么。"""
+	pattern: str
+	label: str
+
+
 def get_id(link: str, pattern: str) -> str | None:
+	"""严格版：只从链接文本里抓 ID；纯数字不算链接，返回 None。"""
 	m = re.compile(pattern, re.I).search(link)
 	if m:
 		return m.group(1)

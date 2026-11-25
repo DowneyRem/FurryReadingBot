@@ -6,6 +6,7 @@ from typing import Any
 
 from sources.format import format_tags
 from sources.tags import canonicalize_tags
+from sources.utils import IdRule, get_id
 
 
 @dataclass
@@ -182,6 +183,14 @@ class NovelSource(ABC):
 	"""小说来源：只负责识别链接、拉取并解析模型，不碰文件系统。"""
 
 	name: str
+	parse_error: type[Exception]
+
+	def require_id(self, link: str, rule: IdRule) -> str:
+		"""宽松版：纯数字 ID 直接用；否则从文本里抓链接 ID，失败抛本源错误。"""
+		found = link if link.isdigit() else get_id(link, rule.pattern)
+		if not found:
+			raise self.parse_error(f"无法从文本中解析 {self.name} {rule.label} ID", raw=link)
+		return found
 
 	@abstractmethod
 	def is_novel_link(self, link: str) -> bool:
