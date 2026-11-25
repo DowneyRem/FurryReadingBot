@@ -26,9 +26,11 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	
 	caption = format_caption(data.desc)
 	content = data.content
+	tags = list(data.tags or [])
+	
 	like_count = data.pixivLikeCount
 	read_count = data.pixivReadCount
-	tags = list(data.tags or [])
+	
 	images = dict(data.images or {})
 	create_date = data.createDate
 	

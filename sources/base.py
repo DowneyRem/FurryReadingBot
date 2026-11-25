@@ -24,15 +24,15 @@ class Novel:
 	
 	caption: str
 	content: str
+	tags: list[str]
+	
+	like_count: int
+	read_count: int
+	comment_count: int
+	# score: int
+	
 	create_date: str
-	tags: list[str] = field(default_factory=list)
-	images: dict[str, Any] = field(default_factory=dict)
-	
-	like_count: int = 0
-	read_count: int = 0
-	comment_count: int = 0
-	score: int = 0
-	
+	images: str = ""
 	source: str = ""
 	raw: dict[str, Any] = field(default_factory=dict)
 	
