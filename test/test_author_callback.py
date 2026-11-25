@@ -51,8 +51,10 @@ def make_novel() -> Novel:
 		author_name="作者",
 		caption="",
 		content="",
+		tags=[],
 		like_count=0,
 		read_count=0,
+		comment_count=0,
 		create_date="",
 	)
 

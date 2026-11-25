@@ -70,8 +70,10 @@ def make_novel(**kwargs) -> Novel:
 		author_name="作者",
 		caption="",
 		content="正文",
+		tags=[],
 		like_count=0,
 		read_count=0,
+		comment_count=0,
 		create_date="",
 	)
 	fields.update(kwargs)

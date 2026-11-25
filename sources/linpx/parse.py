@@ -51,6 +51,7 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 		content=content,
 		like_count=like_count,
 		read_count=read_count,
+		comment_count=0,
 		create_date=create_date,
 		tags=tags,
 		images=images,

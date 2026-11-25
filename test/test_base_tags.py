@@ -10,7 +10,8 @@ NOVEL_FIELDS = dict(
 	novel_id="1", novel_url="u", novel_title="t",
 	series_id=None, series_url=None, series_title=None,
 	author_id="2", author_url="au", author_name="a",
-	caption="", content="", create_date="",
+	caption="", content="", like_count=0, read_count=0, comment_count=0,
+	create_date="",
 )
 
 SERIES_FIELDS = dict(

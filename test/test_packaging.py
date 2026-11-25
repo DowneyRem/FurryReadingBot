@@ -25,7 +25,8 @@ def novel(novel_id: str, title: str, author_name: str = "作者") -> Novel:
 		novel_id=novel_id, novel_url=f"src://novel/{novel_id}", novel_title=title,
 		series_id=None, series_url=None, series_title=None,
 		author_id="9", author_url=AUTHOR_LINK, author_name=author_name,
-		caption="", content=f"正文{novel_id}", like_count=0, read_count=0, create_date="",
+		caption="", content=f"正文{novel_id}", tags=[],
+		like_count=0, read_count=0, comment_count=0, create_date="",
 	)
 
 
