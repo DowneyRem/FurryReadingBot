@@ -52,12 +52,20 @@ RETRY_ATTEMPTS = 3
 RETRY_DELAY = 1.0
 
 
-def _is_retryable(status: int) -> bool:
-	return status == 429 or status >= 500
+def _is_retryable(status: int, *, retry_on_429: bool = True) -> bool:
+	if status == 429:
+		return retry_on_429
+	return status >= 500
 
 
-async def get_json(url: str, headers: dict | None = None) -> Any:
-	"""异步获取 JSON；超时、连接失败、429 / 5xx 自动重试，最终失败抛 ``HttpError``。"""
+async def _request(
+	url: str,
+	headers: dict | None = None,
+	*,
+	retry_on_429: bool = True,
+	as_json: bool = True,
+) -> Any:
+	"""异步请求公共重试骨架；超时、连接失败、429（可选）/ 5xx 自动重试，最终失败抛 ``HttpError``。"""
 	status: int | None = None
 	for attempt in range(1, RETRY_ATTEMPTS + 1):
 		try:
@@ -65,17 +73,37 @@ async def get_json(url: str, headers: dict | None = None) -> Any:
 			async with session.get(url, headers=headers) as resp:
 				status = resp.status
 				if resp.status < 400:
-					return await resp.json()
-				if not _is_retryable(resp.status):
+					return await (resp.json() if as_json else resp.text())
+				if not _is_retryable(resp.status, retry_on_429=retry_on_429):
 					raise HttpError(url, resp.status)
 		except (aiohttp.ClientError, asyncio.TimeoutError) as e:
 			status = None
-			logger.warning("请求 JSON 失败（第 %d 次）：%s，原因：%s", attempt, url, e)
+			logger.warning("请求%s失败（第 %d 次）：%s，原因：%s", " JSON " if as_json else "文本", attempt, url, e)
 		else:
-			logger.warning("请求 JSON 失败（第 %d 次）：%s，状态：%s", attempt, url, status)
+			logger.warning("请求%s失败（第 %d 次）：%s，状态：%s", " JSON " if as_json else "文本", attempt, url, status)
 		if attempt < RETRY_ATTEMPTS:
 			await asyncio.sleep(RETRY_DELAY * attempt)
 	raise HttpError(url, status)
+
+
+async def get_json(
+	url: str,
+	headers: dict | None = None,
+	*,
+	retry_on_429: bool = True,
+) -> Any:
+	"""异步获取 JSON；超时、连接失败、429（可选）/ 5xx 自动重试，最终失败抛 ``HttpError``。"""
+	return await _request(url, headers=headers, retry_on_429=retry_on_429, as_json=True)
+
+
+async def get_text(
+	url: str,
+	headers: dict | None = None,
+	*,
+	retry_on_429: bool = True,
+) -> str:
+	"""异步获取文本（HTML 等）；重试与报错约定同 ``get_json``。"""
+	return await _request(url, headers=headers, retry_on_429=retry_on_429, as_json=False)
 
 
 def get_json_sync(url: str, headers: dict | None = None) -> Any:
