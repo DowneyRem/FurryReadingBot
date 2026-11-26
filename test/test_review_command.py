@@ -60,22 +60,41 @@ class FakeApplyService:
 		return self._records
 
 
+class FakeBlacklistService:
+	def __init__(self, records: list | None = None) -> None:
+		self._records = records or []
+
+	def pending_review_records(self) -> list:
+		return self._records
+
+
 def patch_review_command(
 		monkeypatch, *,
 		admin: bool = True,
 		records: list | None = None,
+		takedown: list | None = None,
 		sent: list | None = None) -> None:
 	monkeypatch.setattr(
 		review_module, "transit_admin_policy", lambda bot: FakeAdminPolicy(admin))
 	monkeypatch.setattr(
 		review_module, "ApplyService", lambda: FakeApplyService(records))
+	# 下架申请也读默认 Store：不 patch 会去读真实的 data/black_request.json，
+	# 结果取决于本地数据，测试会时绿时红
+	monkeypatch.setattr(
+		review_module, "BlacklistService", lambda: FakeBlacklistService(takedown))
 
 	async def fake_send(update, context, record) -> bool:
 		if sent is not None:
 			sent.append(record)
 		return True
 
+	async def fake_send_card(context, record) -> bool:
+		if sent is not None:
+			sent.append(record)
+		return True
+
 	monkeypatch.setattr(review_module, "send_to_transit", fake_send)
+	monkeypatch.setattr(review_module, "send_blacklist_card", fake_send_card)
 
 
 def test_review_command_requires_admin(monkeypatch) -> None:
@@ -96,6 +115,20 @@ def test_review_command_repushes_pending(monkeypatch) -> None:
 
 	assert len(sent) == 1
 	assert "1/1" in update.effective_message.replies[-1]
+
+
+def test_review_command_repushes_takedown(monkeypatch) -> None:
+	"""下架申请也走注入的 service，不再依赖真实 data/black_request.json。"""
+	sent: list = []
+	patch_review_command(
+		monkeypatch, records=[], takedown=[{"author_id": "42"}], sent=sent)
+	update = FakeUpdate()
+
+	run(review_command(update, FakeContext()))
+
+	assert len(sent) == 1
+	assert "1/1" in update.effective_message.replies[-1]
+	assert "作者下架 1" in update.effective_message.replies[-1]
 
 
 def test_review_command_without_pending(monkeypatch) -> None:
