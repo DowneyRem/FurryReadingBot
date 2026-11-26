@@ -65,6 +65,7 @@ def main() -> None:
 	app.add_handler(CommandHandler("start", start))
 	app.add_handler(CommandHandler("help", help_cmd))
 	app.add_handler(CommandHandler("ping", ping))
+	app.add_handler(CommandHandler("sponsor", sponsor))
 	app.add_handler(CommandHandler("down", download))
 	app.add_handler(CommandHandler("review", review))
 	app.add_handler(CommandHandler("sync", sync))
