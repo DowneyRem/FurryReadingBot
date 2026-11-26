@@ -1,10 +1,12 @@
-"""script/extract_phpsessid.py：从多类文本中提取 Pixiv PHPSESSID。
+"""script/extract_phpsessid.py：从文本或浏览器获取 Pixiv PHPSESSID 并合并写入 pixiv.env。
 
 运行（在项目根目录）:
-\t.venv\\Scripts\\python.exe -m pytest test/test_extract_phpsessid.py -q
+	.venv\\Scripts\\python.exe -m pytest test/test_extract_phpsessid.py -q
 """
 
 from __future__ import annotations
+
+import pytest
 
 from script.extract_phpsessid import extract_phpsessids, format_phpsessids, main
 
@@ -37,35 +39,98 @@ def test_extract_supports_json_tsv_url_encoded_and_bare_tokens() -> None:
 
 	assert extract_phpsessids(text) == [tok1, tok2, tok3, tok4, tok5]
 	assert extract_phpsessids(text, strict=True) == [tok2, tok3, tok4, tok5]
-	assert len(extract_phpsessids(text, dedup=False)) == 6
 
 
 def test_format_phpsessids_outputs_expected_shapes() -> None:
 	values = ["111_aaa", "222_bbb"]
 	assert format_phpsessids(values, "bare") == "111_aaa\n222_bbb"
-	assert format_phpsessids(values, "kv") == "PHPSESSID=111_aaa\nPHPSESSID=222_bbb"
 	assert format_phpsessids(values, "pipe") == "111_aaa || 222_bbb"
 	assert format_phpsessids(values, "env") == 'PIXIV_COOKIE="111_aaa\n222_bbb"'
-	assert format_phpsessids(["111_aaa"], "env") == "PIXIV_COOKIE=111_aaa"
+	assert format_phpsessids(["111_aaa"], "env") == 'PIXIV_COOKIE="111_aaa"'
+	# 默认就是 env（写入 pixiv.env 用）
+	assert format_phpsessids(values) == format_phpsessids(values, "env")
+	with pytest.raises(ValueError):
+		format_phpsessids(values, "kv")
 
 
-def test_cli_reads_file_and_writes_output(tmp_path, capsys) -> None:
-	src = tmp_path / "raw.txt"
-	out = tmp_path / "out.env"
-	src.write_text(
-		"a=1; PHPSESSID=111_aaa; b=2\nPHPSESSID=222_bbb\n",
+def test_read_existing_phpsessids_supports_env_and_bare(tmp_path) -> None:
+	from script.extract_phpsessid import read_existing_phpsessids
+
+	a = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	b = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+	env_file = tmp_path / "old.env"
+	env_file.write_text(f'PIXIV_COOKIE="{a}\n{b}"\n', encoding="utf-8")
+	assert read_existing_phpsessids(env_file) == [a, b]
+
+	raw = tmp_path / "raw.txt"
+	raw.write_text(
+		f"other_cookie=999999999_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n{a}\n",
 		encoding="utf-8",
 	)
+	assert read_existing_phpsessids(raw) == [a]
 
-	code = main([str(src), "--format", "env", "-o", str(out)])
-	assert code == 0
-	assert out.read_text(encoding="utf-8") == 'PIXIV_COOKIE="111_aaa\n222_bbb"\n'
+	assert read_existing_phpsessids(tmp_path / "missing.env") == []
 
-	empty = tmp_path / "empty.txt"
-	empty.write_text("nothing here", encoding="utf-8")
-	assert main([str(empty)]) == 1
+
+def test_merge_phpsessids_keeps_existing_order() -> None:
+	from script.extract_phpsessid import merge_phpsessids
+
+	old = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	new = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	assert merge_phpsessids([old], [new, old]) == [old, new]
+
+
+def test_cli_writes_pixiv_env_with_merge(tmp_path, monkeypatch, capsys) -> None:
+	monkeypatch.chdir(tmp_path)
+	old = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	new = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	src = tmp_path / "raw.txt"
+	src.write_text(f"PHPSESSID={new}\n", encoding="utf-8")
+
+	out = tmp_path / "pixiv.env"
+	out.write_text(f'PIXIV_COOKIE="{old}"\n', encoding="utf-8")
+
+	assert main([str(src)]) == 0
+	assert out.read_text(encoding="utf-8") == f'PIXIV_COOKIE="{old}\n{new}"\n'
+	err = capsys.readouterr().err
+	assert "已有的 1 个" in err
+	assert "新增 1 个" in err
+
+	# 幂等：重复运行不会重复追加
+	assert main([str(src)]) == 0
+	assert out.read_text(encoding="utf-8") == f'PIXIV_COOKIE="{old}\n{new}"\n'
+	assert "新增 0 个" in capsys.readouterr().err
+
+
+def test_cli_creates_pixiv_env_when_missing(tmp_path, monkeypatch, capsys) -> None:
+	monkeypatch.chdir(tmp_path)
+	token = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	assert main(["-t", f"PHPSESSID={token}"]) == 0
+	assert (tmp_path / "pixiv.env").read_text(encoding="utf-8") == f'PIXIV_COOKIE="{token}"\n'
+	assert token in capsys.readouterr().out
+
+
+def test_cli_reads_non_utf8_file(tmp_path, monkeypatch) -> None:
+	"""ANSI / GBK 文本不该崩栈，替换非法字节后仍能提取 ASCII 的 token。"""
+	monkeypatch.chdir(tmp_path)
+	token = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	src = tmp_path / "gbk.txt"
+	src.write_bytes(f"备注：PHPSESSID={token}".encode("gbk"))
+
+	assert main([str(src)]) == 0
+	assert token in (tmp_path / "pixiv.env").read_text(encoding="utf-8")
+
+
+def test_cli_reports_when_nothing_found(tmp_path, monkeypatch, capsys) -> None:
+	monkeypatch.chdir(tmp_path)
+	src = tmp_path / "empty.txt"
+	src.write_text("nothing here", encoding="utf-8")
+
+	assert main([str(src)]) == 1
 	assert "未提取到" in capsys.readouterr().err
-
+	assert not (tmp_path / "pixiv.env").exists()
 
 def test_cdp_cookie_filter_ignores_guest_phpsessid() -> None:
 	from script.extract_phpsessid import extract_auth_phpsessid_from_cdp_cookies
@@ -95,8 +160,28 @@ def test_pick_free_port_and_browser_lookup(tmp_path, monkeypatch) -> None:
 
 	fake_chrome = tmp_path / "chrome.exe"
 	fake_chrome.write_text("", encoding="utf-8")
-	monkeypatch.setattr("script.extract_phpsessid._browser_candidates", lambda kind: [fake_chrome] if kind == "chrome" else [])
-	assert find_browser("chrome") == fake_chrome
+	monkeypatch.setattr(
+		"script.extract_phpsessid._browser_candidates",
+		lambda kind: [fake_chrome] if kind == "chrome" else [],
+	)
+	assert find_browser("auto") == fake_chrome
+
+
+def test_build_login_command_opens_home_page_in_incognito(tmp_path) -> None:
+	from script.extract_phpsessid import PIXIV_HOME_URL, _build_login_command
+
+	browser = tmp_path / "chrome.exe"
+	cmd = _build_login_command(browser, tmp_path, port=9333)
+
+	assert cmd[0] == str(browser)
+	assert cmd[-1] == PIXIV_HOME_URL == "https://www.pixiv.net/"
+	assert "--incognito" in cmd
+	assert f"--user-data-dir={tmp_path}" in cmd
+	assert "--remote-debugging-port=9333" in cmd
+
+	plain = _build_login_command(browser, tmp_path, port=9333, incognito=False)
+	assert "--incognito" not in plain
+	assert plain[-1] == PIXIV_HOME_URL
 
 
 def test_wait_for_login_cookie_via_mock_cdp_ws(monkeypatch) -> None:
@@ -193,36 +278,9 @@ def test_wait_for_login_cookie_via_mock_cdp_ws(monkeypatch) -> None:
 	]
 
 
-def test_cli_login_mode_formats_multi_account_output(tmp_path, monkeypatch, capsys) -> None:
-	import script.extract_phpsessid as mod
-
-	fake_browser = tmp_path / "chrome.exe"
-	fake_browser.write_text("", encoding="utf-8")
-	monkeypatch.setattr(mod, "find_browser", lambda browser: fake_browser)
-	monkeypatch.setattr(
-		mod,
-		"login_and_capture",
-		lambda browser_path, **kwargs: [
-			"111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			"222222_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		],
-	)
-
-	out = tmp_path / "pixiv.env"
-	code = main(["--login", "--count", "2", "--format", "env", "-o", str(out)])
-	assert code == 0
-	assert out.read_text(encoding="utf-8") == (
-		'PIXIV_COOKIE="111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
-		'222222_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"\n'
-	)
-	assert main(["--login", "-t", "abc"]) == 2
-	assert "不能与文件或 --text" in capsys.readouterr().err
-
-
 def test_wait_for_login_cookie_incognito_ignores_browser_wide_cookies(monkeypatch) -> None:
 	"""无痕模式下不能回落到浏览器级 Storage.getCookies，否则会误读常规窗口的登录态。"""
 	import asyncio
-	import pytest
 	import script.extract_phpsessid as mod
 
 	class FakeProc:
@@ -309,42 +367,89 @@ def test_wait_for_login_cookie_incognito_ignores_browser_wide_cookies(monkeypatc
 	assert token == "999999999_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 
-def test_build_login_command_opens_home_page_in_incognito(tmp_path) -> None:
-	from script.extract_phpsessid import PIXIV_HOME_URL, _build_login_command
-
-	browser = tmp_path / "chrome.exe"
-	cmd = _build_login_command(browser, tmp_path, port=9333)
-
-	assert cmd[0] == str(browser)
-	assert cmd[-1] == PIXIV_HOME_URL == "https://www.pixiv.net/"
-	assert "--incognito" in cmd
-	assert f"--user-data-dir={tmp_path}" in cmd
-	assert "--new-window" not in cmd
-	assert "--remote-debugging-port=9333" in cmd
-
-	plain = _build_login_command(browser, tmp_path, port=9333, incognito=False)
-	assert "--incognito" not in plain
-	assert plain[-1] == PIXIV_HOME_URL
-
-
-def test_default_user_data_dir_prefers_existing_profile(tmp_path, monkeypatch) -> None:
+def test_login_and_capture_reuses_profile_dir_and_skips_duplicates(tmp_path, monkeypatch) -> None:
 	import script.extract_phpsessid as mod
 
-	monkeypatch.setattr(mod.sys, "platform", "linux")
-	monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-	(tmp_path / "google-chrome").mkdir()
+	seen: list[tuple] = []
 
-	assert mod.default_user_data_dir(tmp_path / "chrome") == tmp_path / "google-chrome"
-	assert mod.default_user_data_dir(tmp_path / "msedge.exe") == tmp_path / "microsoft-edge"
+	def fake_capture(browser_path, profile_dir, **kwargs):
+		seen.append((profile_dir, kwargs))
+		return "111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	monkeypatch.setattr(mod, "_capture_once", fake_capture)
+	profile = tmp_path / "profile"
+
+	values = mod.login_and_capture(tmp_path / "chrome.exe", profile_dir=profile, count=2)
+
+	assert values == ["111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+	assert profile.is_dir()
+	assert [str(item[0]) for item in seen] == [str(profile), str(profile)]
+	assert seen[0][1]["incognito"] is True
+	assert seen[0][1]["start_url"] == mod.PIXIV_HOME_URL
 
 
-def test_cli_login_mode_passes_window_options(tmp_path, monkeypatch) -> None:
+def test_login_and_capture_hints_when_browser_unavailable(tmp_path, monkeypatch) -> None:
 	import script.extract_phpsessid as mod
 
+	def boom(*args, **kwargs):
+		raise mod.BrowserStartupError("浏览器已关闭，登录已取消")
+
+	monkeypatch.setattr(mod, "_capture_once", boom)
+
+	with pytest.raises(RuntimeError) as info:
+		mod.login_and_capture(tmp_path / "chrome.exe", profile_dir=tmp_path / "p")
+	assert "--profile-dir" in str(info.value)
+
+
+def test_login_and_capture_keeps_plain_login_timeout(tmp_path, monkeypatch) -> None:
+	import script.extract_phpsessid as mod
+
+	def timeout(*args, **kwargs):
+		raise TimeoutError("等待 Pixiv 登录超时（300 秒）")
+
+	monkeypatch.setattr(mod, "_capture_once", timeout)
+
+	with pytest.raises(TimeoutError) as info:
+		mod.login_and_capture(tmp_path / "chrome.exe", profile_dir=tmp_path / "p")
+	assert "--profile-dir" not in str(info.value)
+
+
+def test_cli_login_mode_writes_pixiv_env(tmp_path, monkeypatch, capsys) -> None:
+	import script.extract_phpsessid as mod
+
+	monkeypatch.chdir(tmp_path)
 	fake_browser = tmp_path / "chrome.exe"
 	fake_browser.write_text("", encoding="utf-8")
 	monkeypatch.setattr(mod, "find_browser", lambda browser: fake_browser)
-	default_start_url = mod.login_and_capture.__kwdefaults__["start_url"]
+	monkeypatch.setattr(
+		mod,
+		"login_and_capture",
+		lambda browser_path, **kwargs: [
+			"111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"222222_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		],
+	)
+
+	assert main(["--login", "--count", "2"]) == 0
+	assert (tmp_path / "pixiv.env").read_text(encoding="utf-8") == (
+		'PIXIV_COOKIE="111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+		'222222_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"\n'
+	)
+	captured = capsys.readouterr()
+	assert "222222_bbbb" in captured.out
+	assert "已提取 2 个" in captured.err
+
+	assert main(["--login", "-t", "abc"]) == 2
+
+
+def test_cli_login_mode_passes_options(tmp_path, monkeypatch) -> None:
+	import script.extract_phpsessid as mod
+
+	monkeypatch.chdir(tmp_path)
+	fake_browser = tmp_path / "chrome.exe"
+	fake_browser.write_text("", encoding="utf-8")
+	defaults = dict(mod.login_and_capture.__kwdefaults__ or {})
+	monkeypatch.setattr(mod, "find_browser", lambda browser: fake_browser)
 	captured: dict = {}
 
 	def fake_login(browser_path, **kwargs):
@@ -354,191 +459,14 @@ def test_cli_login_mode_passes_window_options(tmp_path, monkeypatch) -> None:
 	monkeypatch.setattr(mod, "login_and_capture", fake_login)
 
 	assert main(["--login"]) == 0
+	assert captured["profile_dir"] == defaults["profile_dir"] == mod.DEFAULT_PROFILE_DIR
+	assert str(captured["profile_dir"]) == ".pixiv-profile"
 	assert captured["incognito"] is True
-	assert captured["profile_dir"] is None
-	assert captured["isolated"] is False
-	assert default_start_url == mod.PIXIV_HOME_URL == "https://www.pixiv.net/"
+	assert defaults["start_url"] == mod.PIXIV_HOME_URL == "https://www.pixiv.net/"
 
 	captured.clear()
-	assert (
-		main(
-			[
-				"--login",
-				"--profile-dir",
-				str(tmp_path / "cfg"),
-				"--no-incognito",
-				"--isolated",
-			]
-		)
-		== 0
-	)
-	assert captured["profile_dir"] == tmp_path / "cfg"
+	custom = tmp_path / "custom"
+	assert main(["--login", "--profile-dir", str(custom), "--no-incognito"]) == 0
+	assert captured["profile_dir"] == custom
 	assert captured["incognito"] is False
-	assert captured["isolated"] is True
 
-
-def test_login_and_capture_hints_to_close_running_browser(tmp_path, monkeypatch) -> None:
-	import pytest
-	import script.extract_phpsessid as mod
-
-	monkeypatch.setattr(mod, "default_user_data_dir", lambda browser: tmp_path)
-
-	def boom(*args, **kwargs):
-		raise mod.BrowserStartupError("浏览器已关闭，登录已取消")
-
-	monkeypatch.setattr(mod, "_capture_once", boom)
-	browser = tmp_path / "chrome.exe"
-
-	with pytest.raises(RuntimeError) as info:
-		mod.login_and_capture(browser)
-	assert "--isolated" in str(info.value)
-	assert "独占启动" in str(info.value)
-
-	# isolated 模式不追加提示，保持原始错误
-	with pytest.raises(RuntimeError) as isolated_info:
-		mod.login_and_capture(browser, isolated=True)
-	assert "--isolated" not in str(isolated_info.value)
-
-
-def test_login_and_capture_keeps_plain_login_timeout(tmp_path, monkeypatch) -> None:
-	"""用户自己超时不算配置目录被占用，不该追加「先退出浏览器」的提示。"""
-	import pytest
-	import script.extract_phpsessid as mod
-
-	monkeypatch.setattr(mod, "default_user_data_dir", lambda browser: tmp_path)
-
-	def timeout(*args, **kwargs):
-		raise TimeoutError("等待 Pixiv 登录超时（300 秒）")
-
-	monkeypatch.setattr(mod, "_capture_once", timeout)
-
-	with pytest.raises(TimeoutError) as info:
-		mod.login_and_capture(tmp_path / "chrome.exe")
-	assert "--isolated" not in str(info.value)
-
-
-def test_default_profile_link_shares_data_and_is_removed(tmp_path, monkeypatch) -> None:
-	"""默认配置目录通过临时联接共享同一份数据，退出后只删联接本身。"""
-	import script.extract_phpsessid as mod
-
-	monkeypatch.setattr(mod, "default_user_data_dir", lambda browser: tmp_path)
-	(tmp_path / "Local State").write_text("{}", encoding="utf-8")
-
-	with mod._default_profile_link(tmp_path / "chrome.exe") as link:
-		assert link != tmp_path
-		assert (link / "Local State").is_file()
-		(link / "from-link.txt").write_text("hi", encoding="utf-8")
-
-	assert (tmp_path / "from-link.txt").read_text(encoding="utf-8") == "hi"
-	assert not link.exists()
-
-
-def test_login_and_capture_uses_linked_default_profile(tmp_path, monkeypatch) -> None:
-	import script.extract_phpsessid as mod
-
-	(tmp_path / "Local State").write_text("{}", encoding="utf-8")
-	monkeypatch.setattr(mod, "default_user_data_dir", lambda browser: tmp_path)
-	seen: list = []
-
-	def fake_capture(browser_path, profile_dir, **kwargs):
-		seen.append(profile_dir)
-		assert (profile_dir / "Local State").is_file()
-		return "111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-
-	monkeypatch.setattr(mod, "_capture_once", fake_capture)
-
-	values = mod.login_and_capture(tmp_path / "chrome.exe")
-	assert values == ["111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
-	assert seen
-	assert seen[0] != tmp_path
-	assert not seen[0].exists()
-
-
-def test_merge_phpsessids_keeps_existing_order(tmp_path) -> None:
-	from script.extract_phpsessid import merge_phpsessids, read_existing_phpsessids
-
-	assert read_existing_phpsessids(tmp_path / "missing.env") == []
-
-	old = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	new = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	assert merge_phpsessids([old], [new, old]) == [old, new]
-
-
-def test_cli_output_appends_to_existing_file(tmp_path, capsys) -> None:
-	old = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	new = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	out = tmp_path / "pixiv.env"
-	out.write_text(f'PIXIV_COOKIE="{old}"\n', encoding="utf-8")
-	src = tmp_path / "raw.txt"
-	src.write_text(f"PHPSESSID={new}\n", encoding="utf-8")
-
-	assert main([str(src), "--format", "env", "-o", str(out)]) == 0
-	assert out.read_text(encoding="utf-8") == f'PIXIV_COOKIE="{old}\n{new}"\n'
-	err = capsys.readouterr().err
-	assert "已有的 1 个" in err
-	assert "新增 1 个" in err
-
-	# 反复运行不会重复追加
-	assert main([str(src), "--format", "env", "-o", str(out)]) == 0
-	assert out.read_text(encoding="utf-8") == f'PIXIV_COOKIE="{old}\n{new}"\n'
-	assert "新增 0 个" in capsys.readouterr().err
-
-
-def test_read_existing_phpsessids_supports_all_shapes(tmp_path) -> None:
-	from script.extract_phpsessid import read_existing_phpsessids
-
-	a = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	b = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-
-	single = tmp_path / "single.env"
-	single.write_text(f"PIXIV_COOKIE={a}\n", encoding="utf-8")
-	assert read_existing_phpsessids(single) == [a]
-
-	multi = tmp_path / "multi.env"
-	multi.write_text(f'PIXIV_COOKIE="{a}\n{b}"\n', encoding="utf-8")
-	assert read_existing_phpsessids(multi) == [a, b]
-
-	kv = tmp_path / "kv.txt"
-	kv.write_text(f"PHPSESSID={a}\nPHPSESSID={b}\n", encoding="utf-8")
-	assert read_existing_phpsessids(kv) == [a, b]
-
-	raw = tmp_path / "raw.txt"
-	raw.write_text(f"other_cookie=999999999_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n{a}\n", encoding="utf-8")
-	assert read_existing_phpsessids(raw) == [a]
-
-
-def test_cli_output_appends_single_account_env(tmp_path) -> None:
-	"""单账号时输出的是无引号的 ``PIXIV_COOKIE=裸值``，第二次运行也要能读回来合并。"""
-	old = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	new = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	out = tmp_path / "pixiv.env"
-	out.write_text(f"PIXIV_COOKIE={old}\n", encoding="utf-8")
-	src = tmp_path / "raw.txt"
-	src.write_text(f"PHPSESSID={new}\n", encoding="utf-8")
-
-	assert main([str(src), "--format", "env", "-o", str(out)]) == 0
-	assert out.read_text(encoding="utf-8") == f'PIXIV_COOKIE="{old}\n{new}"\n'
-
-
-def test_cli_output_merges_across_formats(tmp_path) -> None:
-	old = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	new = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	out = tmp_path / "cookies.txt"
-	out.write_text(f"{old}\n", encoding="utf-8")
-	src = tmp_path / "raw.txt"
-	src.write_text(f"PHPSESSID={new}\n", encoding="utf-8")
-
-	# 旧文件是裸值格式，本次要求 kv：合并后整体按 kv 重写
-	assert main([str(src), "--format", "kv", "-o", str(out)]) == 0
-	assert out.read_text(encoding="utf-8") == f"PHPSESSID={old}\nPHPSESSID={new}\n"
-
-
-def test_cli_output_overwrites_file_without_tokens(tmp_path) -> None:
-	new = "220011220_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	out = tmp_path / "other.env"
-	out.write_text("SOMETHING_ELSE=1\n", encoding="utf-8")
-	src = tmp_path / "raw.txt"
-	src.write_text(f"PHPSESSID={new}\n", encoding="utf-8")
-
-	assert main([str(src), "-o", str(out)]) == 0
-	assert out.read_text(encoding="utf-8") == f"{new}\n"

@@ -2,6 +2,7 @@
 .venv
 .env
 pixiv.env
+.pixiv-profile
 files
 *.zip
 data

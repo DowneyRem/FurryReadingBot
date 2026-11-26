@@ -2,38 +2,30 @@ r"""从文本提取或通过本地浏览器登录获取 Pixiv ``PHPSESSID`` 的�
 
 支持两种模式：
   1. 文本提取（默认）：支持完整 Cookie 串、JSON、curl、URL 编码、DevTools 表格 / ``cookies.txt``、裸值；
-  2. 半自动登录（``--login``）：复用本机浏览器的**默认配置目录**、以**无痕窗口**打开 ``https://www.pixiv.net/``，
-     由你自己点「登录」并完成人机验证后，脚本通过 CDP 自动捕获 ``PHPSESSID``（含 ``HttpOnly``）并关窗。
+  2. 半自动登录（``--login``）：用独立的固定配置目录（默认 ``.pixiv-profile``）开无痕窗口，
+     从 ``https://www.pixiv.net/`` 首页起步，你自行点「登录」并过验证码，脚本捕获 ``PHPSESSID`` 后关窗。
+
+结果统一写入当前目录的 ``pixiv.env``（``PIXIV_COOKIE="值"``，多个账号换行分隔）：
+文件已存在时先读取其中已有的账号，与本次结果合并去重后整体写回，可反复运行逐步累积。
 
 说明：
-  * Chrome 不允许直接在「默认配置目录」上开远程调试，脚本改用临时目录联接（junction / 软链接）
-    指向该目录，从而复用同一份配置又不复制数据；退出时会删掉联接本身，不动真实配置；
-  * 无痕窗口与常规窗口的 Cookie 隔离，抓完即销毁，不会覆盖你日常浏览器的 Pixiv 登录态
-    （浏览器仍会更新该配置目录的少量本地状态，如 Local State / 最近使用记录）；
-  * 无痕窗口从空 Cookie 起步，不会继承配置里已有的 ``device_token``，若弹出人机验证手动过一次即可；
-  * 复用默认配置需要独占启动，请先完全退出正在运行的浏览器（含后台进程）；
-    做不到时可用 ``--isolated`` 换成一次性独立配置；
-  * 想直接复用配置里已有的登录态（基本不弹验证码），可加 ``--no-incognito`` 用常规窗口；
-  * 想让后续登录少弹验证码，可用 ``--profile-dir`` 指定一个**固定**的独立配置目录，
-    首次手动过验证后 ``device_token`` 会保留下来；
-  * ``-o/--output`` 是**追加合并**语义：写入前先读取目标文件里已有的 ``PHPSESSID``，
-    与本次结果去重合并后整体写回，所以可以反复运行来逐步补全同一个 ``pixiv.env``。
+  * 登录用的是**脚本自己的配置目录**，不是日常浏览器的 profile，所以不需要先退出 Chrome；
+  * ``.pixiv-profile`` 会保留 ``device_token``，第一次手动过验证码后，后续登录一般不再弹；
+  * 默认无痕窗口，无法从该配置目录继承登录态；想直接复用配置里已有的登录态可加 ``--no-incognito``。
 
 用法示例（在项目根目录）:
-# 1. 默认用 Chrome 的无痕窗口登录 1 个账号，直接输出裸 PHPSESSID
-.venv\Scripts\python.exe script/extract_phpsessid.py --login
+# 1. 从日常 Chrome 的 Cookie 里提取（F12 → Application → Cookies 里复制 PHPSESSID）
+.venv\Scripts\python.exe script/extract_phpsessid.py -t "PHPSESSID=123456_abcdefghijklmnop"
+.venv\Scripts\python.exe script/extract_phpsessid.py cookies.txt
 
-# 2. 用 Chrome 依次登录 5 个账号，输出每行一个裸值（可直接贴进 GitHub Secret PIXIV_COOKIE）
+# 2. 用 Chrome 依次登录 5 个账号，结果合并进 pixiv.env
 .venv\Scripts\python.exe script/extract_phpsessid.py --login --count 5
 
-# 3. 依次登录 5 个账号，追加合并进 pixiv.env（文件里已有的账号会保留并去重）
-.venv\Scripts\python.exe script/extract_phpsessid.py --login --count 5 --format env -o pixiv.env
+# 3. 换一个固定配置目录 / 单账号超时调到 10 分钟
+.venv\Scripts\python.exe script/extract_phpsessid.py --login --profile-dir D:\pixiv-profile --timeout 600
 
-# 4. 如需改用 Edge 或单账号超时调大到 10 分钟
-.venv\Scripts\python.exe script/extract_phpsessid.py --login --browser edge --timeout 600
-
-# 5. 浏览器已在运行 / 不想占用默认配置时，用一次性独立配置
-.venv\Scripts\python.exe script/extract_phpsessid.py --login --isolated
+# 4. 直接用常规窗口复用配置里已有的 Pixiv 登录态
+.venv\Scripts\python.exe script/extract_phpsessid.py --login --no-incognito
 """
 
 from __future__ import annotations
@@ -47,15 +39,17 @@ import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
-from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
 import aiohttp
 
 
+# 结果固定写到当前目录的 pixiv.env（脚本专用文件，不放其它变量）
+OUTPUT_FILE = Path("pixiv.env")
+# 登录模式使用的独立配置目录（相对当前目录），会保留 device_token
+DEFAULT_PROFILE_DIR = Path(".pixiv-profile")
 # 登录模式从这里起步，由用户自己点「登录」，避免深链直达登录页触发风控
 PIXIV_HOME_URL = "https://www.pixiv.net/"
 # 已登录的 Pixiv PHPSESSID 形如 <正整数UID>_<16位以上字母数字>；未登录网页种下的是无下划线的 32 位游客串
@@ -75,11 +69,6 @@ _EXPLICIT_KV_RE = re.compile(
 _TSV_ROW_RE = re.compile(r"""(?m)(?:^|\t)PHPSESSID\t+([^\s\t;"'`,]+)""")
 # 裸 Pixiv PHPSESSID 形态：<数字UID>_<16位以上字母数字>，排除前面紧跟 '=' 的其他 Cookie 值
 _BARE_TOKEN_RE = re.compile(r"""(?<![A-Za-z0-9_=.-])(\d{4,}_[A-Za-z0-9]{16,})(?![A-Za-z0-9_.-])""")
-# .env 里的 PIXIV_COOKIE 值：可能是无引号的裸值，也可能是跨行的双引号串
-_PIXIV_COOKIE_VALUE_RE = re.compile(
-	r"""["']?PIXIV_COOKIE["']?\s*[=:]\s*("(?:[^"\\]|\\.)*"|'[^']*'|[^\s;]+)""",
-	re.IGNORECASE,
-)
 
 
 def _clean_value(raw: str) -> str:
@@ -91,13 +80,8 @@ def _clean_value(raw: str) -> str:
 	return value.strip()
 
 
-def extract_phpsessids(
-	text: str,
-	*,
-	strict: bool = False,
-	dedup: bool = True,
-) -> list[str]:
-	"""按出现顺序从文本中提取 ``PHPSESSID`` 值列表。
+def extract_phpsessids(text: str, *, strict: bool = False) -> list[str]:
+	"""按出现顺序从文本中提取去重后的 ``PHPSESSID`` 值列表。
 
 	``strict=True`` 时只匹配显式 ``PHPSESSID`` 键；``strict=False`` 时额外匹配裸 ``<uid>_<token>``。
 	"""
@@ -128,63 +112,36 @@ def extract_phpsessids(
 	results: list[str] = []
 	seen: set[str] = set()
 	for _, _, value in hits:
-		if dedup and value in seen:
+		if value in seen:
 			continue
 		seen.add(value)
 		results.append(value)
 	return results
 
 
-def format_phpsessids(values: Sequence[str], fmt: str = "bare") -> str:
-	"""按指定格式渲染提取结果，方便直接粘贴到 GitHub Secrets 或 ``.env``。"""
+def format_phpsessids(values: Sequence[str], fmt: str = "env") -> str:
+	"""按指定格式渲染结果，默认 ``PIXIV_COOKIE="..."``（``.env`` 可直接使用）。"""
 	if not values:
 		return ""
 	if fmt == "bare":
 		return "\n".join(values)
-	if fmt == "kv":
-		return "\n".join(f"PHPSESSID={item}" for item in values)
 	if fmt == "pipe":
 		return " || ".join(values)
 	if fmt == "env":
-		if len(values) == 1:
-			return f"PIXIV_COOKIE={values[0]}"
 		joined = "\n".join(values)
 		return f'PIXIV_COOKIE="{joined}"'
 	raise ValueError(f"不支持的输出格式：{fmt}")
 
 
 def read_existing_phpsessids(path: Path) -> list[str]:
-	"""读取输出文件里已经存在的 ``PHPSESSID``（用于追加合并，而不是覆盖）。
-
-	兼容 ``PIXIV_COOKIE=裸值`` / ``PIXIV_COOKIE="多行"`` / ``PHPSESSID=...`` / 裸值等写法。
-	裸值正则为了不误抓 ``other_cookie=123456_xxx`` 会排除 ``=`` 紧随其后的值，
-	所以这里再单独解析一次 ``PIXIV_COOKIE`` 的值。
-	"""
+	"""读取输出文件里已经存在的 ``PHPSESSID``（用于追加合并，而不是覆盖）。"""
 	if not path.is_file():
 		return []
 	try:
 		text = path.read_text(encoding="utf-8-sig")
 	except OSError:
 		return []
-
-	hits: list[tuple[int, str]] = []
-	for match in _PIXIV_COOKIE_VALUE_RE.finditer(text):
-		raw = match.group(1)
-		offset = match.start(1)
-		for token in extract_phpsessids(raw):
-			hits.append((offset + max(raw.find(token), 0), token))
-	for token in extract_phpsessids(text):
-		hits.append((max(text.find(token), 0), token))
-
-	hits.sort(key=lambda item: item[0])
-	values: list[str] = []
-	seen: set[str] = set()
-	for _, token in hits:
-		if token in seen:
-			continue
-		seen.add(token)
-		values.append(token)
-	return values
+	return extract_phpsessids(text)
 
 
 def merge_phpsessids(existing: Sequence[str], new: Sequence[str]) -> list[str]:
@@ -201,66 +158,30 @@ def merge_phpsessids(existing: Sequence[str], new: Sequence[str]) -> list[str]:
 
 
 def _browser_candidates(kind: str) -> list[Path]:
-	"""按平台返回指定浏览器（chrome / edge）的候选可执行文件路径。"""
-	candidates: list[Path] = []
+	"""返回 Windows 上指定浏览器（chrome / edge）的候选可执行文件路径。"""
 	if kind == "chrome":
-		names = ("chrome", "chrome.exe", "google-chrome", "google-chrome-stable", "chromium")
+		names = ("chrome", "chrome.exe")
 		win_subdirs = (
 			("Google", "Chrome", "Application", "chrome.exe"),
 			("Chromium", "Application", "chrome.exe"),
 		)
-		mac_paths = ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",)
-		linux_paths = (
-			"/usr/bin/google-chrome",
-			"/usr/bin/google-chrome-stable",
-			"/usr/bin/chromium",
-			"/usr/bin/chromium-browser",
-		)
-		reg_name = "chrome.exe"
 	elif kind == "edge":
-		names = ("msedge", "msedge.exe", "microsoft-edge")
+		names = ("msedge", "msedge.exe")
 		win_subdirs = (("Microsoft", "Edge", "Application", "msedge.exe"),)
-		mac_paths = ("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",)
-		linux_paths = ("/usr/bin/microsoft-edge", "/usr/bin/microsoft-edge-stable")
-		reg_name = "msedge.exe"
 	else:
-		return candidates
+		return []
 
-	for name in names:
-		found = shutil.which(name)
-		if found:
-			candidates.append(Path(found))
-
-	if sys.platform.startswith("win"):
-		for env_key in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
-			base = os.environ.get(env_key)
-			if not base:
-				continue
-			for parts in win_subdirs:
-				candidates.append(Path(base, *parts))
-		try:
-			import winreg
-		except ImportError:
-			winreg = None  # type: ignore[assignment]
-		if winreg is not None:
-			for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
-				subkey = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{reg_name}"
-				try:
-					with winreg.OpenKey(root, subkey) as key:
-						value, _ = winreg.QueryValueEx(key, "")
-						if value:
-							candidates.append(Path(str(value)))
-				except OSError:
-					continue
-	elif sys.platform == "darwin":
-		candidates.extend(Path(p) for p in mac_paths)
-	else:
-		candidates.extend(Path(p) for p in linux_paths)
+	candidates = [Path(found) for name in names if (found := shutil.which(name))]
+	for env_key in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+		base = os.environ.get(env_key)
+		if not base:
+			continue
+		candidates.extend(Path(base, *parts) for parts in win_subdirs)
 	return candidates
 
 
-def find_browser(browser: str = "chrome") -> Path:
-	"""查找本机可用的 Chrome 或 Edge 可执行文件。"""
+def find_browser(browser: str = "auto") -> Path:
+	"""查找本机可用的 Chrome（默认）或 Edge，都没有则报错。"""
 	order = ("chrome", "edge") if browser == "auto" else (browser,)
 	for kind in order:
 		for path in _browser_candidates(kind):
@@ -271,85 +192,6 @@ def find_browser(browser: str = "chrome") -> Path:
 	if browser == "edge":
 		raise FileNotFoundError("未找到 Edge 浏览器，请确认已安装 Edge 或改用 --browser chrome")
 	raise FileNotFoundError("未找到可用的 Chrome 或 Edge 浏览器")
-
-
-def _browser_kind(browser_path: Path) -> str:
-	"""按可执行文件名推断浏览器种类（chrome / edge）。"""
-	return "edge" if "edge" in browser_path.name.lower() else "chrome"
-
-
-def default_user_data_dir(browser_path: Path) -> Path:
-	"""返回本机浏览器的默认配置目录（含日常使用积累的站点数据）。"""
-	kind = _browser_kind(browser_path)
-	bases: list[str | None]
-	subdirs: tuple[tuple[str, ...], ...]
-	if sys.platform.startswith("win"):
-		bases = [os.environ.get("LOCALAPPDATA")]
-		if kind == "chrome":
-			subdirs = (("Google", "Chrome", "User Data"), ("Chromium", "User Data"))
-		else:
-			subdirs = (("Microsoft", "Edge", "User Data"),)
-	elif sys.platform == "darwin":
-		bases = [str(Path.home() / "Library" / "Application Support")]
-		subdirs = (("Google", "Chrome"),) if kind == "chrome" else (("Microsoft Edge",),)
-	else:
-		bases = [os.environ.get("XDG_CONFIG_HOME"), str(Path.home() / ".config")]
-		subdirs = (("google-chrome",), ("chromium",)) if kind == "chrome" else (("microsoft-edge",),)
-
-	candidates: list[Path] = []
-	for base in bases:
-		if not base:
-			continue
-		candidates.extend(Path(base, *parts) for parts in subdirs)
-
-	for candidate in candidates:
-		if candidate.is_dir():
-			return candidate
-	if candidates:
-		return candidates[0]
-	raise FileNotFoundError("未能定位浏览器默认配置目录，请用 --profile-dir 手动指定")
-
-
-def _remove_profile_link(link: Path) -> None:
-	"""删除目录联接 / 符号链接本身，绝不触碰链接指向的真实配置数据。"""
-	if not link.exists() and not link.is_symlink():
-		return
-	try:
-		os.rmdir(link)
-	except OSError:
-		try:
-			os.unlink(link)
-		except OSError:
-			pass
-
-
-@contextmanager
-def _default_profile_link(browser_path: Path) -> Iterator[Path]:
-	"""经由目录联接（junction / symlink）访问浏览器的默认配置目录。
-
-	Chrome 拒绝在默认配置目录本身开启远程调试（stderr 会打印
-	``DevTools remote debugging requires a non-default data directory``），
-	用等价的链接路径指向同一份数据即可绕过，且无需复制配置。
-	"""
-	target = default_user_data_dir(browser_path)
-	link_root = Path(tempfile.mkdtemp(prefix="pixiv-profile-"))
-	link = link_root / "profile"
-	try:
-		if sys.platform.startswith("win"):
-			proc = subprocess.run(
-				["cmd", "/c", "mklink", "/J", str(link), str(target)],
-				capture_output=True,
-				creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-			)
-			if proc.returncode != 0:
-				message = (proc.stderr or proc.stdout).decode("mbcs", "replace").strip()
-				raise RuntimeError(f"创建配置目录联接失败（{target}）：{message}")
-		else:
-			os.symlink(target, link, target_is_directory=True)
-		yield link
-	finally:
-		_remove_profile_link(link)
-		shutil.rmtree(link_root, ignore_errors=True)
 
 
 def _build_login_command(
@@ -607,67 +449,56 @@ def login_and_capture(
 	*,
 	count: int = 1,
 	timeout: float = 300.0,
-	dedup: bool = True,
 	start_url: str = PIXIV_HOME_URL,
-	profile_dir: Path | None = None,
+	profile_dir: Path = DEFAULT_PROFILE_DIR,
 	incognito: bool = True,
-	isolated: bool = False,
 ) -> list[str]:
 	"""依次打开 Pixiv 首页，人工点「登录」后自动捕获 ``PHPSESSID``。
 
-	默认通过目录联接复用本机浏览器的默认配置目录，并以无痕窗口打开（Cookie 与日常窗口隔离）；
-	``profile_dir`` 指定其他配置目录，``isolated`` 改用一次性临时配置，
-	``incognito=False`` 则用常规窗口（会直接带上该配置已有的登录态）。
+	配置目录默认是 ``.pixiv-profile``（会保留 ``device_token``，后续登录少弹验证码）；
+	``incognito=False`` 改用常规窗口，可直接沿用该配置里已有的登录态。
 	"""
 	if count < 1:
 		raise ValueError("count 必须大于等于 1")
 
+	# Chrome 对相对路径的 --user-data-dir 处理异常（不开调试端口），这里统一转成绝对路径
+	profile = Path(profile_dir).expanduser().resolve()
+	profile.mkdir(parents=True, exist_ok=True)
+	mode = "无痕窗口" if incognito else "常规窗口"
+
 	values: list[str] = []
 	seen: set[str] = set()
 	for index in range(1, count + 1):
-		mode = "无痕窗口" if incognito else "常规窗口"
 		print(
-			f"[{index}/{count}] 正在打开 {browser_path.name}（{mode}），"
+			f"[{index}/{count}] 正在打开 {browser_path.name}（{mode}，配置目录 {profile}），"
 			"请在窗口里自行点击「登录」完成 Pixiv 登录……",
 			file=sys.stderr,
 		)
-		ctx: Any
-		if isolated and profile_dir is None:
-			ctx = tempfile.TemporaryDirectory(prefix="pixiv-login-", ignore_cleanup_errors=True)
-		elif profile_dir is not None:
-			base = Path(profile_dir).expanduser()
-			base.mkdir(parents=True, exist_ok=True)
-			ctx = nullcontext(base)
-		else:
-			ctx = _default_profile_link(browser_path)
-		with ctx as profile_raw:
-			profile = Path(profile_raw)
-			profile.mkdir(parents=True, exist_ok=True)
-			try:
-				token = _capture_once(
-					browser_path,
-					profile,
-					start_url=start_url,
-					incognito=incognito,
-					timeout=timeout,
+		try:
+			token = _capture_once(
+				browser_path,
+				profile,
+				start_url=start_url,
+				incognito=incognito,
+				timeout=timeout,
+			)
+		except (RuntimeError, TimeoutError) as exc:
+			if values:
+				print(
+					f"[{index}/{count}] {exc}；将保留前面已捕获的 {len(values)} 个账号。",
+					file=sys.stderr,
 				)
-			except (RuntimeError, TimeoutError) as exc:
-				if values:
-					print(
-						f"[{index}/{count}] {exc}；将保留前面已捕获的 {len(values)} 个账号。",
-						file=sys.stderr,
-					)
-					break
-				if isolated or not isinstance(exc, BrowserStartupError):
-					raise
+				break
+			if isinstance(exc, BrowserStartupError):
 				raise RuntimeError(
-					f"{exc}（复用默认配置目录需要独占启动：请先完全退出 {browser_path.name} 的全部窗口与后台进程"
-					"后重试，或改用 --isolated 换成一次性独立配置）"
+					f"{exc}（请确认配置目录 {profile} 没有被其他浏览器实例占用，"
+					"或换一个 --profile-dir 重试）"
 				) from exc
+			raise
 
 		uid_match = _UID_PREFIX_RE.match(token)
 		uid_hint = f"uid={uid_match.group(1)}" if uid_match else "account"
-		if dedup and token in seen:
+		if token in seen:
 			print(f"[{index}/{count}] 捕获到重复账号（{uid_hint}），已跳过", file=sys.stderr)
 			continue
 		seen.add(token)
@@ -685,7 +516,8 @@ def _read_inputs(files: Sequence[str], text: str | None) -> str:
 		if item == "-":
 			chunks.append(sys.stdin.read())
 		else:
-			chunks.append(Path(item).read_text(encoding="utf-8"))
+			# 兼容 ANSI / GBK 等非 UTF-8 文本：替换非法字节而不是崩栈
+			chunks.append(Path(item).read_text(encoding="utf-8", errors="replace"))
 	if not files and text is None:
 		if sys.stdin.isatty():
 			print(
@@ -717,27 +549,17 @@ def build_parser() -> argparse.ArgumentParser:
 		help="严格模式：只匹配显式 PHPSESSID 键，不匹配裸 <uid>_<token>",
 	)
 	parser.add_argument(
-		"--no-dedup",
-		action="store_true",
-		help="保留重复的 PHPSESSID（默认按出现顺序去重）",
-	)
-	parser.add_argument(
 		"-f",
 		"--format",
-		choices=("bare", "kv", "env", "pipe"),
-		default="bare",
-		help='输出格式：bare=每行裸值（默认，可直接贴 GitHub Secret）；kv=PHPSESSID=值；env=PIXIV_COOKIE="..."；pipe=|| 拼接',
-	)
-	parser.add_argument(
-		"-o",
-		"--output",
-		help="将结果写入指定文件（UTF-8）；文件已存在时先读取其中已有的 PHPSESSID，合并去重后整体写回",
+		choices=("bare", "env", "pipe"),
+		default="env",
+		help='输出格式：env=PIXIV_COOKIE="..."（默认，写入 pixiv.env）；bare=每行裸值；pipe=|| 拼接',
 	)
 	parser.add_argument(
 		"-l",
 		"--login",
 		action="store_true",
-		help="半自动登录模式：复用默认配置的无痕窗口打开 Pixiv 首页，自己登录后自动捕获 PHPSESSID",
+		help="半自动登录模式：用独立配置目录开无痕窗口打开 Pixiv 首页，自己登录后自动捕获 PHPSESSID",
 	)
 	parser.add_argument(
 		"-c",
@@ -750,8 +572,8 @@ def build_parser() -> argparse.ArgumentParser:
 		"-b",
 		"--browser",
 		choices=("chrome", "edge", "auto"),
-		default="chrome",
-		help="登录模式使用的浏览器：chrome（默认）、edge 或 auto",
+		default="auto",
+		help="登录模式使用的浏览器：auto（默认，先 Chrome 再 Edge）、chrome 或 edge",
 	)
 	parser.add_argument(
 		"--timeout",
@@ -761,17 +583,12 @@ def build_parser() -> argparse.ArgumentParser:
 	)
 	parser.add_argument(
 		"--profile-dir",
-		help="登录模式复用的浏览器配置目录（默认通过联接复用本机浏览器的默认配置目录）",
+		help="登录模式使用的浏览器配置目录（默认 .pixiv-profile，会保留 device_token）",
 	)
 	parser.add_argument(
 		"--no-incognito",
 		action="store_true",
 		help="登录模式改用常规窗口（默认无痕）：会直接沿用配置里已有的 Pixiv 登录态",
-	)
-	parser.add_argument(
-		"--isolated",
-		action="store_true",
-		help="登录模式改用一次性临时配置（不占用默认配置目录，浏览器已在运行也可用）",
 	)
 	return parser
 
@@ -793,10 +610,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 				browser_path,
 				count=args.count,
 				timeout=args.timeout,
-				dedup=not args.no_dedup,
-				profile_dir=Path(args.profile_dir) if args.profile_dir else None,
+				profile_dir=Path(args.profile_dir) if args.profile_dir else DEFAULT_PROFILE_DIR,
 				incognito=not args.no_incognito,
-				isolated=args.isolated,
 			)
 		except (FileNotFoundError, RuntimeError, TimeoutError, ValueError, OSError) as exc:
 			print(f"登录获取失败：{exc}", file=sys.stderr)
@@ -804,39 +619,34 @@ def main(argv: Sequence[str] | None = None) -> int:
 	else:
 		try:
 			content = _read_inputs(args.files, args.text)
-		except OSError as exc:
+		except (OSError, UnicodeError) as exc:
 			print(f"读取输入失败：{exc}", file=sys.stderr)
 			return 2
-		values = extract_phpsessids(content, strict=args.strict, dedup=not args.no_dedup)
+		values = extract_phpsessids(content, strict=args.strict)
 
 	if not values:
 		print("未提取到任何有效的 PHPSESSID。", file=sys.stderr)
 		return 1
 
-	if args.output:
-		out_path = Path(args.output)
-		existing = read_existing_phpsessids(out_path)
-		merged = merge_phpsessids(existing, values)
-		try:
-			out_path.write_text(
-				format_phpsessids(merged, args.format) + "\n",
-				encoding="utf-8",
-				newline="\n",
-			)
-		except OSError as exc:
-			print(f"写入 {args.output} 失败：{exc}", file=sys.stderr)
-			return 2
-		if existing:
-			print(
-				f"已读取 {args.output} 中已有的 {len(existing)} 个 PHPSESSID，"
-				f"新增 {len(merged) - len(existing)} 个，共 {len(merged)} 个并写回 {args.output}",
-				file=sys.stderr,
-			)
-		else:
-			print(f"已提取 {len(merged)} 个 PHPSESSID 并写入 {args.output}", file=sys.stderr)
+	# 固定写入 pixiv.env：先读取已有账号，合并去重后整体写回
+	existing = read_existing_phpsessids(OUTPUT_FILE)
+	merged = merge_phpsessids(existing, values)
+	rendered = format_phpsessids(merged, args.format)
+	try:
+		OUTPUT_FILE.write_text(rendered + "\n", encoding="utf-8", newline="\n")
+	except OSError as exc:
+		print(f"写入 {OUTPUT_FILE} 失败：{exc}", file=sys.stderr)
+		return 2
+
+	if existing:
+		print(
+			f"已读取 {OUTPUT_FILE} 中已有的 {len(existing)} 个 PHPSESSID，"
+			f"新增 {len(merged) - len(existing)} 个，共 {len(merged)} 个并写回 {OUTPUT_FILE}",
+			file=sys.stderr,
+		)
 	else:
-		print(format_phpsessids(values, args.format))
-		print(f"# 共提取 {len(values)} 个 PHPSESSID", file=sys.stderr)
+		print(f"已提取 {len(merged)} 个 PHPSESSID 并写入 {OUTPUT_FILE}", file=sys.stderr)
+	print(rendered)
 	return 0
 
 
