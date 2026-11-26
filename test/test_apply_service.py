@@ -60,8 +60,12 @@ def make_service(
 	furry=(),
 	fetch_name: str = "作者",
 	fetch_calls: list[str] | None = None,
+	cooldown_hours: float | None = None,
 ):
-	store = FurryRequestStore(path=tmp_path / "furry_request.json")
+	store = FurryRequestStore(
+		path=tmp_path / "furry_request.json",
+		apply_cooldown_hours=cooldown_hours,
+	)
 
 	async def fake_fetch(link: str) -> FakeAuthor:
 		if fetch_calls is not None:
@@ -243,3 +247,54 @@ def test_pending_records(tmp_path) -> None:
 	assert len(records) == 1
 	assert records[0].author_id == "42"
 	assert records[0].status == FurryRequestStore.STATUS_PENDING
+
+
+def test_inspect_after_reject_hits_cooldown(tmp_path) -> None:
+	"""被拒后 1 天内不能再申请：同一作者 1 天只能申请一次。"""
+	service, store = make_service(tmp_path)
+	run(service.submit(AUTHOR_LINK, user_id=1, user_name="A"))
+	store.set_status("42", FurryRequestStore.STATUS_REJECTED)
+
+	fetch_calls: list[str] = []
+	service, _ = make_service(tmp_path, fetch_calls=fetch_calls)
+	result = run(service.inspect(AUTHOR_LINK))
+
+	assert result.status == "cooldown"
+	assert result.author_name == "作者"
+	assert 0 < result.remaining_seconds <= 24 * 3600
+	# 冷却直接拦下，不必再抓一次来源
+	assert fetch_calls == []
+
+
+def test_submit_after_reject_hits_cooldown(tmp_path) -> None:
+	"""冷却期内提交：不写记录、不再送中转。"""
+	service, store = make_service(tmp_path)
+	sent = []
+
+	async def send_transit(record) -> bool:
+		sent.append(record)
+		return True
+
+	run(service.submit(
+		AUTHOR_LINK, user_id=1, user_name="A", send_transit=send_transit))
+	store.set_status("42", FurryRequestStore.STATUS_REJECTED)
+
+	result = run(service.submit(
+		AUTHOR_LINK, user_id=2, user_name="B", send_transit=send_transit))
+
+	assert result.status == "cooldown"
+	assert result.remaining_seconds > 0
+	assert result.transit_sent is False
+	assert len(sent) == 1
+	assert store.get("42").count == 1
+
+
+def test_zero_cooldown_allows_reapply(tmp_path) -> None:
+	service, store = make_service(tmp_path, cooldown_hours=0)
+	run(service.submit(AUTHOR_LINK, user_id=1, user_name="A"))
+	store.set_status("42", FurryRequestStore.STATUS_REJECTED)
+
+	result = run(service.submit(AUTHOR_LINK, user_id=2, user_name="B"))
+
+	assert result.status == "submitted"
+	assert store.get("42").count == 2

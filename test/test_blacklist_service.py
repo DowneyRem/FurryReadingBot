@@ -53,8 +53,11 @@ class FailingListManager(FakeListManager):
 		raise RuntimeError("list write failed")
 
 
-def make_service(tmp_path, manager=None):
-	store = BlackRequestStore(path=tmp_path / "black_request.json")
+def make_service(tmp_path, manager=None, *, cooldown_hours: float | None = None):
+	store = BlackRequestStore(
+		path=tmp_path / "black_request.json",
+		apply_cooldown_hours=cooldown_hours,
+	)
 	manager = manager or FakeListManager()
 	service = BlacklistService(store, list_manager=manager)
 	return service, store, manager
@@ -90,6 +93,7 @@ def test_request_prefers_caller_name_then_list(tmp_path) -> None:
 
 
 def test_request_again_reopens_material(tmp_path) -> None:
+	"""(只受理、不交截图不算一次申请：不占 1 天冷却)"""
 	service, store, _ = make_service(tmp_path)
 	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
 	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
@@ -119,6 +123,36 @@ def test_request_already_blacklisted(tmp_path) -> None:
 
 	assert result.status == "already_blacklisted"
 	assert store.get(AUTHOR_ID) is None
+
+
+def test_request_after_reject_hits_cooldown(tmp_path) -> None:
+	"""送审被拒后 1 天内不能再申请：同一作者 1 天只能申请一次。"""
+	service, store, _ = make_service(tmp_path)
+	service.request(
+		AUTHOR_ID, author_url=AUTHOR_URL, author_name="作者", user_id=7)
+	service.submit_material(7, "PHOTO")
+	service.review(AUTHOR_ID, "reject")
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+
+	assert result.status == "cooldown"
+	assert result.author_name == "作者"
+	assert 0 < result.remaining_seconds <= 24 * 3600
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_REJECTED
+	assert store.get(AUTHOR_ID).count == 1
+
+
+def test_request_after_reject_allowed_when_cooldown_zero(tmp_path) -> None:
+	service, store, _ = make_service(tmp_path, cooldown_hours=0)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	service.submit_material(7, "PHOTO")
+	service.review(AUTHOR_ID, "reject")
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+
+	assert result.status == "needs_material"
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_MATERIAL
+	assert store.get(AUTHOR_ID).count == 2
 
 def test_submit_material_marks_review(tmp_path) -> None:
 	service, store, _ = make_service(tmp_path)

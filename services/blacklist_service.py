@@ -1,5 +1,9 @@
 """作者拉黑申请业务：材料收集、状态流转与名单更新。
 
+同一作者 1 天内只能申请一次（`config.APPLY_COOLDOWN_HOURS`，见
+`storage.black_request.BlackRequestStore.apply_remaining`）；
+冷却按「提交截图送审」算，只点受理不交截图不会占冷却。
+
 Telegram 相关部分留在 handlers：
   - 本模块不 import telegram；
   - 送审卡片、删卡片、私聊通知都由 handler 做；
@@ -25,7 +29,9 @@ from utils.json import JsonDict
 
 logger = logging.getLogger(__name__)
 
-RequestStatus = Literal["needs_material", "pending_review", "already_blacklisted"]
+RequestStatus = Literal[
+	"needs_material", "pending_review", "cooldown", "already_blacklisted",
+]
 SubmitStatus = Literal["submitted", "no_request", "expired"]
 ReviewStatus = Literal["approved", "rejected", "missing", "already_processed"]
 BlacklistDecision = Literal["approve", "reject"]
@@ -39,6 +45,8 @@ class BlacklistRequest:
 	author_id: str
 	author_name: str = ""
 	record: JsonDict | None = None
+	# status == "cooldown" 时还要等多少秒（同一作者 1 天只能申请一次）
+	remaining_seconds: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -104,7 +112,7 @@ class BlacklistService:
 		user_id: str | int | None = None,
 		user_name: str = "",
 	) -> BlacklistRequest:
-		"""受理一次「申请下架」：回材料清单、提示已在核验，或已在黑名单。"""
+		"""受理一次「申请下架」：回材料清单、提示已在核验/冷却中，或已在黑名单。"""
 		key = str(author_id or "").strip()
 		if not key:
 			raise ValueError("作者 ID 为空")
@@ -117,6 +125,12 @@ class BlacklistService:
 		if existing is not None and existing.status == BlackRequestStore.STATUS_REVIEW:
 			name = str(existing.author_name or decision.author_name)
 			return BlacklistRequest("pending_review", key, name, existing)
+
+		remaining = self.black_requests.apply_remaining(key)
+		if remaining > 0:
+			name = str(
+				(existing.author_name if existing else "") or decision.author_name)
+			return BlacklistRequest("cooldown", key, name, existing, remaining)
 
 		record = self.black_requests.open(
 			key,

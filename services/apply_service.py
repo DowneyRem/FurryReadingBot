@@ -1,4 +1,4 @@
-"""申请业务：链接解析、名单校验、重复待审、写入申请记录、送审编排。
+"""申请业务：链接解析、名单校验、重复待审、1 天 1 次冷却、写入申请记录、送审编排。
 
 Telegram 相关部分留在 handlers：
   - 本模块不 import telegram；
@@ -23,10 +23,10 @@ from utils.links import get_id
 logger = logging.getLogger(__name__)
 
 ApplyInspectionStatus = Literal[
-	"needs_confirm", "pending", "blacklisted", "already_furry",
+	"needs_confirm", "pending", "cooldown", "blacklisted", "already_furry",
 ]
 ApplySubmissionStatus = Literal[
-	"submitted", "pending", "blacklisted", "already_furry",
+	"submitted", "pending", "cooldown", "blacklisted", "already_furry",
 ]
 
 
@@ -47,6 +47,8 @@ class ApplyInspection:
 	author_name: str
 	link: str
 	record: JsonDict | None = None
+	# status == "cooldown" 时还要等多少秒（同一作者 1 天只能申请一次）
+	remaining_seconds: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,8 @@ class ApplySubmission:
 	link: str
 	record: JsonDict | None = None
 	transit_sent: bool = False
+	# status == "cooldown" 时还要等多少秒
+	remaining_seconds: float = 0.0
 
 
 TransitCallback = Callable[[JsonDict], Awaitable[bool]]
@@ -127,6 +131,17 @@ class ApplyService:
 				record=record,
 			)
 
+		remaining = self.furry_requests.apply_remaining(author_id)
+		if remaining > 0:
+			return ApplyInspection(
+				status="cooldown",
+				author_id=author_id,
+				author_name=str((record.author_name if record else "") or author_id),
+				link=link,
+				record=record,
+				remaining_seconds=remaining,
+			)
+
 		author = await self._fetch(link)
 		name = str(getattr(author, "author_name", "") or author_id)
 		return ApplyInspection(
@@ -154,6 +169,7 @@ class ApplyService:
 				author_name=inspection.author_name,
 				link=link,
 				record=inspection.record,
+				remaining_seconds=inspection.remaining_seconds,
 			)
 
 		# inspect 与 submit 之间可能被其他用户抢先提交，再确认一次
@@ -165,6 +181,19 @@ class ApplyService:
 				author_name=str(record.author_name or inspection.author_id),
 				link=link,
 				record=record,
+			)
+
+		# 冷却同理：1 天内已经有人提过，就不再写记录、不再送中转
+		remaining = self.furry_requests.apply_remaining(inspection.author_id)
+		if remaining > 0:
+			return ApplySubmission(
+				status="cooldown",
+				author_id=inspection.author_id,
+				author_name=str(
+					(record.author_name if record else "") or inspection.author_name),
+				link=link,
+				record=record,
+				remaining_seconds=remaining,
 			)
 
 		record = self.furry_requests.submit(
