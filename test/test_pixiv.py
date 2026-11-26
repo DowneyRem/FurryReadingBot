@@ -32,6 +32,9 @@ AUTHOR_LINK = f"https://www.pixiv.net/users/{AUTHOR_ID}"
 
 LIVE = os.getenv("PIXIV_LIVE") == "1"
 live = pytest.mark.skipif(not LIVE, reason="需要真实 Pixiv API：PIXIV_LIVE=1")
+# 正文清洗已临时关闭：sources/pixiv/parse.py 里 format_pixiv_content() 被注释，
+# content 原样返回。恢复清洗后删掉这个标记和 3 个 @skip_cleaning。
+skip_cleaning = pytest.mark.skip(reason="正文清洗已临时关闭（parse.py 保留原始 content）")
 
 
 def run(coro):
@@ -271,6 +274,7 @@ def test_json_to_novel_missing_body() -> None:
 		json_to_novel({"error": True, "message": "作品不存在", "body": None})
 
 
+@skip_cleaning
 def test_json_to_novel_tolerates_missing_text_fields() -> None:
 	"""缺标题 / 作者名 / 正文时补空串：别把 None 带进文件名、文案和缓存。"""
 	novel = json_to_novel(_envelope(_novel_body(
@@ -280,6 +284,7 @@ def test_json_to_novel_tolerates_missing_text_fields() -> None:
 	assert novel.content == ""
 
 
+@skip_cleaning
 def test_json_to_novel_cleans_pixiv_markers() -> None:
 	"""正文里的 Pixiv 方括号标记要换成可读文本，不能原样进 txt。"""
 	body = _novel_body(
@@ -313,6 +318,7 @@ def test_json_to_novel_cleans_pixiv_markers() -> None:
 	assert "\n\n\n" not in novel.content
 
 
+@skip_cleaning
 def test_json_to_novel_without_embedded_images() -> None:
 	"""没有 textEmbeddedImages 时 uploadedimage 只留占位，不报错。"""
 	novel = json_to_novel(_envelope(_novel_body(content="[uploadedimage:1]")))

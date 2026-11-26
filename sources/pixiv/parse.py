@@ -7,18 +7,6 @@ from sources.pixiv.errors import PixivNotFoundError
 from utils.json import JsonDict
 
 
-def _tag_names(value: object) -> list[str]:
-	"""Pixiv 标签结构不统一：`{tags: [...]}` 外壳、字符串列表、`{tag: "..."}` 列表都要接。"""
-	if isinstance(value, dict):
-		value = value.get("tags")
-	names: list[str] = []
-	for item in value or []:
-		name = item.get("tag") if isinstance(item, dict) else item
-		if name:
-			names.append(str(name))
-	return names
-
-
 def _embedded_image_urls(value: object) -> dict[str, str]:
 	"""`textEmbeddedImages` → `{图片ID: 原图URL}`；缺失或结构异常时返回空表。"""
 	data = JsonDict.from_obj(value)
@@ -54,9 +42,10 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	author_name = data.userName or ""
 	
 	caption = format_caption(data.description)
-	content = format_pixiv_content(
-		data.content or "", _embedded_image_urls(data.textEmbeddedImages))
-	tags = _tag_names(data.tags)
+	content = data.content
+	# content = format_pixiv_content(
+	# 	data.content or "", _embedded_image_urls(data.textEmbeddedImages))
+	tags = [item.tag for item in data.tags.tags]
 	
 	like_count = int(data.bookmarkCount or 0)
 	read_count = int(data.viewCount or 0)
@@ -115,7 +104,7 @@ def json_to_series(data: dict | JsonDict) -> Series:
 	author_name = data.userName or ""
 	
 	caption = format_caption(data.caption)
-	tags = _tag_names(data.tags)
+	tags = data.tags or []
 	# total = data.total
 	total = int(data.publishedContentCount or 0)
 	
