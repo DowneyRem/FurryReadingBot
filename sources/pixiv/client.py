@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import re
 import time
 from collections.abc import Callable, Iterable
@@ -18,11 +19,14 @@ from infra.http import HttpError, get_json, get_text
 from sources.pixiv.config import (
 	COOKIE_SEPARATOR,
 	ENV_COOKIE,
+	GLOBAL_MIN_INTERVAL,
 	HEADERS,
 	LANG,
+	MAX_REQUESTS_PER_ACCOUNT,
 	MIN_INTERVAL,
 	RATE_LIMIT_COOLDOWN,
 	REFERER,
+	REQUEST_JITTER,
 )
 from sources.pixiv.errors import (
 	PixivAuthError,
@@ -158,31 +162,64 @@ class PixivClient:
 		*,
 		cookies: Iterable[str | PixivAccount] | None = None,
 		min_interval: float | None = None,
+		global_min_interval: float | None = None,
+		jitter: float | None = None,
 		cooldown_seconds: float | None = None,
+		rotate_every: int | None = None,
+		random_start: bool = True,
 		lang: str = LANG,
 	) -> None:
 		self.min_interval = MIN_INTERVAL if min_interval is None else max(0.0, min_interval)
+		if global_min_interval is not None:
+			self.global_min_interval = max(0.0, global_min_interval)
+		elif min_interval is not None and self.min_interval == 0.0:
+			# 显式传入 min_interval=0（测试关闭限流）时，同步关闭全局间隔与抖动
+			self.global_min_interval = 0.0
+		else:
+			self.global_min_interval = GLOBAL_MIN_INTERVAL
+		if jitter is not None:
+			self.jitter = max(0.0, jitter)
+		elif min_interval is not None and self.min_interval == 0.0:
+			self.jitter = 0.0
+		else:
+			self.jitter = REQUEST_JITTER
 		self.cooldown_seconds = (
 			RATE_LIMIT_COOLDOWN if cooldown_seconds is None else max(0.0, cooldown_seconds)
 		)
+		self.rotate_every = (
+			MAX_REQUESTS_PER_ACCOUNT if rotate_every is None else max(1, int(rotate_every))
+		)
+		self.random_start = random_start
 		self.lang = lang or LANG
 
 		# 按事件循环存放锁：asyncio.Lock 不能跨 loop 复用（测试里每个 asyncio.run 都是新 loop）。
 		self._rate_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
 		self._anon_account = PixivAccount(cookie="")
+		self._last_request_at: float | None = None
 		self._cursor = 0
+		self._current_uses = 0
 		self._last_env_raw: str | None = None
 
 		if cookies is not None:
 			self._explicit_source = True
 			self._accounts = _accounts_from_cookies(cookies)
+			self._reset_cursor()
 		elif cookie is not None:
 			self._explicit_source = True
 			self._accounts = _accounts_from_cookies(parse_cookies(cookie))
+			self._reset_cursor()
 		else:
 			# 懒读取：首次用到时再读 PIXIV_COOKIE，避免依赖「.env 先于 sources 加载」的导入顺序
 			self._explicit_source = False
 			self._accounts = []
+
+
+	def _reset_cursor(self) -> None:
+		self._current_uses = 0
+		if self.random_start and len(self._accounts) > 1:
+			self._cursor = random.randrange(len(self._accounts))
+		else:
+			self._cursor = 0
 
 
 	def _loop_lock(self) -> asyncio.Lock:
@@ -202,7 +239,7 @@ class PixivClient:
 			return
 		self._last_env_raw = raw_env
 		self._accounts = _accounts_from_cookies(parse_cookies(raw_env))
-		self._cursor = 0
+		self._reset_cursor()
 
 
 	@property
@@ -245,7 +282,7 @@ class PixivClient:
 		self._explicit_source = True
 		self._last_env_raw = None
 		self._accounts = _accounts_from_cookies(parse_cookies(cookie))
-		self._cursor = 0
+		self._reset_cursor()
 
 
 	def set_cookies(self, cookies: Iterable[str | PixivAccount] | None) -> None:
@@ -255,11 +292,12 @@ class PixivClient:
 			self._last_env_raw = None
 			self._accounts = []
 			self._cursor = 0
+			self._current_uses = 0
 			return
 		self._explicit_source = True
 		self._last_env_raw = None
 		self._accounts = _accounts_from_cookies(cookies)
-		self._cursor = 0
+		self._reset_cursor()
 
 
 	def headers(
@@ -289,8 +327,16 @@ class PixivClient:
 
 		ready = [account for account in ordered if account.is_available(now)]
 		if ready:
-			chosen_idx = self._accounts.index(ready[0])
-			self._cursor = (chosen_idx + 1) % n
+			chosen = ready[0]
+			chosen_idx = self._accounts.index(chosen)
+			# 当前游标账号不可用（冷却/失效）而顺延到下一个号时，重新从 0 计该账号的连续次数
+			if chosen_idx != start:
+				self._cursor = chosen_idx
+				self._current_uses = 0
+			self._current_uses += 1
+			if self._current_uses >= self.rotate_every:
+				self._cursor = (chosen_idx + 1) % n
+				self._current_uses = 0
 			return ready
 
 		alive = [account for account in ordered if not account.dead]
@@ -310,17 +356,43 @@ class PixivClient:
 			return self._pick_candidates(url)
 
 
+	async def _record_fallback(self, account: PixivAccount) -> None:
+		"""首选号失败、故障转移到备用号并成功后，把游标与连续计数对齐到接替成功的号。"""
+		if not account.is_authenticated:
+			return
+		async with self._loop_lock():
+			if account not in self._accounts:
+				return
+			idx = self._accounts.index(account)
+			n = len(self._accounts)
+			if self._cursor == idx:
+				self._current_uses += 1
+			else:
+				self._cursor = idx
+				self._current_uses = 1
+			if self._current_uses >= self.rotate_every:
+				self._cursor = (idx + 1) % n
+				self._current_uses = 0
+
+
 	async def _acquire_slot(self, account: PixivAccount) -> None:
-		"""按账号独立错开请求开始时间，不阻塞其他账号和响应读取。"""
-		if self.min_interval <= 0:
+		"""同时约束单账号间隔、单 IP 全局间隔与随机抖动，锁外睡眠以支持并发错开。"""
+		if self.min_interval <= 0 and self.global_min_interval <= 0 and self.jitter <= 0:
 			return
 		async with self._loop_lock():
 			now = time.monotonic()
-			if account.last_used is None:
-				target = now
-			else:
-				target = max(now, account.last_used + self.min_interval)
+			account_ready = (
+				now if account.last_used is None
+				else account.last_used + self.min_interval
+			)
+			global_ready = (
+				now if self._last_request_at is None
+				else self._last_request_at + self.global_min_interval
+			)
+			extra = random.uniform(0.0, self.jitter) if self.jitter > 0 else 0.0
+			target = max(now, account_ready, global_ready) + extra
 			account.last_used = target
+			self._last_request_at = target
 		delay = target - time.monotonic()
 		if delay > 0:
 			await asyncio.sleep(delay)
@@ -420,6 +492,8 @@ class PixivClient:
 			for bad in suspect_auth_accounts:
 				bad.dead = True
 				logger.warning("Pixiv 账号 %s 因鉴权失败已在故障转移后标记失效", bad.label)
+			if index > 0:
+				await self._record_fallback(account)
 			return envelope
 
 		assert last_error is not None
