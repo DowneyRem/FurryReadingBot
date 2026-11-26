@@ -1,16 +1,25 @@
-"""HTTP 访问：aiohttp 按事件循环复用会话；requests 只给独立脚本用。"""
+"""HTTP 访问：aiohttp 按事件循环复用会话；requests 只给独立脚本用。
+
+``get_json()`` 默认带请求缓存（``storage/fetch_cache.py``）：key 就是请求的链接，
+成功响应落盘后在 TTL 内直接复用，失败照旧抛错、下次重试。
+同一个作品在「预检 → 解析系列 → 打包」里被请求多次时，只有第一次真正打网络。
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import requests
 
 from infra.files import save_json, save_json_sync
+
+if TYPE_CHECKING:
+	from storage.fetch_cache import FetchCacheStore
+
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +95,85 @@ async def _request(
 	raise HttpError(url, status)
 
 
+# ----- 请求缓存 -----
+def _cache() -> "FetchCacheStore | None":
+	"""取进程内请求缓存；不可用时返回 None，让请求降级为直连。
+
+	缓存坏了（JSON 损坏、磁盘只读）只该少一层加速，不能让下载整体失败，
+	所以这里连同后面的读写一起兜异常。
+	"""
+	try:
+		# 延迟导入：infra 只在真正要用缓存时才依赖 storage，避免导入期互相牵连
+		from storage.fetch_cache import get_fetch_cache
+
+		return get_fetch_cache()
+	except Exception as error:
+		logger.warning("请求缓存不可用，本次直接请求：%s", error)
+		return None
+
+
+def _cached(cache: "FetchCacheStore", url: str) -> Any | None:
+	try:
+		return cache.get(url)
+	except Exception as error:
+		logger.warning("读取请求缓存失败，本次直接请求：%s（%s）", url, error)
+		return None
+
+
+def _remember(cache: "FetchCacheStore", url: str, data: Any) -> None:
+	try:
+		cache.set(url, data)
+	except Exception as error:
+		logger.warning("写入请求缓存失败：%s（%s）", url, error)
+
+
+def drop_cached_json(url: str) -> bool:
+	"""删掉某个 URL 的请求缓存，返回是否真的删了一条。
+
+	给「响应不能用」的场景用：例如 Pixiv 未登录时 R18 正文为空 / 章节被打码，
+	这份响应不能留给之后配好 Cookie 的请求。缓存没创建过时直接跳过，
+	不为了一次删除先把缓存文件建出来。
+	"""
+	try:
+		# 延迟导入：infra 只在真正要用缓存时才依赖 storage，避免导入期互相牵连
+		from storage.fetch_cache import peek_fetch_cache
+
+		cache = peek_fetch_cache()
+	except Exception as error:
+		logger.warning("请求缓存不可用，跳过清理：%s（%s）", url, error)
+		return False
+	if cache is None:
+		return False
+	try:
+		return cache.remove(url)
+	except Exception as error:
+		logger.warning("清理请求缓存失败：%s（%s）", url, error)
+		return False
+
+
 async def get_json(
 	url: str,
 	headers: dict | None = None,
 	*,
 	retry_on_429: bool = True,
+	use_cache: bool = True,
 ) -> Any:
-	"""异步获取 JSON；超时、连接失败、429（可选）/ 5xx 自动重试，最终失败抛 ``HttpError``。"""
-	return await _request(url, headers=headers, retry_on_429=retry_on_429, as_json=True)
+	"""异步获取 JSON；超时、连接失败、429（可选）/ 5xx 自动重试，最终失败抛 ``HttpError``。
+
+	默认按 URL 走请求缓存（``storage/fetch_cache.py``）：命中直接返回，
+	成功响应回写，失败不写（下次仍然重试）。确实要最新数据时传 ``use_cache=False``。
+	"""
+	cache = _cache() if use_cache else None
+	if cache is not None:
+		cached = _cached(cache, url)
+		if cached is not None:
+			logger.debug("命中请求缓存：%s", url)
+			return cached
+
+	data = await _request(url, headers=headers, retry_on_429=retry_on_429, as_json=True)
+	if cache is not None:
+		_remember(cache, url, data)
+	return data
 
 
 async def get_text(
