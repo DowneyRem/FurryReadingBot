@@ -13,6 +13,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from config import BLACK_REQUEST_MATERIAL_TTL_MINUTES
 from handlers.callbacks.apply import edit_or_reply
 from handlers.callbacks.review import (
 	close_transit_message,
@@ -28,7 +29,6 @@ from services import (
 	DownloadService,
 	TakedownResult,
 )
-from storage.black_request import BlackRequestStore
 from utils.links import get_id
 
 
@@ -54,7 +54,7 @@ def material_notice(author_name: str, author_id: str) -> str:
 		"1. 截图位置为 Pixiv 的「数据分析」或「我的作品」页面",
 		"2. 截图里要有：该作者的至少一篇小说",
 		"",
-		f"请在 {BlackRequestStore.MATERIAL_TTL_MINUTES} 分钟内发送；管理员核验后会私聊通知结果",
+		f"请在 {BLACK_REQUEST_MATERIAL_TTL_MINUTES} 分钟内发送；管理员核验后会私聊通知结果",
 	])
 
 

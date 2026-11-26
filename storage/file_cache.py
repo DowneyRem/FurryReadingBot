@@ -22,15 +22,16 @@ class FileCacheStore(JsonStore):
 	"""
 
 	DATA_KEY = "files"
-	DEFAULT_TTL_DAYS = 30
 
 	def __init__(self, path: Path | None = None, default_ttl_days: float | None = None) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "files_cache.json"
-		# bot 内由 config.FILE_CACHE_TTL_DAYS 覆盖；0 也是合法值，不能用 or 兜底
-		self.default_ttl_days = (
-			self.DEFAULT_TTL_DAYS if default_ttl_days is None else default_ttl_days
-		)
+		# 默认值只在 config 里定义；0 也是合法值（立即过期），不能用 or 兜底
+		if default_ttl_days is None:
+			from config import FILE_CACHE_TTL_DAYS
+
+			default_ttl_days = FILE_CACHE_TTL_DAYS
+		self.default_ttl_days = default_ttl_days
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
@@ -131,10 +132,8 @@ _default_cache: FileCacheStore | None = None
 
 
 def get_file_cache() -> FileCacheStore:
-	"""进程内共享的 file_id 缓存；TTL 由 config 控制。"""
+	"""进程内共享的 file_id 缓存；TTL 走 config.FILE_CACHE_TTL_DAYS。"""
 	global _default_cache
 	if _default_cache is None:
-		from config import FILE_CACHE_TTL_DAYS
-
-		_default_cache = FileCacheStore(default_ttl_days=FILE_CACHE_TTL_DAYS)
+		_default_cache = FileCacheStore()
 	return _default_cache

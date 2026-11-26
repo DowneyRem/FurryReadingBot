@@ -124,7 +124,7 @@ def test_missing_tags_read_as_empty(tmp_path) -> None:
 
 
 def test_zero_ttl_means_immediately_expired(tmp_path) -> None:
-	"""default_ttl_days=0 不应被 or 兜底成默认 30 天。"""
+	"""default_ttl_days=0 不应被 or 兜底成 config.FILE_CACHE_TTL_DAYS。"""
 	store = _store(tmp_path, default_ttl_days=0)
 	key = FileCacheStore.make_key("series", "9", "zip")
 	store.set(key, "FILE_ID")

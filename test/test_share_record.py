@@ -202,7 +202,7 @@ def test_expired_messages_are_pruned(tmp_path) -> None:
 	}
 	path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
-	store = ShareRecordStore(path=path, cooldown_days=1)
+	store = ShareRecordStore(path=path, cooldown_days=1, record_ttl_days=30)
 	assert store.work("12345", "novel", "1") is None
 	assert store.by_author("12345") == []
 	assert store.is_limited("12345", "novel", "1") is False

@@ -145,7 +145,7 @@ def test_submit_material_expired(tmp_path) -> None:
 	service, store, _ = make_service(tmp_path)
 	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
 
-	store.MATERIAL_TTL_MINUTES = 0
+	store.material_ttl_minutes = 0
 	result = service.submit_material(7, "PHOTO")
 
 	assert result.status == "expired"

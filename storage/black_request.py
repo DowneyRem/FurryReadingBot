@@ -7,7 +7,7 @@
 	pending_material（等截图） → pending_review（等管理员） → approved / rejected
 
 key 为 author_id：一个作者一条记录，重复申请只累计 ``count``。
-「等截图」有有效期（``MATERIAL_TTL_MINUTES``），过期后要重新点申请。
+「等截图」有时限（``config.BLACK_REQUEST_MATERIAL_TTL_MINUTES``），过期后要重新点申请。
 """
 
 from __future__ import annotations
@@ -32,14 +32,25 @@ class BlackRequestStore(JsonStore):
 	STATUS_REJECTED = "rejected"
 
 	# 点完申请后，多久内提交截图仍然有效
-	MATERIAL_TTL_MINUTES = 30
+	# 具体分钟数只在 config 里定义（BLACK_REQUEST_MATERIAL_TTL_MINUTES）
 
-	def __init__(self, path: Path | None = None) -> None:
+	def __init__(
+		self,
+		path: Path | None = None,
+		*,
+		material_ttl_minutes: float | None = None,
+	) -> None:
 		if path is None:
 			path = (
 				Path(__file__).parent.parent.resolve()
 				/ "data" / "black_request.json"
 			)
+		# 默认值只在 config 里定义；0 也是合法值（立即过期），不能用 or 兜底
+		if material_ttl_minutes is None:
+			from config import BLACK_REQUEST_MATERIAL_TTL_MINUTES
+
+			material_ttl_minutes = BLACK_REQUEST_MATERIAL_TTL_MINUTES
+		self.material_ttl_minutes = material_ttl_minutes
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
@@ -173,7 +184,7 @@ class BlackRequestStore(JsonStore):
 			return True
 		minutes = (
 			ttl_minutes if ttl_minutes is not None
-			else self.MATERIAL_TTL_MINUTES
+			else self.material_ttl_minutes
 		)
 		return utc_now() - moment > timedelta(minutes=minutes)
 

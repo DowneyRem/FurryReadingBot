@@ -11,7 +11,7 @@
   - 下架按作者来（投诉 → 拉黑 → 删历史），所以作者是第一层 key；
   - ``share_count`` 是「用户分享次数」，一次点击只 +1，发几个频道都不再加；
   - ``first_shared_at`` / ``last_shared_at`` 由 history 派生，读盘时重算；
-  - 记录按消息级 TTL 保留，30 天内可回溯下架。
+  - 记录按消息级 TTL 保留（`config.SHARE_RECORD_TTL_DAYS`），保留期内可回溯下架。
 
 旧格式（顶层 key 是 "novel:123"）会在读盘时被丢弃：作者 key 必须是纯数字。
 """
@@ -49,20 +49,27 @@ class ShareRecordStore(JsonStore):
 	"""分享记录：按作者归档，冷却窗口与记录保留时间（TTL）相互独立。"""
 
 	DATA_KEY = "shares"
-	DEFAULT_COOLDOWN_DAYS = 7
-	# 记录保留时间写死在代码里，不提供配置入口
-	DEFAULT_TTL_DAYS = 30
 
 	def __init__(
 		self,
 		path: Path | None = None,
 		cooldown_days: float | None = None,
+		*,
+		record_ttl_days: float | None = None,
 	) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "share_records.json"
-		self.cooldown_days = (
-			cooldown_days if cooldown_days is not None else self.DEFAULT_COOLDOWN_DAYS
-		)
+		# 默认值只在 config 里定义；0 也是合法值，不能用 or 兜底
+		if cooldown_days is None:
+			from config import SHARE_COOLDOWN_DAYS
+
+			cooldown_days = SHARE_COOLDOWN_DAYS
+		if record_ttl_days is None:
+			from config import SHARE_RECORD_TTL_DAYS
+
+			record_ttl_days = SHARE_RECORD_TTL_DAYS
+		self.cooldown_days = cooldown_days
+		self.record_ttl_days = record_ttl_days
 		super().__init__(path)
 
 	# ----- key 规则 -----
@@ -157,7 +164,7 @@ class ShareRecordStore(JsonStore):
 		读盘、写盘、查询前都会跑，保证内存里永远只有「TTL 天内」的数据。
 		"""
 		now = utc_now()
-		ttl = timedelta(days=self.DEFAULT_TTL_DAYS)
+		ttl = timedelta(days=self.record_ttl_days)
 		kept = JsonDict()
 		for author_id, node in self._items.items():
 			author_key = str(author_id)
@@ -396,11 +403,9 @@ _default_store: ShareRecordStore | None = None
 
 
 def get_share_records() -> ShareRecordStore:
-	"""进程内共享的分享记录；冷却天数由 config 控制。"""
+	"""进程内共享的分享记录；冷却 / 记录保留时间都走 config。"""
 	global _default_store
 	if _default_store is None:
-		from config import SHARE_COOLDOWN_DAYS
-
-		_default_store = ShareRecordStore(cooldown_days=SHARE_COOLDOWN_DAYS)
+		_default_store = ShareRecordStore()
 	return _default_store
 

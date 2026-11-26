@@ -69,7 +69,7 @@ def test_list_payload_persists(tmp_path) -> None:
 
 
 def test_zero_ttl_means_immediately_expired(tmp_path) -> None:
-	"""default_ttl_hours=0 不应被 or 兜底成默认 6 小时。"""
+	"""default_ttl_hours=0 不应被 or 兜底成 config.FETCH_CACHE_TTL_HOURS。"""
 	store = _store(tmp_path, default_ttl_hours=0)
 	store.set(NOVEL_URL, {"body": {}})
 	assert store.get(NOVEL_URL) is None

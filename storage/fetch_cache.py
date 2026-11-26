@@ -42,7 +42,6 @@ class FetchCacheStore(JsonStore):
 	"""请求 URL -> JSON 响应的缓存；单条记录带 TTL、写入序号与字节数。"""
 
 	DATA_KEY = "responses"
-	DEFAULT_TTL_HOURS = 6
 	# 单条响应的硬上限：Chapter 正文再长也不该超过它，否则直接不缓存
 	DEFAULT_MAX_BYTES = 2 * 1024 * 1024
 	DEFAULT_MAX_ENTRIES = 200
@@ -57,10 +56,12 @@ class FetchCacheStore(JsonStore):
 	) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "fetch_cache.json"
-		# 0 也是合法值（立即过期），不能用 or 兜底
-		self.default_ttl_hours = (
-			self.DEFAULT_TTL_HOURS if default_ttl_hours is None else default_ttl_hours
-		)
+		# 默认值只在 config 里定义；0 也是合法值（立即过期），不能用 or 兜底
+		if default_ttl_hours is None:
+			from config import FETCH_CACHE_TTL_HOURS
+
+			default_ttl_hours = FETCH_CACHE_TTL_HOURS
+		self.default_ttl_hours = default_ttl_hours
 		self.max_bytes = self.DEFAULT_MAX_BYTES if max_bytes is None else max_bytes
 		self.max_entries = self.DEFAULT_MAX_ENTRIES if max_entries is None else max_entries
 		# 下面 super().__init__ 会触发 reload -> _prune，上限必须先就位
@@ -165,12 +166,10 @@ _default_cache: FetchCacheStore | None = None
 
 
 def get_fetch_cache() -> FetchCacheStore:
-	"""进程内共享的请求缓存；TTL 由 config 控制。"""
+	"""进程内共享的请求缓存；TTL 走 config.FETCH_CACHE_TTL_HOURS。"""
 	global _default_cache
 	if _default_cache is None:
-		from config import FETCH_CACHE_TTL_HOURS
-
-		_default_cache = FetchCacheStore(default_ttl_hours=FETCH_CACHE_TTL_HOURS)
+		_default_cache = FetchCacheStore()
 	return _default_cache
 
 
