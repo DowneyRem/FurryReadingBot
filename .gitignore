@@ -1,6 +1,7 @@
 .idea
 .venv
 .env
+pixiv.env
 files
 *.zip
 data
