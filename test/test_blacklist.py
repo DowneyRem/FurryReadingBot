@@ -312,6 +312,22 @@ def test_confirm_pending_review(monkeypatch) -> None:
 	assert "已在核验中" in replies[-1][0]
 
 
+def test_confirm_cooldown(monkeypatch) -> None:
+	"""送审后被拒，1 天内再申请：直接告知还要等多久，不给材料清单。"""
+	_, replies, _, _, _ = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			request=BlacklistRequest(
+				"cooldown", "42", "作者", None, 3600.0)))
+
+	run(request_blacklist_confirm(
+		FakeUpdate(), FakeContext(), data=f"aby;{AUTHOR_URL}"))
+
+	assert "1 天内只能申请一次" in replies[-1][0]
+	assert "1 小时后可再次申请" in replies[-1][0]
+	assert "Pixiv 后台数据" not in replies[-1][0]
+
+
 def test_confirm_already_blacklisted(monkeypatch) -> None:
 	_, replies, _, _, _ = patch_handler(
 		monkeypatch,

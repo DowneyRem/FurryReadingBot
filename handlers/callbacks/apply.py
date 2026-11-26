@@ -1,7 +1,7 @@
 """用户侧申请 callback：af（告知后果 + 二次确认）/ afy（提交申请）。
 
-业务规则在 services.apply_service，管理核验在 handlers.callbacks.review，
-公共 Telegram 工具在 handlers.telegram。
+业务规则在 services.apply_service（含「同一作者 1 天只能申请一次」的冷却），
+管理核验在 handlers.callbacks.review，公共 Telegram 工具在 handlers.telegram。
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from handlers.telegram import reply, send_to_transit
 from keyboards import confirm_furry_keyboard
 from services import ApplyInvalidLinkError, ApplyService
+from utils.time import format_remaining
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,16 @@ def apply_notice(author_name: str, author_id: str) -> str:
 		"确认发起申请吗？"
 	]
 	return "\n".join(message)
+
+
+def cooldown_text(author_name: str, author_id: str, remaining_seconds: float) -> str:
+	"""同一作者 1 天内只能申请一次：告诉用户还要等多久。"""
+	name = author_name or author_id
+	return "\n".join([
+		"同一作者 1 天内只能申请一次",
+		f"{name}（#a{author_id}）刚刚已经申请过，"
+		f"{format_remaining(remaining_seconds)}后可再次申请",
+	])
 
 
 def _link_from_data(data: str) -> str:
@@ -82,6 +93,14 @@ async def apply_furry(update: Update, context: ContextTypes.DEFAULT_TYPE,
 			"请等待管理员核验")
 		return
 
+	if inspection.status == "cooldown":
+		await edit_or_reply(
+			update, context,
+			cooldown_text(
+				inspection.author_name, inspection.author_id,
+				inspection.remaining_seconds))
+		return
+
 	await edit_or_reply(
 		update, context,
 		apply_notice(inspection.author_name, inspection.author_id),
@@ -124,6 +143,13 @@ async def apply_furry_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
 		await edit_or_reply(
 			update, context,
 			f"作者 {result.author_name}（#a{result.author_id}）的申请已在审核中，请勿重复提交")
+		return
+
+	if result.status == "cooldown":
+		await edit_or_reply(
+			update, context,
+			cooldown_text(
+				result.author_name, result.author_id, result.remaining_seconds))
 		return
 
 	if not result.transit_sent:

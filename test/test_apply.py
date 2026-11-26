@@ -17,6 +17,7 @@ from handlers.callbacks.apply import (
 	_blocked_text,
 	_link_from_data,
 	apply_notice,
+	cooldown_text,
 )
 from services.apply_service import (
 	ApplyInspection,
@@ -223,6 +224,49 @@ def test_apply_furry_confirm_invalid_data(monkeypatch) -> None:
 
 	assert "无法从链接中解析作者 ID" in captured[0]["text"]
 	assert service.submitted is None
+
+
+def test_apply_furry_cooldown(monkeypatch) -> None:
+	"""1 天内已经申请过：af 直接告知还要等多久，不给确认按钮。"""
+	_, captured = patch_handler(
+		monkeypatch,
+		inspection=ApplyInspection(
+			"cooldown", "42", "作者", AUTHOR_LINK, None, 3600.0),
+	)
+
+	run(apply_handler.apply_furry(
+		FakeUpdate(), object(), data=f"af;{AUTHOR_LINK}"))
+
+	assert "1 天内只能申请一次" in captured[0]["text"]
+	assert "1 小时后可再次申请" in captured[0]["text"]
+	assert captured[0]["markup"] is None
+
+
+def test_apply_furry_confirm_cooldown(monkeypatch) -> None:
+	"""(确认时撞上冷却：不显示「已提交」)"""
+	_, captured = patch_handler(
+		monkeypatch,
+		submission=ApplySubmission(
+			status="cooldown",
+			author_id="42",
+			author_name="作者",
+			link=AUTHOR_LINK,
+			remaining_seconds=1800.0,
+		),
+	)
+
+	run(apply_handler.apply_furry_confirm(
+		FakeUpdate(), object(), data=f"afy;{AUTHOR_LINK}"))
+
+	assert "1 天内只能申请一次" in captured[-1]["text"]
+	assert "已提交" not in captured[-1]["text"]
+
+
+def test_cooldown_text_without_name() -> None:
+	"""作者名抓不到时退化成作者 ID，文案仍然完整。"""
+	text = cooldown_text("", "42", 60)
+	assert "#a42" in text
+	assert "1 分钟后可再次申请" in text
 
 
 if __name__ == "__main__":

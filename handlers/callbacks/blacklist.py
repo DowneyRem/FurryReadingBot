@@ -14,7 +14,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import BLACK_REQUEST_MATERIAL_TTL_MINUTES
-from handlers.callbacks.apply import edit_or_reply
+from handlers.callbacks.apply import cooldown_text, edit_or_reply
 from handlers.callbacks.review import (
 	close_transit_message,
 	ensure_transit_admin,
@@ -174,6 +174,12 @@ async def request_blacklist_confirm(
 		await edit_or_reply(
 			update, context,
 			f"作者 {result.author_name}（#a{result.author_id}）的下架申请已在核验中\n请等待管理员处理。")
+		return
+	if result.status == "cooldown":
+		await edit_or_reply(
+			update, context,
+			cooldown_text(
+				result.author_name, result.author_id, result.remaining_seconds))
 		return
 
 	await edit_or_reply(
