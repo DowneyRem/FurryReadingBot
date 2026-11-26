@@ -22,3 +22,22 @@ def parse_iso(s: str) -> datetime | None:
 		return datetime.fromisoformat(s)
 	except Exception:
 		return None
+
+
+def cooldown_remaining(moment: datetime | None, hours: float) -> float:
+	"""距离 ``moment + hours`` 还剩多少秒；时间缺失或已过期返回 0。"""
+	if moment is None:
+		return 0.0
+	return max(0.0, hours * 3600 - (utc_now() - moment).total_seconds())
+
+
+def format_remaining(seconds: float) -> str:
+	"""把剩余秒数格式化为「x 天 y 小时」/「x 小时 y 分钟」/「x 分钟」。"""
+	minutes = int(seconds // 60) + (1 if seconds % 60 else 0)
+	days, minutes = divmod(minutes, 24 * 60)
+	hours, minutes = divmod(minutes, 60)
+	if days:
+		return f"{days} 天 {hours} 小时" if hours else f"{days} 天"
+	if hours:
+		return f"{hours} 小时 {minutes} 分钟" if minutes else f"{hours} 小时"
+	return f"{max(minutes, 1)} 分钟"

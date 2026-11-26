@@ -1,12 +1,18 @@
-"""ID 规则与提取：IdRule 绑定 pattern/label，get_id 兼容纯数字与链接。"""
+"""ID 规则与提取：IdRule 绑定 pattern/label，get_id 兼容纯数字与链接。
+
+外加时间工具：申请冷却的剩余秒数计算。
+"""
 
 from __future__ import annotations
+
+from datetime import timedelta
 
 from sources.linpx.config import NOVEL as LINPX_NOVEL
 from sources.linpx.config import NOVEL_PATTERN as LINPX_NOVEL_PATTERN
 from sources.pixiv.config import NOVEL as PIXIV_NOVEL
 from sources.pixiv.config import NOVEL_PATTERN as PIXIV_NOVEL_PATTERN
 from sources.utils import get_id
+from utils.time import cooldown_remaining, utc_now
 
 
 def test_id_rule_binds_pattern_and_label() -> None:
@@ -35,3 +41,11 @@ def test_extracts_from_sentence() -> None:
 def test_returns_none_without_id() -> None:
 	assert get_id("hello world", LINPX_NOVEL_PATTERN) is None
 	assert get_id("", PIXIV_NOVEL_PATTERN) is None
+
+
+def test_cooldown_remaining_counts_down() -> None:
+	"""申请冷却：时间缺失 / 已过期都是 0，窗口内返回剩余秒数。"""
+	assert cooldown_remaining(None, 24) == 0.0
+	assert cooldown_remaining(utc_now() - timedelta(hours=25), 24) == 0.0
+	assert 0 < cooldown_remaining(utc_now(), 24) <= 24 * 3600
+	assert cooldown_remaining(utc_now(), 0) == 0.0

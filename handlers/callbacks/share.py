@@ -23,21 +23,10 @@ from sources import resolve_source
 from storage.file_cache import FileCacheStore, get_file_cache
 from storage.share_records import get_share_records
 from utils.links import get_id
+from utils.time import format_remaining
 
 
 logger = logging.getLogger(__name__)
-
-
-def format_remaining(seconds: float) -> str:
-	"""把剩余冷却秒数格式化为「x 天 y 小时」/「x 小时 y 分钟」。"""
-	minutes = int(seconds // 60) + (1 if seconds % 60 else 0)
-	days, minutes = divmod(minutes, 24 * 60)
-	hours, minutes = divmod(minutes, 60)
-	if days:
-		return f"{days} 天 {hours} 小时" if hours else f"{days} 天"
-	if hours:
-		return f"{hours} 小时 {minutes} 分钟" if minutes else f"{hours} 小时"
-	return f"{max(minutes, 1)} 分钟"
 
 
 def format_channels(channels: tuple[str, ...]) -> str:

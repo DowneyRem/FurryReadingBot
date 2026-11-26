@@ -34,7 +34,7 @@ CONCURRENT_UPDATES = 8
 
 
 # 时间参数：storage 里的 TTL / 冷却 / 有效期 -----
-# 按一次使用流程的先后顺序排列：抓来源 → 下载产物 → 分享 → 分享记录保留 → 下架申请
+# 按一次使用流程的先后顺序排列：抓来源 → 下载产物 → 分享 → 分享记录保留 → 下架申请 → 申请冷却
 # ① 抓来源：同一链接的 JSON 响应缓存多久；预检 / 解析系列 / 打包共用同一份
 FETCH_CACHE_TTL_HOURS = 24
 # ② 下载产物：file_id 在该时间（天）内可直接复用，不再重新上传
@@ -45,6 +45,9 @@ SHARE_COOLDOWN_DAYS = 3
 SHARE_RECORD_TTL_DAYS = 365 * 2
 # ⑤ 下架申请：点「申请下架」后必须在该时间（分钟）内提交后台截图，过期作废
 BLACK_REQUEST_MATERIAL_TTL_MINUTES = 30
+# ⑥ 申请冷却：同一作者在该时间（小时）内只能申请一次（兽人名单 / 黑名单共用）
+#    兽人名单按「提交申请」算；黑名单按「提交截图送审」算（受理后 30 分钟没交截图会作废，不该再等一天）
+APPLY_COOLDOWN_HOURS = 24
 
 
 def config_errors() -> list[str]:
