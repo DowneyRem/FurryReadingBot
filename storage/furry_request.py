@@ -14,21 +14,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from storage.json_store import JsonStore
-from utils.json import JsonDict
-from utils.time import cooldown_left, is_older_than, parse_iso, utc_now_iso
+from storage.request_store import AuthorRequestStore
+from utils.json import JsonDict, to_int
+from utils.time import utc_now_iso
 
 
-class FurryRequestStore(JsonStore):
+class FurryRequestStore(AuthorRequestStore):
 	"""待审核的「申请加入兽人作者名单」记录，key 为 author_id。"""
 
 	DATA_KEY = "furry_request"
+	RECORD_TTL_CONFIG = "FURRY_REQUEST_TTL_DAYS"
 
 	STATUS_PENDING = "pending"
-	STATUS_APPROVED = "approved"
-	STATUS_REJECTED = "rejected"
-	# 已经走完流程的状态：只有这些记录会按 record_ttl_days 淘汰
-	CLOSED_STATUSES = (STATUS_APPROVED, STATUS_REJECTED)
+	DEFAULT_STATUS = STATUS_PENDING
 
 	def __init__(
 		self,
@@ -39,18 +37,11 @@ class FurryRequestStore(JsonStore):
 	) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "furry_request.json"
-		# 默认值只在 config 里定义；0 也是合法值（不冷却 / 立即过期），不能用 or 兜底
-		if apply_cooldown_hours is None:
-			from config import APPLY_COOLDOWN_HOURS
-
-			apply_cooldown_hours = APPLY_COOLDOWN_HOURS
-		if record_ttl_days is None:
-			from config import FURRY_REQUEST_TTL_DAYS
-
-			record_ttl_days = FURRY_REQUEST_TTL_DAYS
-		self.apply_cooldown_hours = apply_cooldown_hours
-		self.record_ttl_days = record_ttl_days
-		super().__init__(path)
+		super().__init__(
+			path,
+			apply_cooldown_hours=apply_cooldown_hours,
+			record_ttl_days=record_ttl_days,
+		)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
 		if not isinstance(info, dict):
@@ -65,47 +56,13 @@ class FurryRequestStore(JsonStore):
 			created_at=str(info.get("created_at") or ""),
 			last_apply_at=str(info.get("last_apply_at") or ""),
 			updated_at=str(info.get("updated_at") or ""),
-			count=int(info.get("count") or 0),
+			count=to_int(info.get("count")),
 			note=str(info.get("note") or ""),
 		)
-
-	def _prune(self) -> None:
-		"""删掉已结束且超过 ``record_ttl_days`` 的申请记录。
-
-		``pending`` 还在等审核，不能按 TTL 淘汰；``updated_at`` 解析不出来的
-		旧数据也保留——宁可留一条脏记录，也不静默丢掉一次申请。
-		"""
-		for key, info in list(self._items.items()):
-			if str(info.get("status") or self.STATUS_PENDING) not in self.CLOSED_STATUSES:
-				continue
-			if is_older_than(
-				parse_iso(str(info.get("updated_at") or "")),
-				self.record_ttl_days,
-			):
-				del self._items[key]
-
-	@staticmethod
-	def make_key(author_id: str | int) -> str:
-		return str(author_id)
-
-	def get(self, author_id: str | int) -> JsonDict | None:
-		"""返回该作者的申请记录，没有则返回 None。"""
-		self._maybe_reload()
-		with self._lock:
-			info = self._items.get(self.make_key(author_id))
-			return JsonDict(info) if info else None
 
 	def is_pending(self, author_id: str | int) -> bool:
 		info = self.get(author_id)
 		return bool(info) and info.status == self.STATUS_PENDING
-
-	def apply_remaining(self, author_id: str | int) -> float:
-		"""距离该作者下次可申请还剩多少秒；0 表示现在就能申请。"""
-		info = self.get(author_id)
-		if not info:
-			return 0.0
-		return cooldown_left(
-			str(info.last_apply_at or ""), self.apply_cooldown_hours)
 
 	def submit(
 		self,
@@ -134,48 +91,11 @@ class FurryRequestStore(JsonStore):
 				created_at=str(prev.created_at or now),
 				last_apply_at=now,
 				updated_at=now,
-				count=int(prev.count or 0) + 1,
+				count=to_int(prev.count) + 1,
 				note=str(note or prev.note or ""),
 			)
 			self._persist()
 			return JsonDict(self._items[key])
-
-	def set_status(
-		self, author_id: str | int, status: str,
-		*, expected: str | None = None) -> bool:
-		"""更新申请状态；``expected`` 用于保证并发核验只有一个能生效。"""
-		with self._lock:
-			self._maybe_reload()
-			key = self.make_key(author_id)
-			current = self._items.get(key)
-			if current is None:
-				return False
-			if expected is not None and str(current.status or "") != expected:
-				return False
-			self._items[key] = JsonDict({
-				**current,
-				"status": status,
-				"updated_at": utc_now_iso(),
-			})
-			self._persist()
-			return True
-
-	def remove(self, author_id: str | int) -> bool:
-		with self._lock:
-			self._maybe_reload()
-			key = self.make_key(author_id)
-			if key not in self._items:
-				return False
-			del self._items[key]
-			self._persist()
-			return True
-
-	def records(self) -> JsonDict:
-		"""返回全部申请记录的浅拷贝，便于管理端展示。"""
-		self._maybe_reload()
-		with self._lock:
-			return JsonDict(dict(self._items))
-
 
 _default_store: FurryRequestStore | None = None
 

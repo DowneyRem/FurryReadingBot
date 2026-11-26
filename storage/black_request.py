@@ -35,32 +35,22 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from storage.json_store import JsonStore
-from utils.json import JsonDict
-from utils.time import (
-	cooldown_left,
-	is_older_than,
-	parse_iso,
-	remaining_seconds,
-	utc_now_iso,
-)
+from storage.json_store import config_default
+from storage.request_store import AuthorRequestStore
+from utils.json import JsonDict, to_int
+from utils.time import parse_iso, remaining_seconds, utc_now_iso
 
 
-class BlackRequestStore(JsonStore):
+class BlackRequestStore(AuthorRequestStore):
 	"""作者下架申请记录，key 为 author_id。"""
 
 	DATA_KEY = "black_request"
+	RECORD_TTL_CONFIG = "BLACK_REQUEST_TTL_DAYS"
 
 	STATUS_MATERIAL = "pending_material"
 	STATUS_REVIEW = "pending_review"
-	STATUS_APPROVED = "approved"
-	STATUS_REJECTED = "rejected"
-	# 已经走完流程的状态：只有这些记录会按 record_ttl_days 淘汰
-	# （pending_material 过期后还要被接手，pending_review 要等核验，都不能删）
-	CLOSED_STATUSES = (STATUS_APPROVED, STATUS_REJECTED)
-
-	# 点完申请后，多久内提交截图仍然有效
-	# 具体分钟数只在 config 里定义（BLACK_REQUEST_MATERIAL_TTL_MINUTES）
+	# STATUS_APPROVED / STATUS_REJECTED / CLOSED_STATUSES 继承自 AuthorRequestStore
+	DEFAULT_STATUS = STATUS_MATERIAL
 
 	def __init__(
 		self,
@@ -76,22 +66,13 @@ class BlackRequestStore(JsonStore):
 				/ "data" / "black_request.json"
 			)
 		# 默认值只在 config 里定义；0 也是合法值（立即过期 / 不冷却），不能用 or 兜底
-		if material_ttl_minutes is None:
-			from config import BLACK_REQUEST_MATERIAL_TTL_MINUTES
-
-			material_ttl_minutes = BLACK_REQUEST_MATERIAL_TTL_MINUTES
-		if apply_cooldown_hours is None:
-			from config import APPLY_COOLDOWN_HOURS
-
-			apply_cooldown_hours = APPLY_COOLDOWN_HOURS
-		if record_ttl_days is None:
-			from config import BLACK_REQUEST_TTL_DAYS
-
-			record_ttl_days = BLACK_REQUEST_TTL_DAYS
-		self.material_ttl_minutes = material_ttl_minutes
-		self.apply_cooldown_hours = apply_cooldown_hours
-		self.record_ttl_days = record_ttl_days
-		super().__init__(path)
+		self.material_ttl_minutes = config_default(
+			material_ttl_minutes, "BLACK_REQUEST_MATERIAL_TTL_MINUTES")
+		super().__init__(
+			path,
+			apply_cooldown_hours=apply_cooldown_hours,
+			record_ttl_days=record_ttl_days,
+		)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
 		if not isinstance(info, dict):
@@ -107,48 +88,13 @@ class BlackRequestStore(JsonStore):
 			created_at=str(info.get("created_at") or ""),
 			last_apply_at=str(info.get("last_apply_at") or ""),
 			updated_at=str(info.get("updated_at") or ""),
-			count=int(info.get("count") or 0),
+			count=to_int(info.get("count")),
 			note=str(info.get("note") or ""),
 			# 上一位受理人：受理窗口过期后被新申请接手时记下，
 			# 让原申请人再发截图时能收到「请重新申请」而不是静默
 			previous_user_id=str(info.get("previous_user_id") or ""),
 			previous_user_name=str(info.get("previous_user_name") or ""),
 		)
-
-	def _prune(self) -> None:
-		"""删掉已结束且超过 ``record_ttl_days`` 的申请记录。
-
-		只淘汰 ``approved`` / ``rejected``：``pending_material`` 过期后要被下一位
-		申请人接手（``open()``），``pending_review`` 还在等管理员核验——早删会让
-		原申请人收不到提示、或让申请凭空消失。``updated_at`` 解析不出来的旧数据同样保留。
-		"""
-		for key, info in list(self._items.items()):
-			if str(info.get("status") or self.STATUS_MATERIAL) not in self.CLOSED_STATUSES:
-				continue
-			if is_older_than(
-				parse_iso(str(info.get("updated_at") or "")),
-				self.record_ttl_days,
-			):
-				del self._items[key]
-
-	@staticmethod
-	def make_key(author_id: str | int) -> str:
-		return str(author_id)
-
-	def get(self, author_id: str | int) -> JsonDict | None:
-		"""返回该作者的申请记录，没有则返回 None。"""
-		self._maybe_reload()
-		with self._lock:
-			info = self._items.get(self.make_key(author_id))
-			return JsonDict(info) if info else None
-
-	def apply_remaining(self, author_id: str | int) -> float:
-		"""距离该作者下次可申请还剩多少秒；0 表示现在就能申请。"""
-		info = self.get(author_id)
-		if not info:
-			return 0.0
-		return cooldown_left(
-			str(info.last_apply_at or ""), self.apply_cooldown_hours)
 
 	def open(
 		self,
@@ -191,7 +137,7 @@ class BlackRequestStore(JsonStore):
 				created_at=str(prev.created_at or now),
 				last_apply_at=str(prev.last_apply_at or ""),
 				updated_at=now,
-				count=int(prev.count or 0) + 1,
+				count=to_int(prev.count) + 1,
 				note="",
 				previous_user_id=prev_user if takeover else "",
 				previous_user_name=str(prev.user_name or "") if takeover else "",
@@ -219,26 +165,6 @@ class BlackRequestStore(JsonStore):
 			self._persist()
 			return True
 
-	def set_status(
-		self, author_id: str | int, status: str,
-		*, expected: str | None = None) -> bool:
-		"""更新申请状态；``expected`` 保证并发核验只有一个能生效。"""
-		with self._lock:
-			self._maybe_reload()
-			key = self.make_key(author_id)
-			current = self._items.get(key)
-			if current is None:
-				return False
-			if expected is not None and str(current.status or "") != expected:
-				return False
-			self._items[key] = JsonDict({
-				**current,
-				"status": status,
-				"updated_at": utc_now_iso(),
-			})
-			self._persist()
-			return True
-
 	def discard_material(self, author_id: str | int) -> None:
 		"""作废一条仍在「等截图」的申请（截图超时后调用）。"""
 		with self._lock:
@@ -255,19 +181,7 @@ class BlackRequestStore(JsonStore):
 		由 ``request()`` 保证同一用户同时只有一条，所以结果唯一；
 		若历史数据里有多条，取 ``updated_at`` 最新的那条。
 		"""
-		key = str(user_id or "")
-		if not key:
-			return None
-		self._maybe_reload()
-		with self._lock:
-			hits = [
-				info for info in self._items.values()
-				if str(info.user_id or "") == key
-				and info.status == self.STATUS_MATERIAL
-			]
-			if not hits:
-				return None
-			return JsonDict(max(hits, key=lambda info: str(info.updated_at or "")))
+		return self._latest_material(user_id)
 
 	def other_material_for_user(
 		self, user_id: str | int | None, author_id: str | int,
@@ -276,17 +190,31 @@ class BlackRequestStore(JsonStore):
 
 		「一个用户同时只留一条待交材料」由服务层执行，这里只负责查。
 		"""
+		return self._latest_material(user_id, exclude_author=author_id)
+
+	def _latest_material(
+		self,
+		user_id: str | int | None,
+		*,
+		exclude_author: str | int | None = None,
+	) -> JsonDict | None:
+		"""该用户最近一条「等截图」记录；``exclude_author`` 排除指定作者。
+
+		两个对外查询只差「要不要排掉当前作者」，扫描逻辑只写这一处。
+		"""
 		key = str(user_id or "")
 		if not key:
 			return None
-		target = self.make_key(author_id)
+		target = (
+			self.make_key(exclude_author) if exclude_author is not None else None
+		)
 		self._maybe_reload()
 		with self._lock:
 			hits = [
 				info for info in self._items.values()
 				if str(info.user_id or "") == key
 				and info.status == self.STATUS_MATERIAL
-				and self.make_key(info.author_id) != target
+				and (target is None or self.make_key(info.author_id) != target)
 			]
 			if not hits:
 				return None
@@ -326,12 +254,6 @@ class BlackRequestStore(JsonStore):
 		ttl_minutes: float | None = None) -> bool:
 		"""这条「等截图」的申请是否已过期。"""
 		return self.material_remaining(record, ttl_minutes=ttl_minutes) <= 0
-
-	def records(self) -> JsonDict:
-		"""全部申请记录的浅拷贝，便于统计 / 管理端展示。"""
-		self._maybe_reload()
-		with self._lock:
-			return JsonDict(dict(self._items))
 
 
 _default_store: BlackRequestStore | None = None
