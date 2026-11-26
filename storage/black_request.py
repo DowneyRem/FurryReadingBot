@@ -21,6 +21,12 @@ key 为 author_id：一个作者一条记录，重复申请只累计 ``count``�
 「等截图」窗口过期后，下一个受理会**接手**同一条记录（``open()``）：
 ``created_at`` / ``count`` 保留，上一位申请人记进 ``previous_user_id``；
 他再补发截图时由 ``taken_over_material_for_user`` 识别，提示重新申请。
+
+已结束（通过 / 拒绝）的记录按 ``config.BLACK_REQUEST_TTL_DAYS`` 保留，到期在
+``_prune()`` 里整条删掉。**仍在流程里的记录不按 TTL 淘汰**：``pending_material``
+的窗口由 ``material_ttl_minutes`` 管，且过期后要被下一位申请人接手——删掉会丢掉
+``count`` / ``previous_user_id``，让原申请人再发截图时收不到提示；``pending_review``
+在等管理员核验，更不能自动消失。黑名单本身在 ``black_authors.json``，不受影响。
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ from storage.json_store import JsonStore
 from utils.json import JsonDict
 from utils.time import (
 	cooldown_remaining,
+	is_older_than,
 	parse_iso,
 	utc_now,
 	utc_now_iso,
@@ -47,6 +54,9 @@ class BlackRequestStore(JsonStore):
 	STATUS_REVIEW = "pending_review"
 	STATUS_APPROVED = "approved"
 	STATUS_REJECTED = "rejected"
+	# 已经走完流程的状态：只有这些记录会按 record_ttl_days 淘汰
+	# （pending_material 过期后还要被接手，pending_review 要等核验，都不能删）
+	CLOSED_STATUSES = (STATUS_APPROVED, STATUS_REJECTED)
 
 	# 点完申请后，多久内提交截图仍然有效
 	# 具体分钟数只在 config 里定义（BLACK_REQUEST_MATERIAL_TTL_MINUTES）
@@ -57,13 +67,14 @@ class BlackRequestStore(JsonStore):
 		*,
 		material_ttl_minutes: float | None = None,
 		apply_cooldown_hours: float | None = None,
+		record_ttl_days: float | None = None,
 	) -> None:
 		if path is None:
 			path = (
 				Path(__file__).parent.parent.resolve()
 				/ "data" / "black_request.json"
 			)
-		# 默认值只在 config 里定义；0 也是合法值（立即过期），不能用 or 兜底
+		# 默认值只在 config 里定义；0 也是合法值（立即过期 / 不冷却），不能用 or 兜底
 		if material_ttl_minutes is None:
 			from config import BLACK_REQUEST_MATERIAL_TTL_MINUTES
 
@@ -72,8 +83,13 @@ class BlackRequestStore(JsonStore):
 			from config import APPLY_COOLDOWN_HOURS
 
 			apply_cooldown_hours = APPLY_COOLDOWN_HOURS
+		if record_ttl_days is None:
+			from config import BLACK_REQUEST_TTL_DAYS
+
+			record_ttl_days = BLACK_REQUEST_TTL_DAYS
 		self.material_ttl_minutes = material_ttl_minutes
 		self.apply_cooldown_hours = apply_cooldown_hours
+		self.record_ttl_days = record_ttl_days
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
@@ -97,6 +113,22 @@ class BlackRequestStore(JsonStore):
 			previous_user_id=str(info.get("previous_user_id") or ""),
 			previous_user_name=str(info.get("previous_user_name") or ""),
 		)
+
+	def _prune(self) -> None:
+		"""删掉已结束且超过 ``record_ttl_days`` 的申请记录。
+
+		只淘汰 ``approved`` / ``rejected``：``pending_material`` 过期后要被下一位
+		申请人接手（``open()``），``pending_review`` 还在等管理员核验——早删会让
+		原申请人收不到提示、或让申请凭空消失。``updated_at`` 解析不出来的旧数据同样保留。
+		"""
+		for key, info in list(self._items.items()):
+			if str(info.get("status") or self.STATUS_MATERIAL) not in self.CLOSED_STATUSES:
+				continue
+			if is_older_than(
+				parse_iso(str(info.get("updated_at") or "")),
+				self.record_ttl_days,
+			):
+				del self._items[key]
 
 	@staticmethod
 	def make_key(author_id: str | int) -> str:

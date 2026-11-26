@@ -2,6 +2,11 @@
 
 同一作者 1 天内只能申请一次（``config.APPLY_COOLDOWN_HOURS``）：
 ``last_apply_at`` 只记录「提交申请」的时间，审核改状态不会刷新它。
+
+已结束（通过 / 拒绝）的记录按 ``config.FURRY_REQUEST_TTL_DAYS`` 保留，
+到期在 ``_prune()`` 里整条删掉，文件不会随审核历史无限增长；
+还在流程里的 ``pending`` 记录**不按 TTL 淘汰**，否则待审核的申请会凭空消失。
+名单本身在 ``furry_authors.json``，记录被淘汰不影响作者权限。
 """
 
 from __future__ import annotations
@@ -11,7 +16,7 @@ from typing import Any
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
-from utils.time import cooldown_remaining, parse_iso, utc_now_iso
+from utils.time import cooldown_remaining, is_older_than, parse_iso, utc_now_iso
 
 
 class FurryRequestStore(JsonStore):
@@ -22,21 +27,29 @@ class FurryRequestStore(JsonStore):
 	STATUS_PENDING = "pending"
 	STATUS_APPROVED = "approved"
 	STATUS_REJECTED = "rejected"
+	# 已经走完流程的状态：只有这些记录会按 record_ttl_days 淘汰
+	CLOSED_STATUSES = (STATUS_APPROVED, STATUS_REJECTED)
 
 	def __init__(
 		self,
 		path: Path | None = None,
 		*,
 		apply_cooldown_hours: float | None = None,
+		record_ttl_days: float | None = None,
 	) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "furry_request.json"
-		# 默认值只在 config 里定义；0 也是合法值（不冷却），不能用 or 兜底
+		# 默认值只在 config 里定义；0 也是合法值（不冷却 / 立即过期），不能用 or 兜底
 		if apply_cooldown_hours is None:
 			from config import APPLY_COOLDOWN_HOURS
 
 			apply_cooldown_hours = APPLY_COOLDOWN_HOURS
+		if record_ttl_days is None:
+			from config import FURRY_REQUEST_TTL_DAYS
+
+			record_ttl_days = FURRY_REQUEST_TTL_DAYS
 		self.apply_cooldown_hours = apply_cooldown_hours
+		self.record_ttl_days = record_ttl_days
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
@@ -55,6 +68,21 @@ class FurryRequestStore(JsonStore):
 			count=int(info.get("count") or 0),
 			note=str(info.get("note") or ""),
 		)
+
+	def _prune(self) -> None:
+		"""删掉已结束且超过 ``record_ttl_days`` 的申请记录。
+
+		``pending`` 还在等审核，不能按 TTL 淘汰；``updated_at`` 解析不出来的
+		旧数据也保留——宁可留一条脏记录，也不静默丢掉一次申请。
+		"""
+		for key, info in list(self._items.items()):
+			if str(info.get("status") or self.STATUS_PENDING) not in self.CLOSED_STATUSES:
+				continue
+			if is_older_than(
+				parse_iso(str(info.get("updated_at") or "")),
+				self.record_ttl_days,
+			):
+				del self._items[key]
 
 	@staticmethod
 	def make_key(author_id: str | int) -> str:
