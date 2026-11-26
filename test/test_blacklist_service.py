@@ -53,6 +53,19 @@ class FailingListManager(FakeListManager):
 		raise RuntimeError("list write failed")
 
 
+class FlakyListManager(FakeListManager):
+	"""加黑先失败一次，之后恢复正常（模拟磁盘 / 权限问题被修好）。"""
+
+	def __init__(self, **kwargs) -> None:
+		super().__init__(**kwargs)
+		self.fail = True
+
+	def add_blacklist(self, author_id, name: str = "", note: str = "") -> None:
+		if self.fail:
+			raise RuntimeError("blacklist write failed")
+		super().add_blacklist(author_id, name, note)
+
+
 def make_service(tmp_path, manager=None, *, cooldown_hours: float | None = None):
 	store = BlackRequestStore(
 		path=tmp_path / "black_request.json",
@@ -342,9 +355,10 @@ def test_review_approve_blacklists_and_unlists(tmp_path) -> None:
 	assert result.status == "approved"
 	assert AUTHOR_ID in manager.black
 	assert AUTHOR_ID not in manager.furry
+	# 先移出兽人名单、再加黑：加黑失败时不会留下「已拉黑但申请回滚」
 	assert manager.calls == [
-		("black", AUTHOR_ID, "兽人42", "作者本人申请下架"),
 		("unfurry", AUTHOR_ID),
+		("black", AUTHOR_ID, "兽人42", "作者本人申请下架"),
 	]
 	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_APPROVED
 
@@ -385,6 +399,29 @@ def test_review_rolls_back_when_list_write_fails(tmp_path) -> None:
 
 	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_REVIEW
 	assert AUTHOR_ID not in manager.black
+
+
+def test_review_failure_leaves_author_unlisted_not_half_blacklisted(tmp_path) -> None:
+	"""先移出兽人名单再加黑：加黑失败时不会留下「已拉黑但申请回滚」的脏数据。"""
+	manager = FlakyListManager(furry={AUTHOR_ID})
+	service, store, _ = make_service(tmp_path, manager)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	service.submit_material(7, "PHOTO")
+
+	with pytest.raises(RuntimeError):
+		service.review(AUTHOR_ID, "approve")
+
+	assert AUTHOR_ID not in manager.black      # 黑名单没写进去
+	assert AUTHOR_ID not in manager.furry      # 只是被移出了兽人名单
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_REVIEW
+
+	# 名单写入恢复后重试，可以直接补完
+	manager.fail = False
+	result = service.review(AUTHOR_ID, "approve")
+
+	assert result.status == "approved"
+	assert AUTHOR_ID in manager.black
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_APPROVED
 
 
 def test_unknown_decision_raises(tmp_path) -> None:

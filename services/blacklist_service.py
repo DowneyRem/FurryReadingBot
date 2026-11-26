@@ -264,9 +264,12 @@ class BlacklistService:
 			return self._already_processed(key, record)
 
 		try:
+			# 先移出兽人名单、再加黑：第二步失败时作者只是「不在名单」，
+			# 不会出现「黑名单已生效、申请却回滚成待核验」的半成功状态
+			# （以前先加黑，add 成功但 remove 抛异常就会留下这种脏数据）
+			self.list_manager.remove_furrylist(key)
 			self.list_manager.add_blacklist(
 				key, name=name, note="作者本人申请下架")
-			self.list_manager.remove_furrylist(key)
 		except Exception:
 			# 名单写失败：把申请退回待核验，便于重试
 			self.black_requests.set_status(
