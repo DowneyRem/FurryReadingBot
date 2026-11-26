@@ -106,6 +106,24 @@ def test_expired_entry_is_pruned_on_write(tmp_path) -> None:
 	assert OTHER_URL in raw["responses"]
 
 
+def test_missing_expires_at_counts_as_expired(tmp_path) -> None:
+	"""没有 expires_at（旧格式 / 手写坏）的缓存条目一律当过期：缓存本来就该重建。"""
+	path = tmp_path / "fetch_cache.json"
+	payload = {
+		"updated_at": _iso(timedelta(hours=1)),
+		"responses": {
+			NOVEL_URL: {
+				"payload": {"body": {}}, "size": 12, "seq": 1,
+				"cached_at": _iso(timedelta(0)),
+			},
+		},
+	}
+	path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+	store = FetchCacheStore(path=path, default_ttl_hours=1)
+	assert store.get(NOVEL_URL) is None
+
+
 def test_remove(tmp_path) -> None:
 	store = _store(tmp_path, default_ttl_hours=1)
 	store.set(NOVEL_URL, {"body": {}})

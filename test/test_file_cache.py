@@ -167,5 +167,31 @@ def test_expired_entry_is_pruned_on_write(tmp_path) -> None:
 	assert "novel:3:txt" in raw["files"]
 
 
+def test_missing_expires_at_is_reused(tmp_path) -> None:
+	"""升级前写入的 file_id 没有 expires_at：保留复用，不按过期删。
+
+	与 `fetch_cache`（缺 expires_at 就当过期）相反：file_id 是上传产物，
+	老记录还能直接用，等下次上传再补新的到期时间。
+	"""
+	path = tmp_path / "files_cache.json"
+	payload = {
+		"updated_at": _iso(timedelta(days=1)),
+		"files": {
+			"novel:7:txt": {"file_id": "LEGACY", "file_name": "旧.txt", "caption": "旧"},
+		},
+	}
+	path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+	store = FileCacheStore(path=path, default_ttl_days=1)
+	info = store.get_valid("novel:7:txt")
+	assert info is not None
+	assert info.file_id == "LEGACY"
+
+	# 写盘时的 prune 也不能把它顺手删掉
+	store.set(FileCacheStore.make_key("novel", "8", "txt"), "NEW")
+	raw = json.loads(path.read_text(encoding="utf-8"))
+	assert "novel:7:txt" in raw["files"]
+
+
 if __name__ == "__main__":
 	test_make_key()
