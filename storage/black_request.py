@@ -10,11 +10,17 @@ key 为 author_id：一个作者一条记录，重复申请只累计 ``count``�
 「等截图」有时限（``config.BLACK_REQUEST_MATERIAL_TTL_MINUTES``），过期后要重新点申请。
 同一作者 1 天内只能申请一次（``config.APPLY_COOLDOWN_HOURS``）：冷却按
 ``last_apply_at``（提交截图送审的时间）算，只受理不交截图不受影响。
+
+互斥规则（由 ``services.blacklist_service`` 执行，Store 只提供查询）：
+
+- 一个作者同一时间只允许一个 ``user_id`` 受理：别人正在交截图 / 等核验时，
+  第二位用户会被挡下（否则截图会挂到别人的名字下，或被静默丢弃）；
+- 一个用户同一时间只保留一条「等截图」（``other_material_for_user``），
+  这样 ``pending_material_for_user`` 反查作者时不会歧义。
 """
 
 from __future__ import annotations
 
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -190,7 +196,11 @@ class BlackRequestStore(JsonStore):
 				self._persist()
 
 	def pending_material_for_user(self, user_id: str | int | None) -> JsonDict | None:
-		"""该用户最近一条「等截图」的申请（不判断是否过期）。"""
+		"""该用户最近一条「等截图」的申请（不判断是否过期）。
+
+		由 ``request()`` 保证同一用户同时只有一条，所以结果唯一；
+		若历史数据里有多条，取 ``updated_at`` 最新的那条。
+		"""
 		key = str(user_id or "")
 		if not key:
 			return None
@@ -205,18 +215,47 @@ class BlackRequestStore(JsonStore):
 				return None
 			return JsonDict(max(hits, key=lambda info: str(info.updated_at or "")))
 
-	def is_stale(
+	def other_material_for_user(
+		self, user_id: str | int | None, author_id: str | int,
+	) -> JsonDict | None:
+		"""该用户在**其他作者**上是否还有「等截图」的申请（不判断是否过期）。
+
+		「一个用户同时只留一条待交材料」由服务层执行，这里只负责查。
+		"""
+		key = str(user_id or "")
+		if not key:
+			return None
+		target = self.make_key(author_id)
+		self._maybe_reload()
+		with self._lock:
+			hits = [
+				info for info in self._items.values()
+				if str(info.user_id or "") == key
+				and info.status == self.STATUS_MATERIAL
+				and self.make_key(info.author_id) != target
+			]
+			if not hits:
+				return None
+			return JsonDict(max(hits, key=lambda info: str(info.updated_at or "")))
+
+	def material_remaining(
 		self, record: JsonDict, *,
-		ttl_minutes: float | None = None) -> bool:
-		"""这条「等截图」的申请是否已过期。"""
+		ttl_minutes: float | None = None) -> float:
+		"""「等截图」窗口还剩多少秒；时间缺失 / 已过期返回 0。"""
 		moment = parse_iso(str(record.updated_at or ""))
 		if moment is None:
-			return True
+			return 0.0
 		minutes = (
 			ttl_minutes if ttl_minutes is not None
 			else self.material_ttl_minutes
 		)
-		return utc_now() - moment > timedelta(minutes=minutes)
+		return max(0.0, minutes * 60 - (utc_now() - moment).total_seconds())
+
+	def is_stale(
+		self, record: JsonDict, *,
+		ttl_minutes: float | None = None) -> bool:
+		"""这条「等截图」的申请是否已过期。"""
+		return self.material_remaining(record, ttl_minutes=ttl_minutes) <= 0
 
 	def records(self) -> JsonDict:
 		"""全部申请记录的浅拷贝，便于统计 / 管理端展示。"""
