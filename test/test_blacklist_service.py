@@ -185,6 +185,35 @@ def test_other_user_cannot_take_over_review(tmp_path) -> None:
 	assert store.get(AUTHOR_ID).user_id == "7"
 
 
+def test_rejected_record_does_not_lock_author(tmp_path) -> None:
+	"""被拒的记录不能再挡住别人：冷却过去后应由新用户接手。"""
+	service, store, _ = make_service(tmp_path, cooldown_hours=0)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	service.submit_material(7, "PHOTO")
+	service.review(AUTHOR_ID, "reject")
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=8)
+
+	assert result.status == "needs_material"
+	record = store.get(AUTHOR_ID)
+	assert record.user_id == "8"
+	assert record.status == BlackRequestStore.STATUS_MATERIAL
+	assert record.count == 2
+
+
+def test_rejected_record_blocks_other_user_only_by_cooldown(tmp_path) -> None:
+	"""冷却期内别人也该拿到冷却提示，而不是「已由其他用户受理」。"""
+	service, _store, _ = make_service(tmp_path)   # 默认 24h
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	service.submit_material(7, "PHOTO")
+	service.review(AUTHOR_ID, "reject")
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=8)
+
+	assert result.status == "cooldown"
+	assert 0 < result.remaining_seconds <= 24 * 3600
+
+
 def test_same_user_can_reopen_material(tmp_path) -> None:
 	"""本人重复点受理：允许（只刷新材料窗口）。"""
 	service, store, _ = make_service(tmp_path)

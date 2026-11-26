@@ -143,7 +143,13 @@ class BlacklistService:
 
 		current = str(user_id or "")
 		holder = str((existing.user_id if existing else "") or "")
-		if existing is not None and holder and current and holder != current:
+		# 只有「进行中」的受理才锁人：已拒绝 / 已通过的旧记录不能挡住别人，
+		# 否则一条 rejected 记录会让这个作者对其他人永久不可申请
+		in_progress = existing is not None and existing.status in (
+			BlackRequestStore.STATUS_MATERIAL,
+			BlackRequestStore.STATUS_REVIEW,
+		)
+		if in_progress and holder and current and holder != current:
 			# 同一作者同一时间只允许一个用户受理：别人正在交截图 / 等核验
 			return BlacklistRequest(
 				status="other_applicant",
