@@ -204,6 +204,42 @@ def test_fetch_series_fills_chapters_and_counts() -> None:
 	]
 
 
+def test_fetch_series_skips_unavailable_chapters() -> None:
+	"""content_titles 里 available=false 的章节要跳过，别留给抓正文时整包失败。"""
+	src, client = _source()
+	client.titles = [
+		{"id": "1001", "title": "第一章", "available": True},
+		{"id": "1002", "title": "-----", "available": False},
+		{"id": "1003", "title": "第三章", "available": True},
+	]
+	client.series = _envelope(_series_body(publishedContentCount=3))
+
+	series = run(src.fetch_series(SERIES_LINK))
+
+	assert series.novel_ids == ["1001", "1003"]
+	assert series.novel_titles == ["第一章", "第三章"]
+	assert series.total == 2
+	assert client.calls == [
+		("series", SERIES_ID),
+		("titles", SERIES_ID),
+		("novel", "1001"),
+	]
+
+
+def test_fetch_series_without_available_chapters() -> None:
+	src, client = _source()
+	client.titles = [{"id": "1001", "title": "-----", "available": False}]
+	client.series = _envelope(_series_body(publishedContentCount=1))
+
+	series = run(src.fetch_series(SERIES_LINK))
+
+	assert series.novel_ids == []
+	assert series.novel_titles == []
+	assert series.total == 0
+	# 没有可下载章节时不抓首篇补统计
+	assert client.calls == [("series", SERIES_ID), ("titles", SERIES_ID)]
+
+
 def test_fetch_author_merges_profile_and_works() -> None:
 	src, client = _source()
 
@@ -242,6 +278,46 @@ def test_json_to_novel_tolerates_missing_text_fields() -> None:
 	assert novel.title == ""
 	assert novel.author_name == ""
 	assert novel.content == ""
+
+
+def test_json_to_novel_cleans_pixiv_markers() -> None:
+	"""正文里的 Pixiv 方括号标记要换成可读文本，不能原样进 txt。"""
+	body = _novel_body(
+		content=(
+			"第一页\n[newpage]\n[chapter: 图片与链接]\n"
+			"[[rb:注音 > ルビ]] [b:加粗] [i:倾斜] [[emphasismark:重点 > •]]\n"
+			"[pixivimage:136299928]\n"
+			"[uploadedimage:22813593]\n"
+			"[[jumpuri: 兽人游戏 > https://furrygames.top/]] "
+			"[[jumpuri: https://example.com/ > https://example.com/]] [jump:2]"
+		),
+		textEmbeddedImages={
+			"22813593": {"urls": {"original": "https://i.pximg.net/a.png"}},
+		},
+	)
+
+	novel = json_to_novel(_envelope(body))
+
+	assert "图片与链接" in novel.content
+	assert "注音(ルビ)" in novel.content
+	assert "加粗" in novel.content
+	assert "倾斜" in novel.content
+	assert "重点" in novel.content
+	assert "https://www.pixiv.net/artworks/136299928" in novel.content
+	assert "[图片 https://i.pximg.net/a.png]" in novel.content
+	assert "兽人游戏 (https://furrygames.top/)" in novel.content
+	assert novel.content.count("https://example.com/") == 1
+	assert "(见第 2 页)" in novel.content
+	for marker in ("[newpage]", "[chapter:", "[b:", "[i:", "emphasismark", "[jump:", "[uploadedimage:"):
+		assert marker not in novel.content
+	assert "\n\n\n" not in novel.content
+
+
+def test_json_to_novel_without_embedded_images() -> None:
+	"""没有 textEmbeddedImages 时 uploadedimage 只留占位，不报错。"""
+	novel = json_to_novel(_envelope(_novel_body(content="[uploadedimage:1]")))
+
+	assert novel.content == "[图片]"
 
 
 def test_json_to_series_allows_empty_series() -> None:

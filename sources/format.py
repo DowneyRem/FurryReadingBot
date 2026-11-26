@@ -8,6 +8,21 @@ if TYPE_CHECKING:
 	from sources.base import Novel
 
 
+# Pixiv 正文标记：content 是纯文本，但用方括号表达分页 / 章节 / 注音 / 外链 / 图片 / 粗斜体。
+# 这些标记不是正文，写进 txt 前要换成可读文本；Linpx 的 content 已经是干净文本，不要走这里。
+_PIXIV_JUMPURI_RE = re.compile(r"\[\[jumpuri:\s*(.*?)\s*>\s*(\S+?)\s*\]\]")
+_PIXIV_RUBY_RE = re.compile(r"\[\[rb:\s*([^\]>]+?)\s*>\s*([^\]]+?)\s*\]\]")
+_PIXIV_EMPHASIS_RE = re.compile(r"\[\[emphasismark:\s*([^\]]*?)\s*>\s*[^\]]*?\]\]")
+_PIXIV_CHAPTER_RE = re.compile(r"\[chapter:\s*([^\]]*?)\s*\]")
+_PIXIV_NEWPAGE_RE = re.compile(r"\[newpage\]")
+_PIXIV_IMAGE_RE = re.compile(r"\[pixivimage:(\d+)\]")
+_PIXIV_UPLOAD_RE = re.compile(r"\[uploadedimage:(\d+)\]")
+_PIXIV_BOLD_RE = re.compile(r"\[b:([^\]]*?)\]")
+_PIXIV_ITALIC_RE = re.compile(r"\[i:([^\]]*?)\]")
+_PIXIV_JUMP_RE = re.compile(r"\[jump:(\d+)\]")
+_BLANK_LINES_RE = re.compile(r"\n{3,}")
+
+
 def format_caption(text: str) -> str:
 	if not text:
 		return ""
@@ -105,3 +120,46 @@ def format_series_text(series, novels: list[Novel]) -> str:
 	head = "\n".join(head_lines)
 	contents = "\n".join(content)
 	return f"{head}\n\n\n{contents}"
+
+
+def format_pixiv_content(
+	text: str,
+	embedded_images: dict[str, str] | None = None,
+) -> str:
+	"""Pixiv 正文 → 可读纯文本。
+
+	`[newpage]` 分页、`[chapter: 标题]` 章节、`[[rb:汉字 > 假名]]` 注音、
+	`[[jumpuri: 文本 > URL]]` 外链、`[pixivimage:]` / `[uploadedimage:]` 图片、
+	`[b:]` / `[i:]` / `[[emphasismark:]]` 粗体 / 斜体 / 着重号。
+	`embedded_images` 是 `textEmbeddedImages` 解析出的 `{图片ID: 原图URL}`，
+	用于把 `[uploadedimage:ID]` 换成真实图片地址。
+	"""
+	if not text:
+		return ""
+
+	def jump_uri(match: re.Match[str]) -> str:
+		label, url = match.group(1).strip(), match.group(2).strip()
+		return url if not label or label == url else f"{label} ({url})"
+
+	def chapter(match: re.Match[str]) -> str:
+		title = match.group(1).strip()
+		return f"\n\n{title}\n\n" if title else "\n\n"
+
+	def uploaded_image(match: re.Match[str]) -> str:
+		url = (embedded_images or {}).get(match.group(1))
+		return f"[图片 {url}]" if url else "[图片]"
+
+	text = text.replace("\r\n", "\n").replace("\r", "\n")
+	# 双括号标记先处理，避免内部的 `[b:]` 之类被后续规则拆开
+	text = _PIXIV_JUMPURI_RE.sub(jump_uri, text)
+	text = _PIXIV_RUBY_RE.sub(lambda m: f"{m.group(1)}({m.group(2)})", text)
+	text = _PIXIV_EMPHASIS_RE.sub(lambda m: m.group(1), text)
+	text = _PIXIV_CHAPTER_RE.sub(chapter, text)
+	text = _PIXIV_NEWPAGE_RE.sub("\n\n", text)
+	text = _PIXIV_IMAGE_RE.sub(
+		lambda m: f"[插画 https://www.pixiv.net/artworks/{m.group(1)}]", text)
+	text = _PIXIV_UPLOAD_RE.sub(uploaded_image, text)
+	text = _PIXIV_BOLD_RE.sub(lambda m: m.group(1), text)
+	text = _PIXIV_ITALIC_RE.sub(lambda m: m.group(1), text)
+	text = _PIXIV_JUMP_RE.sub(lambda m: f"(见第 {m.group(1)} 页)", text)
+	return _BLANK_LINES_RE.sub("\n\n", text).strip()

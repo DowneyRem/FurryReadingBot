@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sources.base import Novel, Series, Author
-from sources.format import format_caption
+from sources.format import format_caption, format_pixiv_content
 from sources.pixiv.urls import url_novel, url_series, url_author
 from sources.pixiv.errors import PixivNotFoundError
 from utils.json import JsonDict
@@ -17,6 +17,19 @@ def _tag_names(value: object) -> list[str]:
 		if name:
 			names.append(str(name))
 	return names
+
+
+def _embedded_image_urls(value: object) -> dict[str, str]:
+	"""`textEmbeddedImages` → `{图片ID: 原图URL}`；缺失或结构异常时返回空表。"""
+	data = JsonDict.from_obj(value)
+	if not isinstance(data, dict):
+		return {}
+	urls: dict[str, str] = {}
+	for key, item in data.items():
+		url = item.urls.original if isinstance(item, dict) else None
+		if url:
+			urls[str(key)] = str(url)
+	return urls
 
 
 def json_to_novel(data: dict | JsonDict) -> Novel:
@@ -41,7 +54,8 @@ def json_to_novel(data: dict | JsonDict) -> Novel:
 	author_name = data.userName or ""
 	
 	caption = format_caption(data.description)
-	content = data.content or ""
+	content = format_pixiv_content(
+		data.content or "", _embedded_image_urls(data.textEmbeddedImages))
 	tags = _tag_names(data.tags)
 	
 	like_count = int(data.bookmarkCount or 0)

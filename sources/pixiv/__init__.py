@@ -40,11 +40,14 @@ class PixivSource(NovelSource):
 		data = await self.client.get_series(series_id)
 		series = json_to_series(data)
 
-		# 系列详情不带章节列表：content_titles 一次拿全 ID + 标题，比逐页拉正文省请求
+		# 系列详情不带章节列表：content_titles 一次拿全 ID + 标题，比逐页拉正文省请求。
+		# available=false 的章节（未公开 / 当前账号看不到）要跳过，
+		# 否则会在抓正文时失败，白白拖累整个系列。
 		titles = await self.client.get_series_titles(series_id)
-		series.novel_ids = [str(item.id) for item in titles]
-		series.novel_titles = [str(item.title or "") for item in titles]
-		if not series.total:
+		available = [item for item in titles if item.available is not False]
+		series.novel_ids = [str(item.id) for item in available]
+		series.novel_titles = [str(item.title or "") for item in available]
+		if not series.total or len(available) != len(titles):
 			series.total = len(series.novel_ids)
 
 		# 系列接口不带点赞 / 阅读量，用首篇补齐；系列为空（刚建 / 作者清空）时没有首篇可抓
