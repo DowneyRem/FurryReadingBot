@@ -470,3 +470,86 @@ def test_cli_login_mode_passes_options(tmp_path, monkeypatch) -> None:
 	assert captured["profile_dir"] == custom
 	assert captured["incognito"] is False
 
+
+def test_ensure_writable_dir_reports_unwritable(tmp_path) -> None:
+	"""配置目录不可写时立刻报错，而不是让 Chrome 弹「无法创建数据目录」后干等。"""
+	import script.extract_phpsessid as mod
+
+	blocker = tmp_path / "not-a-dir"
+	blocker.write_text("x", encoding="utf-8")
+
+	with pytest.raises(mod.BrowserStartupError) as info:
+		mod._ensure_writable_dir(blocker)
+	assert "无法读写" in str(info.value)
+	assert "--profile-dir" in str(info.value)
+
+	ok = tmp_path / "profile"
+	mod._ensure_writable_dir(ok)
+	assert ok.is_dir()
+	assert not (ok / ".write-probe").exists()
+
+
+def test_wait_for_login_cookie_reports_missing_devtools_port(monkeypatch) -> None:
+	import asyncio
+	import script.extract_phpsessid as mod
+
+	class FakeProc:
+		def poll(self):
+			return None
+
+	class FakeResp:
+		async def __aenter__(self):
+			return self
+
+		async def __aexit__(self, *args):
+			return False
+
+		async def json(self, **kwargs):
+			return {}
+
+	class FakeSession:
+		async def __aenter__(self):
+			return self
+
+		async def __aexit__(self, *args):
+			return False
+
+		def get(self, url, **kwargs):
+			return FakeResp()
+
+	monkeypatch.setattr(mod.aiohttp, "ClientSession", lambda: FakeSession())
+
+	with pytest.raises(mod.BrowserStartupError) as info:
+		asyncio.run(
+			mod._wait_for_login_cookie(
+				FakeProc(),
+				14338,
+				timeout=0.4,
+				startup_timeout=0.4,
+				poll_interval=0,
+			)
+		)
+	assert "没有提供调试端口" in str(info.value)
+
+
+def test_read_stdin_decodes_utf8_bytes(monkeypatch) -> None:
+	import io
+	import script.extract_phpsessid as mod
+
+	class FakeStdin:
+		buffer = io.BytesIO("备注：PHPSESSID=119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".encode("utf-8"))
+
+	monkeypatch.setattr(mod.sys, "stdin", FakeStdin())
+	text = mod._read_stdin()
+	assert "备注" in text
+	assert "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in text
+
+
+def test_cli_warns_when_format_is_not_env(tmp_path, monkeypatch, capsys) -> None:
+	monkeypatch.chdir(tmp_path)
+	token = "119908520_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	assert main(["-t", f"PHPSESSID={token}", "-f", "pipe"]) == 0
+	assert (tmp_path / "pixiv.env").read_text(encoding="utf-8") == f"{token}\n"
+	assert "不是 .env 格式" in capsys.readouterr().err
+

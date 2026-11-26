@@ -347,15 +347,19 @@ async def _wait_for_login_cookie(
 	port: int,
 	*,
 	timeout: float = 300.0,
+	startup_timeout: float = 60.0,
 	poll_interval: float = 0.5,
 	allow_browser_wide: bool = True,
 ) -> str:
 	deadline = time.monotonic() + max(1.0, timeout)
+	# 等调试端口单独限时：Chrome 弹「无法创建数据目录」时根本不会监听端口，不能干等到登录超时
+	startup_limit = max(1.0, min(startup_timeout, timeout))
+	startup_deadline = time.monotonic() + startup_limit
 	ids = itertools.count(1)
 	session_id: str | None = None
 	async with aiohttp.ClientSession() as session:
 		ws_url: str | None = None
-		while time.monotonic() < deadline:
+		while time.monotonic() < startup_deadline:
 			if proc.poll() is not None:
 				raise BrowserStartupError("浏览器已关闭，登录已取消")
 			ws_url = await _resolve_ws_url(session, port)
@@ -364,7 +368,10 @@ async def _wait_for_login_cookie(
 			await asyncio.sleep(0.1)
 
 		if ws_url is None:
-			raise BrowserStartupError("等待浏览器调试端口就绪超时")
+			raise BrowserStartupError(
+				f"浏览器 {startup_limit:.0f} 秒内没有提供调试端口：请检查配置目录是否可写、"
+				"是否被其它浏览器实例占用，或关掉浏览器弹出的错误窗口后重试"
+			)
 
 		async with session.ws_connect(ws_url, heartbeat=15.0) as ws:
 			while time.monotonic() < deadline:
@@ -408,6 +415,20 @@ def _stop_browser(proc: subprocess.Popen[bytes]) -> None:
 			proc.wait(timeout=2.0)
 		except subprocess.TimeoutExpired:
 			pass
+
+
+def _ensure_writable_dir(profile: Path) -> None:
+	"""启动前确认配置目录可读写，避免 Chrome 弹「无法创建数据目录」后干等超时。"""
+	probe = profile / ".write-probe"
+	try:
+		profile.mkdir(parents=True, exist_ok=True)
+		probe.write_text("ok", encoding="utf-8")
+		probe.unlink()
+	except OSError as exc:
+		raise BrowserStartupError(
+			f"配置目录 {profile} 无法读写（{exc}）：请换一个可写目录，"
+			r"例如 --profile-dir %TEMP%\pixiv-profile"
+		) from exc
 
 
 def _capture_once(
@@ -463,7 +484,7 @@ def login_and_capture(
 
 	# Chrome 对相对路径的 --user-data-dir 处理异常（不开调试端口），这里统一转成绝对路径
 	profile = Path(profile_dir).expanduser().resolve()
-	profile.mkdir(parents=True, exist_ok=True)
+	_ensure_writable_dir(profile)
 	mode = "无痕窗口" if incognito else "常规窗口"
 
 	values: list[str] = []
@@ -508,13 +529,22 @@ def login_and_capture(
 	return values
 
 
+def _read_stdin() -> str:
+	"""按 UTF-8 读取标准输入（非法字节替换），避免 Windows 控制台编码差异导致崩栈。"""
+	try:
+		data = sys.stdin.buffer.read()
+	except (AttributeError, OSError):  # 极端情况下 stdin 没有 buffer
+		return sys.stdin.read()
+	return data.decode("utf-8", "replace")
+
+
 def _read_inputs(files: Sequence[str], text: str | None) -> str:
 	chunks: list[str] = []
 	if text is not None:
 		chunks.append(text)
 	for item in files:
 		if item == "-":
-			chunks.append(sys.stdin.read())
+			chunks.append(_read_stdin())
 		else:
 			# 兼容 ANSI / GBK 等非 UTF-8 文本：替换非法字节而不是崩栈
 			chunks.append(Path(item).read_text(encoding="utf-8", errors="replace"))
@@ -524,7 +554,7 @@ def _read_inputs(files: Sequence[str], text: str | None) -> str:
 				"请粘贴包含 Cookie / PHPSESSID 的文本（Windows 按 Ctrl+Z 回车，Linux/macOS 按 Ctrl+D 结束）：",
 				file=sys.stderr,
 			)
-		chunks.append(sys.stdin.read())
+		chunks.append(_read_stdin())
 	return "\n".join(chunks)
 
 
@@ -629,23 +659,29 @@ def main(argv: Sequence[str] | None = None) -> int:
 		return 1
 
 	# 固定写入 pixiv.env：先读取已有账号，合并去重后整体写回
-	existing = read_existing_phpsessids(OUTPUT_FILE)
+	out_path = OUTPUT_FILE.resolve()
+	existing = read_existing_phpsessids(out_path)
 	merged = merge_phpsessids(existing, values)
 	rendered = format_phpsessids(merged, args.format)
 	try:
-		OUTPUT_FILE.write_text(rendered + "\n", encoding="utf-8", newline="\n")
+		out_path.write_text(rendered + "\n", encoding="utf-8", newline="\n")
 	except OSError as exc:
-		print(f"写入 {OUTPUT_FILE} 失败：{exc}", file=sys.stderr)
+		print(f"写入 {out_path} 失败：{exc}", file=sys.stderr)
 		return 2
 
+	if args.format != "env":
+		print(
+			f"注意：--format {args.format} 不是 .env 格式，{out_path.name} 里只有裸值/拼接值。",
+			file=sys.stderr,
+		)
 	if existing:
 		print(
-			f"已读取 {OUTPUT_FILE} 中已有的 {len(existing)} 个 PHPSESSID，"
-			f"新增 {len(merged) - len(existing)} 个，共 {len(merged)} 个并写回 {OUTPUT_FILE}",
+			f"已读取 {out_path.name} 中已有的 {len(existing)} 个 PHPSESSID，"
+			f"新增 {len(merged) - len(existing)} 个，共 {len(merged)} 个并写回 {out_path}",
 			file=sys.stderr,
 		)
 	else:
-		print(f"已提取 {len(merged)} 个 PHPSESSID 并写入 {OUTPUT_FILE}", file=sys.stderr)
+		print(f"已提取 {len(merged)} 个 PHPSESSID 并写入 {out_path}", file=sys.stderr)
 	print(rendered)
 	return 0
 
