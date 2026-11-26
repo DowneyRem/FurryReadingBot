@@ -25,6 +25,9 @@ TEST_GROUP = os.environ.get("TEST_GROUP", "").strip()
 CONCURRENT_UPDATES = 8
 # 文件缓存天数：file_id 在该时间内可直接复用，不再重新上传
 FILE_CACHE_TTL_DAYS = 7
+
+# 请求缓存小时数：同一链接（URL）的 JSON 响应在该时间内直接复用，不再重复请求源站
+FETCH_CACHE_TTL_HOURS = 6
 # 分享冷却：同一部作品在该时间（天）内不会重复发送到频道
 SHARE_COOLDOWN_DAYS = 3
 # prod 模式下，评分达到该值的作品同时发到兽人阅读和兽人小说；否则只发兽人小说

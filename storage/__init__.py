@@ -15,6 +15,7 @@ from storage.black_request import (
 	BlackRequestStore,
 	get_black_requests,
 )
+from storage.fetch_cache import FetchCacheStore, get_fetch_cache
 from storage.furry_request import (
 	FurryRequestStore,
 	get_furry_requests,
@@ -23,10 +24,12 @@ from storage.unknown_tags import UnknownTagStore, get_unknown_tags
 
 __all__ = [
 	"BlackRequestStore",
+	"FetchCacheStore",
 	"FurryRequestStore",
 	"ListManager",
 	"UnknownTagStore",
 	"get_black_requests",
+	"get_fetch_cache",
 	"get_furry_requests",
 	"get_lists",
 	"get_unknown_tags",
