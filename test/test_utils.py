@@ -13,6 +13,7 @@ from sources.linpx.config import NOVEL_PATTERN as LINPX_NOVEL_PATTERN
 from sources.pixiv.config import NOVEL as PIXIV_NOVEL
 from sources.pixiv.config import NOVEL_PATTERN as PIXIV_NOVEL_PATTERN
 from sources.utils import get_id
+from utils.json import to_int, to_str
 from utils.time import (
 	cooldown_left,
 	cooldown_remaining,
@@ -25,6 +26,17 @@ from utils.time import (
 
 def _iso(delta: timedelta) -> str:
 	return (utc_now() + delta).strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def test_to_int_and_to_str_normalise_fields() -> None:
+	"""存储读盘用的宽松转换：坏值不炸，None → 0 / ""。"""
+	assert to_int(None) == 0
+	assert to_int("12") == 12
+	assert to_int(3.9) == 3
+	assert to_int("不是数字") == 0
+	assert to_str(None) == ""
+	assert to_str(42) == "42"
+	assert to_str(0) == "0"
 
 
 def test_id_rule_binds_pattern_and_label() -> None:
