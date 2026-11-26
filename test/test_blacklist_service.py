@@ -154,6 +154,90 @@ def test_request_after_reject_allowed_when_cooldown_zero(tmp_path) -> None:
 	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_MATERIAL
 	assert store.get(AUTHOR_ID).count == 2
 
+
+def test_other_user_cannot_take_over_pending_material(tmp_path) -> None:
+	"""同一作者只允许同一用户受理：别人正在交截图时，第二位用户被挡下。"""
+	service, store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=8)
+
+	assert result.status == "other_applicant"
+	assert result.record is not None
+	assert result.record.user_id == "7"
+	record = store.get(AUTHOR_ID)
+	assert record.user_id == "7"      # 没有被覆盖
+	assert record.count == 1
+	# 第一位用户之后仍能正常交截图（不会再被静默丢弃）
+	assert service.submit_material(7, "PHOTO").status == "submitted"
+
+
+def test_other_user_cannot_take_over_review(tmp_path) -> None:
+	service, store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	service.submit_material(7, "PHOTO")
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=8)
+
+	assert result.status == "other_applicant"
+	assert result.record is not None
+	assert result.record.status == BlackRequestStore.STATUS_REVIEW
+	assert store.get(AUTHOR_ID).user_id == "7"
+
+
+def test_same_user_can_reopen_material(tmp_path) -> None:
+	"""本人重复点受理：允许（只刷新材料窗口）。"""
+	service, store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+
+	assert result.status == "needs_material"
+	assert store.get(AUTHOR_ID).count == 2
+
+
+def test_expired_material_does_not_lock_author(tmp_path) -> None:
+	"""没人交截图的僵尸受理过期后必须放行，否则作者会被永久占住。"""
+	service, store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	store.material_ttl_minutes = 0
+
+	result = service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=8)
+
+	assert result.status == "needs_material"
+	assert store.get(AUTHOR_ID).user_id == "8"
+
+
+def test_other_author_material_blocks_new_request(tmp_path) -> None:
+	"""同一用户同时只留一条待交材料：先把上一张交了再申请别的作者。"""
+	service, store, _ = make_service(tmp_path)
+	service.request(
+		AUTHOR_ID, author_url=AUTHOR_URL, author_name="作者A", user_id=7)
+
+	result = service.request(
+		"99", author_url="https://linpx.ink/pixiv/user/99", user_id=7)
+
+	assert result.status == "material_open"
+	assert result.pending_record is not None
+	assert result.pending_record.author_id == AUTHOR_ID
+	assert 0 < result.remaining_seconds <= 30 * 60
+	# 新作者没有被受理，旧材料仍然有效
+	assert store.get("99") is None
+	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_MATERIAL
+
+
+def test_expired_other_author_material_does_not_block(tmp_path) -> None:
+	service, store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	store.material_ttl_minutes = 0
+
+	result = service.request(
+		"99", author_url="https://linpx.ink/pixiv/user/99", user_id=7)
+
+	assert result.status == "needs_material"
+	assert store.get(AUTHOR_ID) is None      # 过期的那条已作废
+	assert store.get("99") is not None
+
 def test_submit_material_marks_review(tmp_path) -> None:
 	service, store, _ = make_service(tmp_path)
 	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)

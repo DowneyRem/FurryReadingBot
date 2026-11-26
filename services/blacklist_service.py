@@ -1,8 +1,16 @@
 """作者拉黑申请业务：材料收集、状态流转与名单更新。
 
+两条互斥规则（都用 `user_id` 判定，不需要额外状态字段）：
+
+- **同一作者同一时间只允许一个用户受理**：别人正在交截图（`pending_material`）
+  或在等核验（`pending_review`）时，第二位用户拿到 `other_applicant`。
+  以前这里会被覆盖，导致前一位用户发来的截图被静默丢弃。
+- **同一用户同时只保留一条「等截图」**：已有别的作者的材料没交时，
+  新受理返回 `material_open`，避免 `pending_material_for_user()` 认错作者。
+
 同一作者 1 天内只能申请一次（`config.APPLY_COOLDOWN_HOURS`，见
 `storage.black_request.BlackRequestStore.apply_remaining`）；
-冷却按「提交截图送审」算，只点受理不交截图不会占冷却。
+冷却按「提交截图送审」算，只点受理不交截图不会占冷却（那条受理 30 分钟后作废）。
 
 Telegram 相关部分留在 handlers：
   - 本模块不 import telegram；
@@ -30,7 +38,8 @@ from utils.json import JsonDict
 logger = logging.getLogger(__name__)
 
 RequestStatus = Literal[
-	"needs_material", "pending_review", "cooldown", "already_blacklisted",
+	"needs_material", "pending_review", "cooldown",
+	"other_applicant", "material_open", "already_blacklisted",
 ]
 SubmitStatus = Literal["submitted", "no_request", "expired"]
 ReviewStatus = Literal["approved", "rejected", "missing", "already_processed"]
@@ -46,7 +55,10 @@ class BlacklistRequest:
 	author_name: str = ""
 	record: JsonDict | None = None
 	# status == "cooldown" 时还要等多少秒（同一作者 1 天只能申请一次）
+	# status == "material_open" 时是该用户另一条「等截图」还剩多少秒
 	remaining_seconds: float = 0.0
+	# status == "material_open" 时指向那条还没交截图的申请（别的作者）
+	pending_record: JsonDict | None = None
 
 
 @dataclass(frozen=True)
@@ -112,7 +124,7 @@ class BlacklistService:
 		user_id: str | int | None = None,
 		user_name: str = "",
 	) -> BlacklistRequest:
-		"""受理一次「申请下架」：回材料清单、提示已在核验/冷却中，或已在黑名单。"""
+		"""受理一次「申请下架」：回材料清单，或说明这次受理为什么不成立。"""
 		key = str(author_id or "").strip()
 		if not key:
 			raise ValueError("作者 ID 为空")
@@ -122,6 +134,24 @@ class BlacklistService:
 			return BlacklistRequest("already_blacklisted", key, decision.author_name)
 
 		existing = self.black_requests.get(key)
+		# 「等截图」窗口过期就作废：否则一条没人交图的受理会把作者永久占住
+		if (existing is not None
+				and existing.status == BlackRequestStore.STATUS_MATERIAL
+				and self.black_requests.is_stale(existing)):
+			self.black_requests.discard_material(key)
+			existing = None
+
+		current = str(user_id or "")
+		holder = str((existing.user_id if existing else "") or "")
+		if existing is not None and holder and current and holder != current:
+			# 同一作者同一时间只允许一个用户受理：别人正在交截图 / 等核验
+			return BlacklistRequest(
+				status="other_applicant",
+				author_id=key,
+				author_name=str(existing.author_name or decision.author_name),
+				record=existing,
+			)
+
 		if existing is not None and existing.status == BlackRequestStore.STATUS_REVIEW:
 			name = str(existing.author_name or decision.author_name)
 			return BlacklistRequest("pending_review", key, name, existing)
@@ -131,6 +161,20 @@ class BlacklistService:
 			name = str(
 				(existing.author_name if existing else "") or decision.author_name)
 			return BlacklistRequest("cooldown", key, name, existing, remaining)
+
+		# 同一用户同时只留一条待交材料：先把上一张截图交了
+		pending = self.black_requests.other_material_for_user(user_id, key)
+		if pending is not None and self.black_requests.is_stale(pending):
+			self.black_requests.discard_material(pending.author_id)
+			pending = None
+		if pending is not None:
+			return BlacklistRequest(
+				status="material_open",
+				author_id=key,
+				author_name=str(author_name or decision.author_name),
+				remaining_seconds=self.black_requests.material_remaining(pending),
+				pending_record=pending,
+			)
 
 		record = self.black_requests.open(
 			key,
