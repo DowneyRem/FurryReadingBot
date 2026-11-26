@@ -34,7 +34,7 @@ CONCURRENT_UPDATES = 8
 
 
 # 时间参数：storage 里的 TTL / 冷却 / 有效期 -----
-# 按一次使用流程的先后顺序排列：抓来源 → 下载产物 → 分享 → 分享记录保留 → 下架申请 → 申请冷却
+# 按一次使用流程的先后顺序排列：抓来源 → 下载产物 → 分享 → 分享记录保留 → 下架申请 → 申请冷却 → 申请记录保留
 # ① 抓来源：同一链接的 JSON 响应缓存多久；预检 / 解析系列 / 打包共用同一份
 FETCH_CACHE_TTL_HOURS = 24
 # ② 下载产物：file_id 在该时间（天）内可直接复用，不再重新上传
@@ -48,6 +48,12 @@ BLACK_REQUEST_MATERIAL_TTL_MINUTES = 30
 # ⑥ 申请冷却：同一作者在该时间（小时）内只能申请一次（兽人名单 / 黑名单共用）
 #    兽人名单按「提交申请」算；黑名单按「提交截图送审」算（受理后 30 分钟没交截图会作废，不该再等一天）
 APPLY_COOLDOWN_HOURS = 24
+# ⑦ 申请记录保留：已结束（通过 / 拒绝）的申请在该时间（天）后淘汰
+#    还在流程里的申请（pending / pending_material / pending_review）不按 TTL 淘汰：
+#    等审核的不能凭空消失，等截图的过期后要被下一位申请人接手（见 storage/black_request.py）
+FURRY_REQUEST_TTL_DAYS = 90
+# 拉黑记录本身就是「作者本人申请下架」的凭据，比被拒的兽人作者申请留得更久
+BLACK_REQUEST_TTL_DAYS = 365
 
 
 def config_errors() -> list[str]:
