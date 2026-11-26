@@ -73,6 +73,35 @@ def test_submit_resets_status_to_pending(tmp_path) -> None:
 	assert record.count == 2
 
 
+def test_apply_remaining_after_submit(tmp_path) -> None:
+	"""提交后进入 1 天冷却；没有记录的作者不受限。"""
+	store = _store(tmp_path)
+	store.submit("123", author_name="作者A")
+
+	assert 0 < store.apply_remaining("123") <= 24 * 3600
+	assert store.apply_remaining("404") == 0.0
+
+
+def test_apply_remaining_survives_status_change(tmp_path) -> None:
+	"""审核只改状态、不刷新申请时间：被拒后仍然处在冷却里。"""
+	store = _store(tmp_path)
+	store.submit("123", author_name="作者A")
+	store.set_status("123", FurryRequestStore.STATUS_REJECTED)
+
+	info = store.get("123")
+	assert info.last_apply_at
+	assert store.apply_remaining("123") > 0
+
+
+def test_apply_remaining_disabled(tmp_path) -> None:
+	"""显式传 0 = 不冷却（测试 / 特殊场景）。"""
+	store = FurryRequestStore(
+		path=tmp_path / "no_cooldown.json", apply_cooldown_hours=0)
+	store.submit("123")
+
+	assert store.apply_remaining("123") == 0.0
+
+
 def test_persist_across_instances(tmp_path) -> None:
 	path = tmp_path / "furry_request.json"
 	FurryRequestStore(path=path).submit("5", author_name="跨实例", link="l")
@@ -128,6 +157,8 @@ def test_file_layout(tmp_path) -> None:
 	assert raw["updated_at"]
 	assert raw["furry_request"]["1"]["author_name"] == "单条"
 	assert raw["furry_request"]["1"]["status"] == FurryRequestStore.STATUS_PENDING
+	# 1 天冷却的起点：只由「提交申请」写入
+	assert raw["furry_request"]["1"]["last_apply_at"]
 
 
 if __name__ == "__main__":

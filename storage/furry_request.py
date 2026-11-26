@@ -1,4 +1,8 @@
-"""兽人作者名单申请记录：JSON 文件存储，支持热加载。"""
+"""兽人作者名单申请记录：JSON 文件存储，支持热加载。
+
+同一作者 1 天内只能申请一次（``config.APPLY_COOLDOWN_HOURS``）：
+``last_apply_at`` 只记录「提交申请」的时间，审核改状态不会刷新它。
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ from typing import Any
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
-from utils.time import utc_now_iso
+from utils.time import cooldown_remaining, parse_iso, utc_now_iso
 
 
 class FurryRequestStore(JsonStore):
@@ -19,9 +23,20 @@ class FurryRequestStore(JsonStore):
 	STATUS_APPROVED = "approved"
 	STATUS_REJECTED = "rejected"
 
-	def __init__(self, path: Path | None = None) -> None:
+	def __init__(
+		self,
+		path: Path | None = None,
+		*,
+		apply_cooldown_hours: float | None = None,
+	) -> None:
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "furry_request.json"
+		# 默认值只在 config 里定义；0 也是合法值（不冷却），不能用 or 兜底
+		if apply_cooldown_hours is None:
+			from config import APPLY_COOLDOWN_HOURS
+
+			apply_cooldown_hours = APPLY_COOLDOWN_HOURS
+		self.apply_cooldown_hours = apply_cooldown_hours
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
@@ -35,6 +50,7 @@ class FurryRequestStore(JsonStore):
 			user_name=str(info.get("user_name") or ""),
 			status=str(info.get("status") or self.STATUS_PENDING),
 			created_at=str(info.get("created_at") or ""),
+			last_apply_at=str(info.get("last_apply_at") or ""),
 			updated_at=str(info.get("updated_at") or ""),
 			count=int(info.get("count") or 0),
 			note=str(info.get("note") or ""),
@@ -54,6 +70,14 @@ class FurryRequestStore(JsonStore):
 	def is_pending(self, author_id: str | int) -> bool:
 		info = self.get(author_id)
 		return bool(info) and info.status == self.STATUS_PENDING
+
+	def apply_remaining(self, author_id: str | int) -> float:
+		"""距离该作者下次可申请还剩多少秒；0 表示现在就能申请。"""
+		info = self.get(author_id)
+		if not info:
+			return 0.0
+		return cooldown_remaining(
+			parse_iso(str(info.last_apply_at or "")), self.apply_cooldown_hours)
 
 	def submit(
 		self,
@@ -80,6 +104,7 @@ class FurryRequestStore(JsonStore):
 				# 重新发起申请时回到待审核
 				status=self.STATUS_PENDING,
 				created_at=str(prev.created_at or now),
+				last_apply_at=now,
 				updated_at=now,
 				count=int(prev.count or 0) + 1,
 				note=str(note or prev.note or ""),

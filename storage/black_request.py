@@ -8,6 +8,8 @@
 
 key 为 author_id：一个作者一条记录，重复申请只累计 ``count``。
 「等截图」有时限（``config.BLACK_REQUEST_MATERIAL_TTL_MINUTES``），过期后要重新点申请。
+同一作者 1 天内只能申请一次（``config.APPLY_COOLDOWN_HOURS``）：冷却按
+``last_apply_at``（提交截图送审的时间）算，只受理不交截图不受影响。
 """
 
 from __future__ import annotations
@@ -18,7 +20,12 @@ from typing import Any
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
-from utils.time import parse_iso, utc_now, utc_now_iso
+from utils.time import (
+	cooldown_remaining,
+	parse_iso,
+	utc_now,
+	utc_now_iso,
+)
 
 
 class BlackRequestStore(JsonStore):
@@ -39,6 +46,7 @@ class BlackRequestStore(JsonStore):
 		path: Path | None = None,
 		*,
 		material_ttl_minutes: float | None = None,
+		apply_cooldown_hours: float | None = None,
 	) -> None:
 		if path is None:
 			path = (
@@ -50,7 +58,12 @@ class BlackRequestStore(JsonStore):
 			from config import BLACK_REQUEST_MATERIAL_TTL_MINUTES
 
 			material_ttl_minutes = BLACK_REQUEST_MATERIAL_TTL_MINUTES
+		if apply_cooldown_hours is None:
+			from config import APPLY_COOLDOWN_HOURS
+
+			apply_cooldown_hours = APPLY_COOLDOWN_HOURS
 		self.material_ttl_minutes = material_ttl_minutes
+		self.apply_cooldown_hours = apply_cooldown_hours
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
@@ -65,6 +78,7 @@ class BlackRequestStore(JsonStore):
 			status=str(info.get("status") or self.STATUS_MATERIAL),
 			photo_file_id=str(info.get("photo_file_id") or ""),
 			created_at=str(info.get("created_at") or ""),
+			last_apply_at=str(info.get("last_apply_at") or ""),
 			updated_at=str(info.get("updated_at") or ""),
 			count=int(info.get("count") or 0),
 			note=str(info.get("note") or ""),
@@ -81,6 +95,14 @@ class BlackRequestStore(JsonStore):
 			info = self._items.get(self.make_key(author_id))
 			return JsonDict(info) if info else None
 
+	def apply_remaining(self, author_id: str | int) -> float:
+		"""距离该作者下次可申请还剩多少秒；0 表示现在就能申请。"""
+		info = self.get(author_id)
+		if not info:
+			return 0.0
+		return cooldown_remaining(
+			parse_iso(str(info.last_apply_at or "")), self.apply_cooldown_hours)
+
 	def open(
 		self,
 		author_id: str | int,
@@ -90,7 +112,11 @@ class BlackRequestStore(JsonStore):
 		user_id: str | int | None = None,
 		user_name: str = "",
 	) -> JsonDict:
-		"""开始 / 重新开始一次申请：回到「等截图」，清掉上一张图。"""
+		"""开始 / 重新开始一次申请：回到「等截图」，清掉上一张图。
+
+		只是「受理」，还不算一次申请：``last_apply_at``（1 天冷却的起点）
+		要等截图送审时才刷新，否则没交截图被作废后还要白等一天。
+		"""
 		now = utc_now_iso()
 		with self._lock:
 			self._maybe_reload()
@@ -105,6 +131,7 @@ class BlackRequestStore(JsonStore):
 				status=self.STATUS_MATERIAL,
 				photo_file_id="",
 				created_at=str(prev.created_at or now),
+				last_apply_at=str(prev.last_apply_at or ""),
 				updated_at=now,
 				count=int(prev.count or 0) + 1,
 				note="",
@@ -120,11 +147,14 @@ class BlackRequestStore(JsonStore):
 			record = self._items.get(key)
 			if not record or record.status != self.STATUS_MATERIAL:
 				return False
+			now = utc_now_iso()
 			self._items[key] = JsonDict({
 				**record,
 				"photo_file_id": str(photo_file_id or ""),
 				"status": self.STATUS_REVIEW,
-				"updated_at": utc_now_iso(),
+				# 送审才算一次申请：1 天冷却从这里起算
+				"last_apply_at": now,
+				"updated_at": now,
 			})
 			self._persist()
 			return True
