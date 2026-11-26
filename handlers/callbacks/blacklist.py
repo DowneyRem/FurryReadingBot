@@ -24,12 +24,16 @@ from handlers.telegram import takedown_author
 from keyboards import confirm_black_keyboard, retry_takedown_keyboard
 from services import (
 	BlacklistDecision,
+	BlacklistRequest,
 	BlacklistReview,
 	BlacklistService,
 	DownloadService,
 	TakedownResult,
 )
+from storage.black_request import BlackRequestStore
+from utils.json import JsonDict
 from utils.links import get_id
+from utils.time import format_remaining
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +59,31 @@ def material_notice(author_name: str, author_id: str) -> str:
 		"2. 截图里要有：该作者的至少一篇小说",
 		"",
 		f"请在 {BLACK_REQUEST_MATERIAL_TTL_MINUTES} 分钟内发送；管理员核验后会私聊通知结果",
+	])
+
+
+def other_applicant_text(result: BlacklistRequest) -> str:
+	"""同一作者只允许同一用户受理：告诉第二位用户现在卡在谁那一环。"""
+	status = str((result.record.status if result.record else "") or "")
+	stage = (
+		"正在等待对方提交截图"
+		if status == BlackRequestStore.STATUS_MATERIAL
+		else "已进入核验"
+	)
+	return "\n".join([
+		f"作者 {result.author_name}（#a{result.author_id}）的申请已由其他用户发起，{stage}",
+		"同一作者同一时间只允许一个用户申请；如果长时间没有结果，可以稍后重试",
+	])
+
+
+def pending_material_text(result: BlacklistRequest) -> str:
+	"""同一用户同时只留一条待交材料：提醒先把上一张截图交掉。"""
+	pending = result.pending_record or JsonDict()
+	name = str(pending.author_name or pending.author_id or "")
+	return "\n".join([
+		f"你还有作者 {name}（#a{pending.author_id}）的截图没交",
+		f"请先把那张截图发给我，"
+		f"或等 {format_remaining(result.remaining_seconds)}后它作废再来申请",
 	])
 
 
@@ -169,6 +198,12 @@ async def request_blacklist_confirm(
 		await edit_or_reply(
 			update, context,
 			f"作者 {result.author_name} 已停止分享，无需申请下架。")
+		return
+	if result.status == "other_applicant":
+		await edit_or_reply(update, context, other_applicant_text(result))
+		return
+	if result.status == "material_open":
+		await edit_or_reply(update, context, pending_material_text(result))
 		return
 	if result.status == "pending_review":
 		await edit_or_reply(

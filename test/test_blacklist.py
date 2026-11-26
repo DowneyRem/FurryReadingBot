@@ -328,6 +328,57 @@ def test_confirm_cooldown(monkeypatch) -> None:
 	assert "Pixiv 后台数据" not in replies[-1][0]
 
 
+def test_confirm_other_applicant(monkeypatch) -> None:
+	"""同一作者只允许同一用户受理：第二位用户看到「已由其他用户发起」。"""
+	_, replies, _, _, _ = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			request=BlacklistRequest(
+				"other_applicant", "42", "作者",
+				JsonDict(author_id="42", status="pending_material"))))
+
+	run(request_blacklist_confirm(
+		FakeUpdate(), FakeContext(), data=f"aby;{AUTHOR_URL}"))
+
+	assert "已由其他用户发起" in replies[-1][0]
+	assert "正在等待对方提交截图" in replies[-1][0]
+	assert "Pixiv 后台数据" not in replies[-1][0]
+
+
+def test_confirm_other_applicant_in_review(monkeypatch) -> None:
+	"""对方已经交了截图：提示措辞换成「已进入核验」。"""
+	_, replies, _, _, _ = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			request=BlacklistRequest(
+				"other_applicant", "42", "作者",
+				JsonDict(author_id="42", status="pending_review"))))
+
+	run(request_blacklist_confirm(
+		FakeUpdate(), FakeContext(), data=f"aby;{AUTHOR_URL}"))
+
+	assert "已由其他用户发起" in replies[-1][0]
+	assert "已进入核验" in replies[-1][0]
+
+
+def test_confirm_material_open(monkeypatch) -> None:
+	"""同一用户同时只留一条待交材料：提示先把上一张截图交掉。"""
+	pending = JsonDict(author_id="77", author_name="别的作者")
+	_, replies, _, _, _ = patch_handler(
+		monkeypatch,
+		service=FakeService(
+			request=BlacklistRequest(
+				"material_open", "42", "作者", None, 1200.0, pending)))
+
+	run(request_blacklist_confirm(
+		FakeUpdate(), FakeContext(), data=f"aby;{AUTHOR_URL}"))
+
+	assert "别的作者" in replies[-1][0]
+	assert "#a77" in replies[-1][0]
+	assert "20 分钟" in replies[-1][0]
+	assert "Pixiv 后台数据" not in replies[-1][0]
+
+
 def test_confirm_already_blacklisted(monkeypatch) -> None:
 	_, replies, _, _, _ = patch_handler(
 		monkeypatch,
