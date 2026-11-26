@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from infra.http import HttpError, get_json, get_text
+from infra.http import HttpError, drop_cached_json, get_json, get_text
 from sources.pixiv.config import (
 	COOKIE_SEPARATOR,
 	ENV_COOKIE,
@@ -544,6 +544,8 @@ class PixivClient:
 			detail = payload.body
 			if detail is not None and not detail.content:
 				if int(detail.xRestrict or 0) >= 1 or detail.isLoginOnly:
+					# 这份空正文不能留在请求缓存里，否则之后配好 Cookie 还会拿到它
+					drop_cached_json(url_novel_data(novel_id))
 					return PixivAuthError(
 						"该作品是 R18，需要配置 PIXIV_COOKIE 才能读取正文",
 						raw=detail,
@@ -565,6 +567,8 @@ class PixivClient:
 		# 未登录时 R18 系列的章节会被打码（标题 `-----`、available=false），
 		# 提前报登录错误，而不是产出一个缺章 / 标题损坏的文件
 		if int(detail.xRestrict or 0) >= 1 and not self.has_cookie:
+			# 打码的元信息不能留在请求缓存里，否则之后配好 Cookie 还会拿到它
+			drop_cached_json(url_series_data(series_id))
 			raise PixivAuthError(
 				"该系列是 R18，需要配置 PIXIV_COOKIE 才能读取", raw=detail)
 		return envelope
@@ -579,7 +583,11 @@ class PixivClient:
 		items = payload.get("body") or []
 		if not isinstance(items, list):
 			return []
-		return [JsonDict.from_obj(item) for item in items if isinstance(item, dict)]
+		titles = [JsonDict.from_obj(item) for item in items if isinstance(item, dict)]
+		# 未登录时部分章节 available=false：缓存下来会让之后带 Cookie 的请求继续缺章
+		if not self.has_cookie and any(item.available is False for item in titles):
+			drop_cached_json(url_series_novels_title(series_id))
+		return titles
 
 
 	async def get_author(self, user_id: str | int) -> JsonDict:
