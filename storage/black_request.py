@@ -17,6 +17,10 @@ key 为 author_id：一个作者一条记录，重复申请只累计 ``count``�
   第二位用户会被挡下（否则截图会挂到别人的名字下，或被静默丢弃）；
 - 一个用户同一时间只保留一条「等截图」（``other_material_for_user``），
   这样 ``pending_material_for_user`` 反查作者时不会歧义。
+
+「等截图」窗口过期后，下一个受理会**接手**同一条记录（``open()``）：
+``created_at`` / ``count`` 保留，上一位申请人记进 ``previous_user_id``；
+他再补发截图时由 ``taken_over_material_for_user`` 识别，提示重新申请。
 """
 
 from __future__ import annotations
@@ -88,6 +92,10 @@ class BlackRequestStore(JsonStore):
 			updated_at=str(info.get("updated_at") or ""),
 			count=int(info.get("count") or 0),
 			note=str(info.get("note") or ""),
+			# 上一位受理人：受理窗口过期后被新申请接手时记下，
+			# 让原申请人再发截图时能收到「请重新申请」而不是静默
+			previous_user_id=str(info.get("previous_user_id") or ""),
+			previous_user_name=str(info.get("previous_user_name") or ""),
 		)
 
 	@staticmethod
@@ -122,17 +130,28 @@ class BlackRequestStore(JsonStore):
 
 		只是「受理」，还不算一次申请：``last_apply_at``（1 天冷却的起点）
 		要等截图送审时才刷新，否则没交截图被作废后还要白等一天。
+
+		如果上一条是**别人的**过期受理（窗口过时没人交图），这里会接手它：
+		``created_at`` / ``count`` 保留，上一位申请人记进 ``previous_user_id``，
+		这样他之后发来的截图能被识别成「你的受理已被接替」，给出重新申请的提示。
 		"""
 		now = utc_now_iso()
 		with self._lock:
 			self._maybe_reload()
 			key = self.make_key(author_id)
 			prev = self._items.get(key) or JsonDict()
+			prev_user = str(prev.user_id or "")
+			new_user = str(user_id or "") or prev_user
+			takeover = bool(
+				prev_user
+				and prev_user != new_user
+				and prev.status == self.STATUS_MATERIAL
+			)
 			self._items[key] = JsonDict(
 				author_id=key,
 				author_name=str(author_name or prev.author_name or ""),
 				author_url=str(author_url or prev.author_url or ""),
-				user_id=str(user_id or prev.user_id or ""),
+				user_id=new_user,
 				user_name=str(user_name or prev.user_name or ""),
 				status=self.STATUS_MATERIAL,
 				photo_file_id="",
@@ -141,6 +160,8 @@ class BlackRequestStore(JsonStore):
 				updated_at=now,
 				count=int(prev.count or 0) + 1,
 				note="",
+				previous_user_id=prev_user if takeover else "",
+				previous_user_name=str(prev.user_name or "") if takeover else "",
 			)
 			self._persist()
 			return JsonDict(self._items[key])
@@ -237,6 +258,24 @@ class BlackRequestStore(JsonStore):
 			if not hits:
 				return None
 			return JsonDict(max(hits, key=lambda info: str(info.updated_at or "")))
+
+	def taken_over_material_for_user(
+		self, user_id: str | int | None) -> JsonDict | None:
+		"""该用户的「等截图」被新受理接替后，指向接替它的那条记录。
+
+		用来在用户补发截图时给一句「你的受理已过期，请重新申请」，
+		而不是让截图静默消失（见 ``open()`` 的 ``previous_user_id``）。
+		"""
+		key = str(user_id or "")
+		if not key:
+			return None
+		self._maybe_reload()
+		with self._lock:
+			for info in self._items.values():
+				if (str(info.previous_user_id or "") == key
+						and info.status in (self.STATUS_MATERIAL, self.STATUS_REVIEW)):
+					return JsonDict(info)
+		return None
 
 	def material_remaining(
 		self, record: JsonDict, *,
