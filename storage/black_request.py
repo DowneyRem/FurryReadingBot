@@ -31,16 +31,17 @@ key 为 author_id：一个作者一条记录，重复申请只累计 ``count``�
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
 from utils.time import (
-	cooldown_remaining,
+	cooldown_left,
 	is_older_than,
 	parse_iso,
-	utc_now,
+	remaining_seconds,
 	utc_now_iso,
 )
 
@@ -146,8 +147,8 @@ class BlackRequestStore(JsonStore):
 		info = self.get(author_id)
 		if not info:
 			return 0.0
-		return cooldown_remaining(
-			parse_iso(str(info.last_apply_at or "")), self.apply_cooldown_hours)
+		return cooldown_left(
+			str(info.last_apply_at or ""), self.apply_cooldown_hours)
 
 	def open(
 		self,
@@ -314,13 +315,11 @@ class BlackRequestStore(JsonStore):
 		ttl_minutes: float | None = None) -> float:
 		"""「等截图」窗口还剩多少秒；时间缺失 / 已过期返回 0。"""
 		moment = parse_iso(str(record.updated_at or ""))
-		if moment is None:
-			return 0.0
 		minutes = (
 			ttl_minutes if ttl_minutes is not None
 			else self.material_ttl_minutes
 		)
-		return max(0.0, minutes * 60 - (utc_now() - moment).total_seconds())
+		return remaining_seconds(moment, timedelta(minutes=minutes))
 
 	def is_stale(
 		self, record: JsonDict, *,

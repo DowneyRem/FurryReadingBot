@@ -16,7 +16,7 @@ from typing import Any
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
-from utils.time import cooldown_remaining, is_older_than, parse_iso, utc_now_iso
+from utils.time import cooldown_left, is_older_than, parse_iso, utc_now_iso
 
 
 class FurryRequestStore(JsonStore):
@@ -104,8 +104,8 @@ class FurryRequestStore(JsonStore):
 		info = self.get(author_id)
 		if not info:
 			return 0.0
-		return cooldown_remaining(
-			parse_iso(str(info.last_apply_at or "")), self.apply_cooldown_hours)
+		return cooldown_left(
+			str(info.last_apply_at or ""), self.apply_cooldown_hours)
 
 	def submit(
 		self,

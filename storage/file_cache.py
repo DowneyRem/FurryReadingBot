@@ -9,7 +9,7 @@ from typing import Any
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
-from utils.time import parse_iso, utc_now
+from utils.time import is_expired, utc_now
 
 
 class FileCacheStore(JsonStore):
@@ -55,11 +55,15 @@ class FileCacheStore(JsonStore):
 		)
 
 	def _prune(self) -> None:
-		"""丢弃已过期的缓存条目，避免文件无限增长。"""
+		"""丢弃已过期的缓存条目，避免文件无限增长。
+
+		``expires_at`` 解析不出来（升级前写入的旧条目）时**保留**：老缓存还能用，
+		下次上传会补上新的到期时间；缓存条目本身也可以随时重建，不像业务数据那样必须删。
+		"""
 		now = utc_now()
 		expired = [
 			key for key, info in self._items.items()
-			if (exp := parse_iso(info.expires_at)) is not None and now >= exp
+			if is_expired(str(info.expires_at or ""), now=now)
 		]
 		for key in expired:
 			del self._items[key]
@@ -74,8 +78,7 @@ class FileCacheStore(JsonStore):
 			info = self._items.get(str(key))
 			if not info or not info.file_id:
 				return None
-			exp = parse_iso(info.expires_at)
-			if exp is not None and utc_now() >= exp:
+			if is_expired(str(info.expires_at or "")):
 				del self._items[str(key)]
 				self._persist()
 				return None

@@ -24,7 +24,7 @@ from typing import Any, Iterable
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
-from utils.time import parse_iso, utc_now
+from utils.time import is_older_than, parse_iso, remaining_seconds, utc_now
 
 
 # 作者 id 未知时的占位（升级前写入的 file_id 缓存里没有作者）
@@ -162,9 +162,8 @@ class ShareRecordStore(JsonStore):
 		"""消息级 TTL：过期消息 → 空频道 → 空作品 → 空作者，逐级回收。
 
 		读盘、写盘、查询前都会跑，保证内存里永远只有「TTL 天内」的数据。
+		``sent_at`` 解析不出来的行不在这里判断——``_normalize_message`` 读盘时已丢弃。
 		"""
-		now = utc_now()
-		ttl = timedelta(days=self.record_ttl_days)
 		kept = JsonDict()
 		for author_id, node in self._items.items():
 			author_key = str(author_id)
@@ -179,7 +178,7 @@ class ShareRecordStore(JsonStore):
 					fresh = [
 						row for row in rows
 						if (sent := parse_iso(row.sent_at)) is not None
-						and now - sent < ttl
+						and not is_older_than(sent, self.record_ttl_days)
 					]
 					if fresh:
 						history[str(chat_id)] = fresh
@@ -230,8 +229,7 @@ class ShareRecordStore(JsonStore):
 		if last is None:
 			return 0.0
 		days = cooldown_days if cooldown_days is not None else self.cooldown_days
-		left = (last + timedelta(days=days) - utc_now()).total_seconds()
-		return max(0.0, left)
+		return remaining_seconds(last, timedelta(days=days))
 
 	def is_limited(
 		self,

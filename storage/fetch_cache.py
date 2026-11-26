@@ -18,24 +18,16 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from storage.json_store import JsonStore
 from utils.json import JsonDict
-from utils.time import parse_iso, utc_now, utc_now_iso
+from utils.time import is_expired, utc_now, utc_now_iso
 
 
 logger = logging.getLogger(__name__)
-
-
-def _expired(info: JsonDict, now: datetime | None = None) -> bool:
-	"""没有 ``expires_at`` 或已到期的条目都算过期。"""
-	expires = parse_iso(str(info.expires_at or ""))
-	if expires is None:
-		return True
-	return (now or utc_now()) >= expires
 
 
 class FetchCacheStore(JsonStore):
@@ -83,10 +75,13 @@ class FetchCacheStore(JsonStore):
 		)
 
 	def _prune(self) -> None:
-		"""先丢过期条目，再按条数 / 总字节上限从最旧的开始淘汰。"""
+		"""先丢过期条目，再按条数 / 总字节上限从最旧的开始淘汰。
+
+		没有 ``expires_at``（旧格式 / 手写坏）也算过期：缓存条目本来就该重建。
+		"""
 		now = utc_now()
 		for key, info in list(self._items.items()):
-			if _expired(info, now):
+			if is_expired(str(info.expires_at or ""), now=now, missing=True):
 				del self._items[key]
 		if self._within_limits():
 			return
@@ -115,7 +110,7 @@ class FetchCacheStore(JsonStore):
 			info = self._items.get(name)
 			if info is None:
 				return None
-			if _expired(info):
+			if is_expired(str(info.expires_at or ""), missing=True):
 				del self._items[name]
 				self._persist()
 				return None
