@@ -41,7 +41,7 @@ RequestStatus = Literal[
 	"needs_material", "pending_review", "cooldown",
 	"other_applicant", "material_open", "already_blacklisted",
 ]
-SubmitStatus = Literal["submitted", "no_request", "expired"]
+SubmitStatus = Literal["submitted", "no_request", "expired", "reopened"]
 ReviewStatus = Literal["approved", "rejected", "missing", "already_processed"]
 BlacklistDecision = Literal["approve", "reject"]
 
@@ -134,20 +134,25 @@ class BlacklistService:
 			return BlacklistRequest("already_blacklisted", key, decision.author_name)
 
 		existing = self.black_requests.get(key)
-		# 「等截图」窗口过期就作废：否则一条没人交图的受理会把作者永久占住
-		if (existing is not None
-				and existing.status == BlackRequestStore.STATUS_MATERIAL
-				and self.black_requests.is_stale(existing)):
-			self.black_requests.discard_material(key)
-			existing = None
+		# 过期没人交图的受理不算「进行中」：下一个受理直接接手（open() 保留 count，
+		# 并把上一位申请人记进 previous_user_id，供他补发截图时收到提示）
+		stale_material = (
+			existing is not None
+			and existing.status == BlackRequestStore.STATUS_MATERIAL
+			and self.black_requests.is_stale(existing)
+		)
 
 		current = str(user_id or "")
 		holder = str((existing.user_id if existing else "") or "")
-		# 只有「进行中」的受理才锁人：已拒绝 / 已通过的旧记录不能挡住别人，
+		# 只有「进行中」的受理才锁人：过期 / 已拒绝 / 已通过的记录都不能挡住别人，
 		# 否则一条 rejected 记录会让这个作者对其他人永久不可申请
-		in_progress = existing is not None and existing.status in (
-			BlackRequestStore.STATUS_MATERIAL,
-			BlackRequestStore.STATUS_REVIEW,
+		in_progress = (
+			existing is not None
+			and not stale_material
+			and existing.status in (
+				BlackRequestStore.STATUS_MATERIAL,
+				BlackRequestStore.STATUS_REVIEW,
+			)
 		)
 		if in_progress and holder and current and holder != current:
 			# 同一作者同一时间只允许一个用户受理：别人正在交截图 / 等核验
@@ -202,6 +207,9 @@ class BlacklistService:
 		"""把用户发来的截图挂到他的「等截图」申请上。"""
 		record = self.black_requests.pending_material_for_user(user_id)
 		if record is None:
+			# 受理可能已被后来的申请接手（自己的窗口过期了）：别让截图静默消失
+			if self.black_requests.taken_over_material_for_user(user_id) is not None:
+				return MaterialSubmission("reopened")
 			return MaterialSubmission("no_request")
 		if self.black_requests.is_stale(record):
 			# 只提示一次：过期申请随即作废，之后的图片按普通图片忽略

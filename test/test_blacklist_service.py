@@ -255,6 +255,37 @@ def test_other_author_material_blocks_new_request(tmp_path) -> None:
 	assert store.get(AUTHOR_ID).status == BlackRequestStore.STATUS_MATERIAL
 
 
+def test_expired_material_taken_over_prompts_previous_user(tmp_path) -> None:
+	"""A 的受理过期后被 B 接手：A 补发截图要拿到 reopened，而不是静默丢弃。"""
+	service, store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	store.material_ttl_minutes = 0
+
+	assert service.request(
+		AUTHOR_ID, author_url=AUTHOR_URL, user_id=8).status == "needs_material"
+	record = store.get(AUTHOR_ID)
+	assert record.user_id == "8"
+	assert record.count == 2                  # 受理次数不再归零
+	assert record.previous_user_id == "7"
+
+	result = service.submit_material(7, "PHOTO")
+
+	assert result.status == "reopened"
+	assert store.get(AUTHOR_ID).photo_file_id == ""   # 图没有挂到 B 的申请上
+
+
+def test_reopened_stops_after_round_ends(tmp_path) -> None:
+	"""本轮结案后，原申请人再发图回到「静默忽略」，不会一直被提示。"""
+	service, store, _ = make_service(tmp_path)
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
+	store.material_ttl_minutes = 0
+	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=8)
+	service.submit_material(8, "PHOTO")
+	service.review(AUTHOR_ID, "reject")
+
+	assert service.submit_material(7, "PHOTO").status == "no_request"
+
+
 def test_expired_other_author_material_does_not_block(tmp_path) -> None:
 	service, store, _ = make_service(tmp_path)
 	service.request(AUTHOR_ID, author_url=AUTHOR_URL, user_id=7)
