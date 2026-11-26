@@ -22,7 +22,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from storage.json_store import JsonStore
+from storage.json_store import JsonStore, config_default
 from utils.json import JsonDict
 from utils.time import is_expired, utc_now, utc_now_iso
 
@@ -49,11 +49,8 @@ class FetchCacheStore(JsonStore):
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "fetch_cache.json"
 		# 默认值只在 config 里定义；0 也是合法值（立即过期），不能用 or 兜底
-		if default_ttl_hours is None:
-			from config import FETCH_CACHE_TTL_HOURS
-
-			default_ttl_hours = FETCH_CACHE_TTL_HOURS
-		self.default_ttl_hours = default_ttl_hours
+		self.default_ttl_hours = config_default(
+			default_ttl_hours, "FETCH_CACHE_TTL_HOURS")
 		self.max_bytes = self.DEFAULT_MAX_BYTES if max_bytes is None else max_bytes
 		self.max_entries = self.DEFAULT_MAX_ENTRIES if max_entries is None else max_entries
 		# 下面 super().__init__ 会触发 reload -> _prune，上限必须先就位
@@ -145,16 +142,6 @@ class FetchCacheStore(JsonStore):
 			)
 			self._persist()
 		return True
-
-	def remove(self, key: str) -> bool:
-		with self._lock:
-			self._maybe_reload()
-			name = str(key)
-			if name not in self._items:
-				return False
-			del self._items[name]
-			self._persist()
-			return True
 
 
 _default_cache: FetchCacheStore | None = None

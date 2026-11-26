@@ -34,4 +34,4 @@ def forget_unknown_tags(texts: Iterable[str]) -> int:
 
 	``texts`` 可以写原样写法（`unknown_tags()` 的键），也可以写归一后的写法。
 	"""
-	return get_unknown_tags().remove(texts)
+	return get_unknown_tags().forget(texts)

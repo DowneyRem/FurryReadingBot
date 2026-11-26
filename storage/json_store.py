@@ -13,12 +13,29 @@ import os
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from utils.json import JsonDict
 from utils.time import utc_now_iso
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def config_default(value: T | None, name: str) -> T:
+	"""显式传值优先；只有 ``None`` 才现读 ``config.<name>``。
+
+	TTL / 冷却这类参数只在 ``config`` 里定义一份，各 Store 构造时用它取默认值，
+	不再各写一遍 ``if x is None: from config import X``。
+	``0`` 是合法值（不冷却 / 立即过期），所以判的是 ``is None`` 而不是 ``or``。
+	"""
+	if value is not None:
+		return value
+	import config
+
+	return getattr(config, name)
+
 
 
 class JsonStore:
@@ -124,3 +141,14 @@ class JsonStore:
 		with self._lock:
 			self._prune()
 			self._write_payload(self._payload())
+
+	def remove(self, key: str | int) -> bool:
+		"""按 key 删除一条记录；不存在返回 False，存在时只写一次盘。"""
+		with self._lock:
+			self._maybe_reload()
+			name = str(key)
+			if name not in self._items:
+				return False
+			del self._items[name]
+			self._persist()
+			return True

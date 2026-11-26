@@ -22,8 +22,8 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
-from storage.json_store import JsonStore
-from utils.json import JsonDict
+from storage.json_store import JsonStore, config_default
+from utils.json import JsonDict, to_int, to_str
 from utils.time import is_older_than, parse_iso, remaining_seconds, utc_now
 
 
@@ -32,17 +32,6 @@ UNKNOWN_AUTHOR = "-"
 # 允许的作品类型，与 FileCacheStore / DownloadService 的 kind 保持一致
 WORK_KINDS = ("novel", "series", "author")
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
-
-
-def _as_str(value: str | int | None) -> str:
-	return "" if value is None else str(value)
-
-
-def _as_int(value: Any) -> int:
-	try:
-		return int(value)
-	except (TypeError, ValueError):
-		return 0
 
 
 class ShareRecordStore(JsonStore):
@@ -60,16 +49,9 @@ class ShareRecordStore(JsonStore):
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "share_records.json"
 		# 默认值只在 config 里定义；0 也是合法值，不能用 or 兜底
-		if cooldown_days is None:
-			from config import SHARE_COOLDOWN_DAYS
-
-			cooldown_days = SHARE_COOLDOWN_DAYS
-		if record_ttl_days is None:
-			from config import SHARE_RECORD_TTL_DAYS
-
-			record_ttl_days = SHARE_RECORD_TTL_DAYS
-		self.cooldown_days = cooldown_days
-		self.record_ttl_days = record_ttl_days
+		self.cooldown_days = config_default(cooldown_days, "SHARE_COOLDOWN_DAYS")
+		self.record_ttl_days = config_default(
+			record_ttl_days, "SHARE_RECORD_TTL_DAYS")
 		super().__init__(path)
 
 	# ----- key 规则 -----
@@ -124,7 +106,7 @@ class ShareRecordStore(JsonStore):
 		first, last = ShareRecordStore._span(history)
 		return JsonDict(
 			title=str(info.get("title") or ""),
-			share_count=_as_int(info.get("share_count")),
+			share_count=to_int(info.get("share_count")),
 			first_shared_at=first,
 			last_shared_at=last,
 			history=history,
@@ -138,9 +120,9 @@ class ShareRecordStore(JsonStore):
 		if parse_iso(sent_at) is None:
 			return None
 		return JsonDict(
-			message_id=_as_int(info.get("message_id")),
+			message_id=to_int(info.get("message_id")),
 			sent_at=sent_at,
-			user_id=_as_str(info.get("user_id")),
+			user_id=to_str(info.get("user_id")),
 			user_name=str(info.get("user_name") or ""),
 		)
 
@@ -187,7 +169,7 @@ class ShareRecordStore(JsonStore):
 				first, last = self._span(history)
 				author[work_key] = JsonDict(
 					title=str(work.title or ""),
-					share_count=_as_int(work.share_count),
+					share_count=to_int(work.share_count),
 					first_shared_at=first,
 					last_shared_at=last,
 					history=history,
@@ -208,7 +190,7 @@ class ShareRecordStore(JsonStore):
 		self._maybe_reload()
 		with self._lock:
 			self._prune()
-			node = self._items.get(_as_str(author_id) or UNKNOWN_AUTHOR)
+			node = self._items.get(to_str(author_id) or UNKNOWN_AUTHOR)
 			if not node:
 				return None
 			return node.get(self.make_key(kind, item_id))
@@ -247,7 +229,7 @@ class ShareRecordStore(JsonStore):
 		self._maybe_reload()
 		with self._lock:
 			self._prune()
-			author_key = _as_str(author_id) or UNKNOWN_AUTHOR
+			author_key = to_str(author_id) or UNKNOWN_AUTHOR
 			node = self._items.get(author_key)
 			if not node:
 				return []
@@ -267,7 +249,7 @@ class ShareRecordStore(JsonStore):
 							item_id=item_id,
 							title=str(work.title or ""),
 							chat_id=str(chat_id),
-							message_id=_as_int(message.message_id),
+							message_id=to_int(message.message_id),
 							sent_at=str(message.sent_at or ""),
 							user_id=str(message.user_id or ""),
 							user_name=str(message.user_name or ""),
@@ -290,7 +272,7 @@ class ShareRecordStore(JsonStore):
 		shared_at: str | None = None,
 	) -> JsonDict:
 		"""写入一次用户分享：share_count +1，每个频道追加一条消息。"""
-		author_key = _as_str(author_id) or UNKNOWN_AUTHOR
+		author_key = to_str(author_id) or UNKNOWN_AUTHOR
 		work_key = self.make_key(kind, item_id)
 		stamp = shared_at or utc_now().strftime(ISO_FORMAT)
 		with self._lock:
@@ -315,16 +297,16 @@ class ShareRecordStore(JsonStore):
 				chat_key = str(chat_id)
 				rows = [
 					row for row in (history.get(chat_key) or [])
-					if _as_int(row.message_id) != _as_int(message_id)
+					if to_int(row.message_id) != to_int(message_id)
 				]
 				rows.append(JsonDict(
-					message_id=_as_int(message_id),
+					message_id=to_int(message_id),
 					sent_at=stamp,
-					user_id=_as_str(user_id),
+					user_id=to_str(user_id),
 					user_name=str(user_name or ""),
 				))
 				history[chat_key] = rows
-			work["share_count"] = _as_int(work.share_count) + 1
+			work["share_count"] = to_int(work.share_count) + 1
 			first, last = self._span(history)
 			work["first_shared_at"] = first or stamp
 			work["last_shared_at"] = last or stamp
@@ -347,7 +329,7 @@ class ShareRecordStore(JsonStore):
 
 	def remove_messages(self, author_id: str | int | None, rows: list[JsonDict]) -> int:
 		"""批量下架（行需带 kind / item_id / chat_id / message_id），只写一次盘；返回移除条数。"""
-		author_key = _as_str(author_id) or UNKNOWN_AUTHOR
+		author_key = to_str(author_id) or UNKNOWN_AUTHOR
 		with self._lock:
 			self._maybe_reload()
 			self._prune()
@@ -369,7 +351,7 @@ class ShareRecordStore(JsonStore):
 		messages = history.get(chat_key) or []
 		kept = [
 			message for message in messages
-			if _as_int(message.message_id) != _as_int(row.message_id)
+			if to_int(message.message_id) != to_int(row.message_id)
 		]
 		if len(kept) == len(messages):
 			return False
@@ -387,7 +369,7 @@ class ShareRecordStore(JsonStore):
 
 	def drop_author(self, author_id: str | int) -> bool:
 		"""整块删除一个作者（拉黑后下架完消息时调用）。"""
-		author_key = _as_str(author_id) or UNKNOWN_AUTHOR
+		author_key = to_str(author_id) or UNKNOWN_AUTHOR
 		with self._lock:
 			self._maybe_reload()
 			if self._items.pop(author_key, None) is None:

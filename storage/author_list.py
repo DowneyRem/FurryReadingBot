@@ -77,16 +77,6 @@ class AuthorListStore(JsonStore):
 				self._persist()
 		return added
 
-	def remove(self, author_id: str | int) -> bool:
-		with self._lock:
-			self._maybe_reload()
-			key = str(author_id)
-			if key not in self._items:
-				return False
-			del self._items[key]
-			self._persist()
-			return True
-
 
 class ListManager:
 	"""

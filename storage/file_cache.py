@@ -7,7 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from storage.json_store import JsonStore
+from storage.json_store import JsonStore, config_default
 from utils.json import JsonDict
 from utils.time import is_expired, utc_now
 
@@ -27,11 +27,8 @@ class FileCacheStore(JsonStore):
 		if path is None:
 			path = Path(__file__).parent.parent.resolve() / "data" / "files_cache.json"
 		# 默认值只在 config 里定义；0 也是合法值（立即过期），不能用 or 兜底
-		if default_ttl_days is None:
-			from config import FILE_CACHE_TTL_DAYS
-
-			default_ttl_days = FILE_CACHE_TTL_DAYS
-		self.default_ttl_days = default_ttl_days
+		self.default_ttl_days = config_default(
+			default_ttl_days, "FILE_CACHE_TTL_DAYS")
 		super().__init__(path)
 
 	def _normalize(self, info: Any) -> JsonDict | None:
@@ -119,16 +116,6 @@ class FileCacheStore(JsonStore):
 				expires_at=expires.strftime("%Y-%m-%dT%H:%M:%S%z"),
 			)
 			self._persist()
-
-	def remove(self, key: str) -> bool:
-		with self._lock:
-			self._maybe_reload()
-			k = str(key)
-			if k not in self._items:
-				return False
-			del self._items[k]
-			self._persist()
-			return True
 
 
 _default_cache: FileCacheStore | None = None

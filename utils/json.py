@@ -20,3 +20,17 @@ class JsonDict(dict):
 		if isinstance(obj, list):
 			return [cls.from_obj(v) for v in obj]
 		return obj
+
+
+def to_str(value: Any) -> str:
+	"""把字段读成字符串：``None`` / 缺失 → ``""``，其余 ``str()``。"""
+	return "" if value is None else str(value)
+
+
+def to_int(value: Any) -> int:
+	"""把字段读成整数：``None`` / 非法值 → 0（不抛异常，旧数据不至于炸存储）。"""
+	try:
+		return int(value)
+	except (TypeError, ValueError):
+		return 0
+

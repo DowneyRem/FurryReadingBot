@@ -14,7 +14,7 @@
   - ``text`` 保留来源原样，方便直接抄进 ``tags.toml`` 的 ``aliases``；
   - ``count`` 按「作品」计数：同一次调用（一篇作品）里的重复写法只算一次；
   - 不做 TTL、**不自动淘汰**：没被人工判断过的写法不能悄悄消失，
-    需要瘦身时显式调 ``prune()``；补完 aliases 后 ``clear()``。
+    需要瘦身时显式调 ``prune()``；补完 aliases 后用 ``forget()`` 按条销账、``clear()`` 全清。
 """
 
 from __future__ import annotations
@@ -23,15 +23,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from storage.json_store import JsonStore
-from utils.json import JsonDict
+from utils.json import JsonDict, to_int
 from utils.time import utc_now_iso
-
-
-def _as_int(value: Any) -> int:
-	try:
-		return int(value)
-	except (TypeError, ValueError):
-		return 0
 
 
 class UnknownTagStore(JsonStore):
@@ -54,7 +47,7 @@ class UnknownTagStore(JsonStore):
 			return None
 		return JsonDict(
 			text=text,
-			count=max(_as_int(info.get("count")), 0),
+			count=max(to_int(info.get("count")), 0),
 			first_seen=str(info.get("first_seen") or ""),
 			last_seen=str(info.get("last_seen") or ""),
 		)
@@ -82,7 +75,7 @@ class UnknownTagStore(JsonStore):
 						text=text, count=1, first_seen=now, last_seen=now)
 					added += 1
 				else:
-					item["count"] = _as_int(item.get("count")) + 1
+					item["count"] = to_int(item.get("count")) + 1
 					item["text"] = text
 					item["last_seen"] = now
 				touched = True
@@ -96,7 +89,7 @@ class UnknownTagStore(JsonStore):
 		with self._lock:
 			items = [JsonDict.from_obj(item) for item in self._items.values()]
 		items.sort(
-			key=lambda item: (-_as_int(item.get("count")), str(item.get("text") or "")))
+			key=lambda item: (-to_int(item.get("count")), str(item.get("text") or "")))
 		return items[:limit] if limit > 0 else items
 
 	def clear(self) -> int:
@@ -109,10 +102,12 @@ class UnknownTagStore(JsonStore):
 				self._persist()
 		return removed
 
-	def remove(self, texts: Iterable[str]) -> int:
+	def forget(self, texts: Iterable[str]) -> int:
 		"""按写法删除（补完 aliases 后精确销账）；返回删掉的条数。
 
 		``texts`` 里既可以是原样写法，也可以是 ``normalize()`` 后的写法。
+		与 ``JsonStore.remove(key)`` 按 key 删一条区分：这里是「按写法批量销账」，
+		所以单独命名，避免和基类同名不同义。
 		"""
 		targets = {str(text).strip() for text in texts if str(text).strip()}
 		if not targets:
@@ -142,7 +137,7 @@ class UnknownTagStore(JsonStore):
 				return 0
 			kept = sorted(
 				self._items.items(),
-				key=lambda item: (-_as_int(item[1].get("count")), item[0]),
+				key=lambda item: (-to_int(item[1].get("count")), item[0]),
 			)[:limit]
 			removed = len(self._items) - len(kept)
 			self._items = JsonDict(dict(kept))
