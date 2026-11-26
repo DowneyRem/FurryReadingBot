@@ -281,7 +281,12 @@ def test_round_robin_rotates_accounts_and_concurrent_requests(monkeypatch) -> No
 		return {"error": False, "body": {"id": "1", "content": "ok"}}
 
 	monkeypatch.setattr(client_module, "get_json", fake)
-	client = PixivClient(cookies=["1_a", "2_b", "3_c"], min_interval=0)
+	client = PixivClient(
+		cookies=["1_a", "2_b", "3_c"],
+		min_interval=0,
+		rotate_every=1,
+		random_start=False,
+	)
 
 	for _ in range(5):
 		run(client.get_novel("1"))
@@ -318,7 +323,7 @@ def test_401_marks_account_dead_and_fails_over(monkeypatch) -> None:
 		return {"error": False, "body": {"id": "1", "content": "ok"}}
 
 	monkeypatch.setattr(client_module, "get_json", fake)
-	client = PixivClient(cookies=["1_dead", "2_good"], min_interval=0)
+	client = PixivClient(cookies=["1_dead", "2_good"], min_interval=0, random_start=False)
 
 	data = run(client.get_novel("1"))
 	assert data.body.content == "ok"
@@ -358,7 +363,7 @@ def test_403_only_kills_bad_account_when_backup_succeeds(monkeypatch) -> None:
 		return {"error": False, "body": {"id": "1", "content": "ok"}}
 
 	monkeypatch.setattr(client_module, "get_json", partial_403)
-	client = PixivClient(cookies=["1_bad", "2_good"], min_interval=0)
+	client = PixivClient(cookies=["1_bad", "2_good"], min_interval=0, random_start=False)
 
 	assert run(client.get_novel("1")).body.content == "ok"
 	assert client.accounts[0].dead is True
@@ -367,7 +372,7 @@ def test_403_only_kills_bad_account_when_backup_succeeds(monkeypatch) -> None:
 	async def all_403(url, headers=None, **kwargs):
 		raise HttpError(url, 403)
 
-	client2 = PixivClient(cookies=["1_ok", "2_ok"], min_interval=0)
+	client2 = PixivClient(cookies=["1_ok", "2_ok"], min_interval=0, random_start=False)
 	monkeypatch.setattr(client_module, "get_json", all_403)
 	with pytest.raises(PixivAuthError):
 		run(client2.get_novel("99"))
@@ -391,8 +396,10 @@ def test_429_cools_down_account_switches_immediately_and_recovers(monkeypatch) -
 	client = PixivClient(
 		cookies=["1_limit", "2_good"],
 		min_interval=0,
-		cooldown_seconds=60.0,
+		rotate_every=1,
+		random_start=False,
 	)
+	assert client.cooldown_seconds == 900.0
 
 	# 有多个候选号时应禁用底层 429 原地退避，立即切号
 	data = run(client.get_novel("1"))
@@ -402,7 +409,8 @@ def test_429_cools_down_account_switches_immediately_and_recovers(monkeypatch) -
 		("PHPSESSID=2_good", False),
 	]
 
-	# 冷却期内不再打 1_limit
+	# 冷却期内（满 15 分钟前）不再打 1_limit
+	now[0] = 999.0
 	calls.clear()
 	run(client.get_novel("2"))
 	assert calls == [("PHPSESSID=2_good", None)]
@@ -423,13 +431,19 @@ def test_429_cools_down_account_switches_immediately_and_recovers(monkeypatch) -
 		run(client.get_novel("4"))
 	assert calls == []
 
-	# 冷却期满后自动恢复轮换
-	now[0] = 160.0
+	# 1_limit 冷却期满 15 分钟（100 + 900 = 1000s）后自动恢复；此时 2_good 仍在冷却（999 + 900 = 1899s）
+	now[0] = 1000.0
 	calls.clear()
 	monkeypatch.setattr(client_module, "get_json", fake)
 	run(client.get_novel("5"))
+	assert [cookie for cookie, _ in calls] == ["PHPSESSID=1_limit"]
+
+	# 2_good 冷却期也满 15 分钟后，双账号都恢复并正常轮换
+	now[0] = 1899.0
+	calls.clear()
 	run(client.get_novel("6"))
-	assert [cookie for cookie, _ in calls] == ["PHPSESSID=1_limit", "PHPSESSID=2_good"]
+	run(client.get_novel("7"))
+	assert [cookie for cookie, _ in calls] == ["PHPSESSID=2_good", "PHPSESSID=1_limit"]
 
 
 def test_r18_empty_content_fails_over_to_working_account(monkeypatch) -> None:
@@ -443,7 +457,7 @@ def test_r18_empty_content_fails_over_to_working_account(monkeypatch) -> None:
 		return {"error": False, "body": {"id": "1", "xRestrict": 1, "content": "R18正文"}}
 
 	monkeypatch.setattr(client_module, "get_json", fake)
-	client = PixivClient(cookies=["1_no_r18", "2_r18"], min_interval=0)
+	client = PixivClient(cookies=["1_no_r18", "2_r18"], min_interval=0, random_start=False)
 
 	data = run(client.get_novel("1"))
 	assert data.body.content == "R18正文"
@@ -466,13 +480,127 @@ def test_per_account_throttle_does_not_delay_other_accounts(monkeypatch) -> None
 	monkeypatch.setattr(client_module.asyncio, "sleep", fake_sleep)
 	monkeypatch.setattr(client_module, "get_json", fake_json)
 
-	client = PixivClient(cookies=["1_a", "2_b"], min_interval=0.5)
+	client = PixivClient(
+		cookies=["1_a", "2_b"],
+		min_interval=0.5,
+		global_min_interval=0.0,
+		jitter=0.0,
+		rotate_every=1,
+		random_start=False,
+	)
 	run(client.get_novel("1"))  # account 1 at 100.0
 	run(client.get_novel("2"))  # account 2 at 100.0（不等待）
 	assert sleeps == []
 
 	run(client.get_novel("3"))  # 再次回到 account 1，应等待 0.5s
 	assert sleeps == [pytest.approx(0.5)]
+
+
+def test_global_min_interval_and_jitter_caps_single_ip_rate(monkeypatch) -> None:
+	now = [100.0]
+	sleeps: list[float] = []
+	jitters = iter([0.1, 0.2, 0.05])
+	monkeypatch.setattr(client_module.time, "monotonic", lambda: now[0])
+	monkeypatch.setattr(client_module.random, "uniform", lambda _a, _b: next(jitters))
+
+	async def fake_sleep(delay: float) -> None:
+		sleeps.append(delay)
+		now[0] += delay
+
+	async def fake_json(url, headers=None, **kwargs):
+		return {"error": False, "body": {"id": "1", "content": "ok"}}
+
+	monkeypatch.setattr(client_module.asyncio, "sleep", fake_sleep)
+	monkeypatch.setattr(client_module, "get_json", fake_json)
+
+	# 5 账号同 IP 出口：即使切不同账号，也要受 global_min_interval + jitter 约束
+	client = PixivClient(
+		cookies=["1_a", "2_b", "3_c", "4_d", "5_e"],
+		min_interval=0.5,
+		global_min_interval=0.3,
+		jitter=0.2,
+		rotate_every=1,
+		random_start=False,
+	)
+	run(client.get_novel("1"))  # 100.0 + 0.1 -> sleep 0.1 -> now = 100.1
+	run(client.get_novel("2"))  # max(100.1, 100.1+0.3) + 0.2 -> sleep 0.5 -> now = 100.6
+	run(client.get_novel("3"))  # max(100.6, 100.6+0.3) + 0.05 -> sleep 0.35 -> now = 100.95
+
+	assert sleeps == [pytest.approx(0.1), pytest.approx(0.5), pytest.approx(0.35)]
+
+
+def test_random_start_picks_initial_cursor(monkeypatch) -> None:
+	seen: list[str] = []
+	monkeypatch.setattr(client_module.random, "randrange", lambda n: 3)
+
+	async def fake_json(url, headers=None, **kwargs):
+		seen.append((headers or {}).get("Cookie", ""))
+		return {"error": False, "body": {"id": "1", "content": "ok"}}
+
+	monkeypatch.setattr(client_module, "get_json", fake_json)
+	client = PixivClient(
+		cookies=["1_a", "2_b", "3_c", "4_d", "5_e"],
+		min_interval=0,
+	)
+	run(client.get_novel("1"))
+	run(client.get_novel("2"))
+
+	# 默认连续 100 次才换号：随机从 4_d 开始后，前两次都留在 4_d
+	assert seen == ["PHPSESSID=4_d", "PHPSESSID=4_d"]
+
+
+def test_sticky_batch_rotates_every_100_requests_by_default(monkeypatch) -> None:
+	seen: list[str] = []
+
+	async def fake_json(url, headers=None, **kwargs):
+		seen.append((headers or {}).get("Cookie", ""))
+		return {"error": False, "body": {"id": "1", "content": "ok"}}
+
+	monkeypatch.setattr(client_module, "get_json", fake_json)
+	client = PixivClient(
+		cookies=["1_a", "2_b", "3_c"],
+		min_interval=0,
+		random_start=False,
+	)
+	assert client.rotate_every == 100
+
+	for _ in range(102):
+		run(client.get_novel("1"))
+
+	assert seen[:100] == ["PHPSESSID=1_a"] * 100
+	assert seen[100:] == ["PHPSESSID=2_b", "PHPSESSID=2_b"]
+
+
+def test_sticky_batch_failover_resets_quota_on_new_account(monkeypatch) -> None:
+	seen: list[str] = []
+
+	async def fake(url, headers=None, **kwargs):
+		cookie = (headers or {}).get("Cookie", "")
+		seen.append(cookie)
+		if cookie == "PHPSESSID=1_a" and len(seen) == 2:
+			raise HttpError(url, 429)
+		return {"error": False, "body": {"id": "1", "content": "ok"}}
+
+	monkeypatch.setattr(client_module, "get_json", fake)
+	client = PixivClient(
+		cookies=["1_a", "2_b", "3_c"],
+		min_interval=0,
+		rotate_every=3,
+		random_start=False,
+	)
+	# 第 1 次用 1_a 成功；第 2 次 1_a 429 切到 2_b（计 2_b 第 1 次）；
+	# 第 3、4 次应继续留在 2_b（凑满 3 次），第 5 次切到 3_c
+	for _ in range(5):
+		run(client.get_novel("1"))
+
+	assert seen == [
+		"PHPSESSID=1_a",
+		"PHPSESSID=1_a",
+		"PHPSESSID=2_b",
+		"PHPSESSID=2_b",
+		"PHPSESSID=2_b",
+		"PHPSESSID=3_c",
+	]
 
 
 def test_env_change_refreshes_pool_and_clears_dead_state(monkeypatch) -> None:
