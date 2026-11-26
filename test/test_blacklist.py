@@ -569,6 +569,19 @@ def test_on_photo_without_request_is_silent(monkeypatch) -> None:
 	assert message.replies == []
 
 
+def test_on_photo_reopened(monkeypatch) -> None:
+	"""受理过期后被别人接手：截图不静默，提示重新申请。"""
+	_, cards = patch_media(
+		monkeypatch, submission=MaterialSubmission("reopened"))
+	message = FakeMessage()
+
+	run(media_handler.on_photo(FakeUpdate(message), FakeContext()))
+
+	assert cards == []
+	assert "已被新的申请接替" in message.replies[-1]
+	assert "重新发送作者主页链接" in message.replies[-1]
+
+
 def test_on_photo_expired(monkeypatch) -> None:
 	_, cards = patch_media(
 		monkeypatch,

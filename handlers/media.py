@@ -2,6 +2,9 @@
 
 只有在该用户存在「等截图」的申请时才会处理；其他图片一律静默忽略，
 避免把普通私聊图片当材料、也避免打扰用户。
+
+例外：如果他的受理已过期、且被别人的新受理接手（`reopened`），
+会回一句「请重新发送作者主页链接，再点🈲申请下架」——不能让截图静默消失。
 """
 
 from __future__ import annotations
@@ -33,6 +36,11 @@ async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	if result.status == "expired":
 		await message.reply_text(
 			"截图提交超时，请重新发送作者主页链接，再点「🈲 申请下架」。")
+		return
+	if result.status == "reopened":
+		await message.reply_text(
+			"你之前的申请等待截图超时，已被新的申请接替；"
+			"如需下架，请重新发送作者主页链接，再点「🈲 申请下架」。")
 		return
 
 	record = result.record
