@@ -48,7 +48,7 @@ class FakeSource(NovelSource):
 		self.novels = {n.novel_id: n for n in novels}
 		self.series = {s.series_id: s for s in series_list}
 		self.author = author
-		self.fail_on = fail_on
+		self.fail_on = {fail_on} if isinstance(fail_on, str) else set(fail_on or ())
 
 	def is_novel_link(self, link): return "/novel/" in link
 	def is_series_link(self, link): return "/series/" in link
@@ -57,7 +57,7 @@ class FakeSource(NovelSource):
 
 	async def fetch_novel(self, link):
 		novel_id = link.rsplit("/", 1)[-1]
-		if novel_id == self.fail_on:
+		if novel_id in self.fail_on:
 			raise RuntimeError("network down")
 		return self.novels[novel_id]
 
@@ -136,13 +136,60 @@ def test_author_layout_and_same_title_series(tmp_path, use_source) -> None:
 	]
 
 
-def test_failure_leaves_no_files(tmp_path, use_source) -> None:
-	chapters = [novel("1", "一"), novel("2", "二")]
+def test_failed_chapter_is_skipped(tmp_path, use_source) -> None:
+	chapters = [novel("1", "一"), novel("2", "二"), novel("3", "三")]
 	use_source(FakeSource(
 		novels=chapters, series_list=[series("1", "长篇", chapters)], fail_on="2"))
 
+	path = build(SERIES_LINK, "zip", tmp_path)
+
+	assert zip_names(path) == ["长篇/1_一.txt", "长篇/2_三.txt"]
+
+
+def test_all_chapters_failed_leaves_no_files(tmp_path, use_source) -> None:
+	chapters = [novel("1", "一"), novel("2", "二")]
+	use_source(FakeSource(
+		novels=chapters, series_list=[series("1", "长篇", chapters)], fail_on={"1", "2"}))
+
 	with pytest.raises(RuntimeError):
 		build(SERIES_LINK, "zip", tmp_path)
+
+	assert list(tmp_path.iterdir()) == []
+
+
+def test_author_build_skips_failed_chapters(tmp_path, use_source) -> None:
+	chapters = [novel("1", "上"), novel("2", "下")]
+	single = novel("3", "短篇")
+	author = Author(
+		novel_id="1", novel_url="", novel_title="",
+		series_id=None, series_url=None, series_title=None,
+		author_id="9", author_url=AUTHOR_LINK, author_name="作者",
+		novel_ids=["1", "2", "3"], series_ids=["10"],
+	)
+	use_source(FakeSource(
+		novels=[*chapters, single],
+		series_list=[series("10", "长篇", chapters)],
+		author=author,
+		fail_on="2",
+	))
+
+	path = build(AUTHOR_LINK, "zip", tmp_path)
+
+	assert zip_names(path) == ["作者/单篇/短篇.txt", "作者/长篇/1_上.txt"]
+
+
+def test_author_with_no_downloadable_work_raises(tmp_path, use_source) -> None:
+	chapters = [novel("1", "短篇")]
+	author = Author(
+		novel_id="1", novel_url="", novel_title="",
+		series_id=None, series_url=None, series_title=None,
+		author_id="9", author_url=AUTHOR_LINK, author_name="作者",
+		novel_ids=["1"],
+	)
+	use_source(FakeSource(novels=chapters, author=author, fail_on="1"))
+
+	with pytest.raises(RuntimeError):
+		build(AUTHOR_LINK, "zip", tmp_path)
 
 	assert list(tmp_path.iterdir()) == []
 
