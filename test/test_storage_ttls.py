@@ -45,6 +45,14 @@ def test_black_request_ttl_comes_from_config(tmp_path) -> None:
 	assert store.material_ttl_minutes == config.BLACK_REQUEST_MATERIAL_TTL_MINUTES
 
 
+def test_request_record_ttls_come_from_config(tmp_path) -> None:
+	"""申请记录保留天数同样只在 config 定义：兽人名单 / 黑名单各一个。"""
+	furry = FurryRequestStore(path=tmp_path / "furry_request.json")
+	black = BlackRequestStore(path=tmp_path / "black_request.json")
+	assert furry.record_ttl_days == config.FURRY_REQUEST_TTL_DAYS
+	assert black.record_ttl_days == config.BLACK_REQUEST_TTL_DAYS
+
+
 def test_explicit_values_win_over_config(tmp_path) -> None:
 	"""测试 / 特殊场景可以显式覆盖，0 也不会被 or 兜底掉。"""
 	file_cache = FileCacheStore(path=tmp_path / "a.json", default_ttl_days=0)
@@ -53,9 +61,9 @@ def test_explicit_values_win_over_config(tmp_path) -> None:
 		path=tmp_path / "c.json", cooldown_days=0, record_ttl_days=0)
 	requests = BlackRequestStore(path=tmp_path / "d.json", material_ttl_minutes=0)
 	furry_requests = FurryRequestStore(
-		path=tmp_path / "e.json", apply_cooldown_hours=0)
+		path=tmp_path / "e.json", apply_cooldown_hours=0, record_ttl_days=0)
 	black_requests = BlackRequestStore(
-		path=tmp_path / "f.json", apply_cooldown_hours=0)
+		path=tmp_path / "f.json", apply_cooldown_hours=0, record_ttl_days=0)
 
 	assert file_cache.default_ttl_days == 0
 	assert fetch_cache.default_ttl_hours == 0
@@ -63,4 +71,6 @@ def test_explicit_values_win_over_config(tmp_path) -> None:
 	assert records.record_ttl_days == 0
 	assert requests.material_ttl_minutes == 0
 	assert furry_requests.apply_cooldown_hours == 0
+	assert furry_requests.record_ttl_days == 0
 	assert black_requests.apply_cooldown_hours == 0
+	assert black_requests.record_ttl_days == 0
