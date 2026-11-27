@@ -298,7 +298,7 @@ class DownloadService:
 	) -> FormatChoice | DownloadArtifact:
 		kind, requested_type = self._ACTIONS[action]
 
-		# 单篇链接要求下载系列时，解析为其所属系列
+		# 单篇链接要求下载系列时解析为其所属系列；系列链接下载单篇时落到首章
 		target_link = await self._resolve_link(link, kind)
 		item_id = get_id(target_link)
 		if not item_id:

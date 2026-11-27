@@ -39,9 +39,13 @@ async def fetch(link: str) -> Novel | Series | Author:
 
 
 async def resolve_link(link: str, kind: str) -> str:
+	"""按动作需要的类型归一链接：单篇要系列时换成系列，系列要单篇时换成首章。"""
 	source = _require_source(link)
 	if kind == "series" and source.is_novel_link(link):
 		novel = await source.fetch_novel(link)
 		return novel.series_url or link
-	else:
-		return link
+	if kind == "novel" and source.is_series_link(link):
+		# 「📄 下载首章」直接带系列链接：系列模型的首篇字段就是第一章
+		series = await source.fetch_series(link)
+		return series.novel_url or link
+	return link
