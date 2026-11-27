@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+# P 站小说不能只取公开内容：登录态是启动必填项（见 config_errors()）
 PIXIV_COOKIE = os.environ.get("PIXIV_COOKIE", "").strip()
 
 
