@@ -1,5 +1,8 @@
 """私聊图片：作为「作者申请下架」的材料提交。
 
+图片消息（`message.photo`）和「以文件发送的图片」（`message.document` 且
+MIME 为 `image/*`）都接受：以文件发送不会被 Telegram 压缩，截图的字更清楚。
+
 只有在该用户存在「等截图」的申请时才会处理；其他图片一律静默忽略，
 避免把普通私聊图片当材料、也避免打扰用户。
 
@@ -11,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from telegram import Update
+from telegram import Message, Update
 from telegram.ext import ContextTypes
 
 from handlers.telegram import send_blacklist_card
@@ -21,15 +24,32 @@ from services import BlacklistService
 logger = logging.getLogger(__name__)
 
 
+def material_file_id(message: Message) -> str | None:
+	"""取消息里的图片 file_id：优先图片消息，其次 MIME 是 `image/*` 的文件。"""
+	photos = message.photo
+	if photos:
+		return photos[-1].file_id
+	document = message.document
+	if document is None:
+		return None
+	mime = document.mime_type or ""
+	if not mime.startswith("image/"):
+		return None
+	return document.file_id
+
+
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	"""/photo：把截图挂到申请上，并送中转频道核验。"""
+	"""/photo 或图片文件：把截图挂到申请上，并送中转频道核验。"""
 	message = update.effective_message
 	user = update.effective_user
-	if message is None or user is None or not message.photo:
+	if message is None or user is None:
 		return
 
-	result = BlacklistService().submit_material(
-		user.id, message.photo[-1].file_id)
+	file_id = material_file_id(message)
+	if not file_id:
+		return
+
+	result = BlacklistService().submit_material(user.id, file_id)
 
 	if result.status == "no_request":
 		return

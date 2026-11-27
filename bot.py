@@ -76,9 +76,12 @@ def main() -> None:
 	app.add_handler(
 		MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, download)
 	)
-	# 私聊图片：作者下架申请的材料
+	# 私聊图片：作者下架申请的材料（图片消息，或以「文件」形式发送的图片）
 	app.add_handler(
-		MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, on_photo)
+		MessageHandler(
+			(filters.PHOTO | filters.Document.IMAGE) & filters.ChatType.PRIVATE,
+			on_photo,
+		)
 	)
 
 	app.add_handler(CallbackQueryHandler(button_callback))
