@@ -1,5 +1,5 @@
 from handlers.start import start, help_cmd, ping, sponsor
-from handlers.author import black, furry
+from handlers.author import add_black, add_furry, black, furry
 from handlers.download import download
 from handlers.media import on_photo
 from handlers.review import review
@@ -9,6 +9,7 @@ from handlers.callbacks import button_callback
 __all__ = [
 	"start", "help_cmd", "ping", "sponsor",
 	"black", "furry",
+	"add_black", "add_furry",
 	"download",
 	"on_photo",
 	"review",

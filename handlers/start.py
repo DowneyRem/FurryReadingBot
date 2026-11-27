@@ -20,11 +20,13 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		# "/ping 查看 uid 和语言",
 		"/sponsor 众筹 & 代码开源",
 		"/down 下载并分享",
-		"/black 申请下架（作者 ID 或主页链接）",
-		"/furry 申请兽人作者（作者 ID 或主页链接）",
+		"/black 申请下架（主页链接）",
+		"/furry 申请兽人作者（主页链接）",
 		"",
-		"/review 仅管理：推送待审核申请",
 		"/sync 仅管理：同步运营数据",
+		"/review 仅管理：推送待审核申请",
+		"/blackadd 仅管理：添加下架作者（主页链接）",
+		"/furryadd 仅管理：添加兽人作者（主页链接）",
 	]
 	await update.message.reply_text("\n".join(text))
 
