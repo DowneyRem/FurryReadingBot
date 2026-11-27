@@ -93,12 +93,16 @@ def down_series_keyboard(link: str, auto: bool = True) -> InlineKeyboardMarkup:
 		InlineKeyboardButton(text="📒 下载系列 txt", callback_data=f"dst;{link}"),
 		InlineKeyboardButton(text="📚 下载系列 zip", callback_data=f"dsz;{link}")
 	]
-	buttons2 = [
-		InlineKeyboardButton(text="👤 查看作者", callback_data=f"ba;{link}"),
-		InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore")
-	]
+	buttons2 = []
 	if auto:
 		buttons1.append(InlineKeyboardButton(text="🤖 自动选择", callback_data=f"ds;{link}"))
+		buttons2.append(InlineKeyboardButton(text="📄 下载首章", callback_data=f"dn;{link}"))
+
+	buttons2.extend(
+		[
+			InlineKeyboardButton(text="👤 查看作者", callback_data=f"ba;{link}"),
+			InlineKeyboardButton(text="🗑️ 取消", callback_data=f"ignore"),
+		])
 	return InlineKeyboardMarkup([buttons1, buttons2])
 
 
