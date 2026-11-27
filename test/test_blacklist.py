@@ -55,8 +55,9 @@ class NoLastNameUser:
 
 
 class FakeMessage:
-	def __init__(self, file_id: str = "PHOTO") -> None:
-		self.photo = [FakePhoto(file_id)]
+	def __init__(self, file_id: str = "PHOTO", *, document=None) -> None:
+		self.photo = [] if document is not None else [FakePhoto(file_id)]
+		self.document = document
 		self.replies: list[str] = []
 
 	async def reply_text(self, text: str, **kwargs) -> None:
@@ -66,6 +67,12 @@ class FakeMessage:
 class FakePhoto:
 	def __init__(self, file_id: str) -> None:
 		self.file_id = file_id
+
+
+class FakeDocument:
+	def __init__(self, file_id: str, mime_type: str | None = "image/png") -> None:
+		self.file_id = file_id
+		self.mime_type = mime_type
 
 
 class FakeUpdate:
@@ -556,6 +563,34 @@ def test_on_photo_submits_material(monkeypatch) -> None:
 	assert service.calls == [("submit", 9, "PHOTO")]
 	assert len(cards) == 1
 	assert "材料已收到" in message.replies[-1]
+
+
+def test_on_photo_accepts_image_document(monkeypatch) -> None:
+	"""「以文件发送的图片」也能当材料：取 document.file_id，不压缩更清楚。"""
+	record = JsonDict(author_id="42", author_name="作者", photo_file_id="FILE")
+	service, cards = patch_media(
+		monkeypatch,
+		submission=MaterialSubmission("submitted", record))
+	message = FakeMessage(document=FakeDocument("FILE"))
+
+	run(media_handler.on_photo(FakeUpdate(message), FakeContext()))
+
+	assert service.calls == [("submit", 9, "FILE")]
+	assert len(cards) == 1
+	assert "材料已收到" in message.replies[-1]
+
+
+def test_on_photo_ignores_non_image_document(monkeypatch) -> None:
+	"""非图片文件不是材料：不提交、不回复，避免打扰普通文件。"""
+	service, cards = patch_media(
+		monkeypatch, submission=MaterialSubmission("no_request"))
+	message = FakeMessage(document=FakeDocument("PDF", "application/pdf"))
+
+	run(media_handler.on_photo(FakeUpdate(message), FakeContext()))
+
+	assert service.calls == []
+	assert cards == []
+	assert message.replies == []
 
 
 def test_on_photo_without_request_is_silent(monkeypatch) -> None:

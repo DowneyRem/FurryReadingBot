@@ -85,3 +85,10 @@ def test_import_keyboard_carries_work_link() -> None:
 
 	assert any("legado://import/addToBookshelf" in url for url in urls)
 	assert any(NOVEL_URL in url for url in urls)
+
+
+def test_review_keyboards_use_pixiv_author_page() -> None:
+	"""中转卡片「🏡 主页」用 Pixiv 原站作者页，别退回 Linpx 代理链接。"""
+	for markup in (review_furry_keyboard("42"), review_black_keyboard("42")):
+		urls = [button.url for row in markup.inline_keyboard for button in row if button.url]
+		assert "https://www.pixiv.net/users/42" in urls
