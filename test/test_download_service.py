@@ -231,6 +231,21 @@ def test_inspect_series_and_author_kinds(tmp_path) -> None:
 	assert run(author_service.inspect_link(AUTHOR_LINK)).kind == "author"
 
 
+def test_chapter_download_resolves_series_to_first_novel(tmp_path) -> None:
+	"""dn 带系列链接时由 sources.resolve_link 落到首章，键盘不需要传 ID。"""
+	fetched: list[str] = []
+
+	def resolve(link: str, kind: str) -> str:
+		return NOVEL_LINK if kind == "novel" and link == SERIES_LINK else link
+
+	service, _ = make_service(tmp_path, resolve=resolve, fetch_calls=fetched)
+	artifact = run(service.prepare("dn", SERIES_LINK))
+
+	assert fetched == [NOVEL_LINK]
+	assert artifact.target_link == NOVEL_LINK
+	assert artifact.item_id == "18012577"
+
+
 def test_unsupported_source_raises(tmp_path) -> None:
 	service, _ = make_service(tmp_path, source=False)
 	with pytest.raises(DownloadUnsupportedLinkError):

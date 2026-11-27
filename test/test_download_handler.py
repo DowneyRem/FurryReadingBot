@@ -12,13 +12,20 @@ from __future__ import annotations
 import asyncio
 
 from handlers.download import download as download_handler
-from services import DownloadService, DownloadUnsupportedLinkError
+from services import (
+	AuthorAccess,
+	DownloadOffer,
+	DownloadService,
+	DownloadUnsupportedLinkError,
+)
 from sources.linpx.errors import LinpxNetworkError
 from sources.pixiv.errors import PixivAuthError
 
 
 PIXIV_NOVEL = "https://www.pixiv.net/novel/show.php?id=29588541"
 LINPX_NOVEL = "https://linpx.ink/pixiv/novel/18012577"
+SERIES_URL = "https://www.pixiv.net/novel/series/16747997"
+AUTHOR_URL = "https://www.pixiv.net/users/15478020"
 
 
 def run(coro):
@@ -82,6 +89,34 @@ def test_unsupported_link_mentions_both_sources(monkeypatch) -> None:
 	text, kwargs = replies[0]
 	assert "Pixiv / Linpx" in text
 	assert "reply_markup" not in kwargs
+
+
+def test_series_link_offers_first_chapter(monkeypatch) -> None:
+	"""系列链接的菜单要带上「📄 下载首章」：按钮只带系列链接，首章由服务层取。"""
+	async def fake_inspect(self, message_text: str) -> DownloadOffer:
+		return DownloadOffer(
+			kind="series",
+			link=SERIES_URL,
+			description="系列名\n作者：安怀烈先",
+			author_id="15478020",
+			author_name="安怀烈先",
+			author_url=AUTHOR_URL,
+		)
+
+	monkeypatch.setattr(DownloadService, "inspect_text", fake_inspect)
+	monkeypatch.setattr(
+		DownloadService, "check_access",
+		lambda self, offer: AuthorAccess("allowed", "15478020", "安怀烈先"))
+
+	update = FakeUpdate(SERIES_URL)
+	run(download_handler(update, FakeContext()))
+
+	_text, kwargs = update.effective_message.replies[0]
+	rows = kwargs["reply_markup"].inline_keyboard
+	data = [button.callback_data for row in rows for button in row]
+
+	assert f"dn;{SERIES_URL}" in data
+	assert [len(row) for row in rows] == [3, 3]
 
 
 if __name__ == "__main__":
