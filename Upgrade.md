@@ -76,6 +76,7 @@
 | 并发点击保护 | ✅ | 进程内 `_inflight` |
 | 分享前复查作者名单 | ✅ | 拉黑后分享返回 `forbidden` |
 | 评分分流到正式频道 | ✅ | `SHARE_MODE=prod` + `SHARE_SCORE_THRESHOLD` |
+| 分享同时发群组 | ✅ | `services/share_service.py`：正式频道 + `FURRY_READING_NEW_GROUP` / `TEST_GROUP`（未配置跳过）；回执只显示频道，下架一并删除群消息 |
 | 频道 caption 带作品信息 / 分享者 / 评分 / 支持作者 | ✅ | `_build_caption()` |
 | 分享后挂「导入开源阅读」键盘 | ✅ | `import_to_legado_keyboard` |
 | 作者本人申请下架 `/black` | ✅ | 无参数回用法，带参数出确认键盘 |
@@ -101,7 +102,7 @@
 | `/review` 重推待审申请 | ✅ | 仅中转频道管理员 |
 | `/sync` 推荐作者 + 运营数据同步 | ✅ | 仅中转频道管理员 |
 | systemd 服务 + 定时同步 | ✅ | `deploy/` + `script/` |
-| 单元测试 | ✅ | 580 项：572 passed / 8 skipped |
+| 单元测试 | ✅ | 588 项：580 passed / 8 skipped |
 | 部署前 CI 自动跑测试 | ❌ | `deploy.yml` 只部署，不跑 pytest |
 | Dockerfile | ❌ | |
 | 健康检查 / 指标 / 告警 | ❌ | |
