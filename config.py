@@ -18,7 +18,7 @@ TRANSIT_CHANNEL = os.environ.get("TRANSIT_CHANNEL", "").strip()
 if not TRANSIT_CHANNEL:
 	TRANSIT_CHANNEL = TEST_CHANNEL
 
-# Telegram 群组
+# Telegram 群组：分享时同时发这里（prod 用 FURRY_READING_NEW_GROUP，test 用 TEST_GROUP）
 FURRY_READING_NEW_GROUP = os.environ.get("FURRY_READING_NEW_GROUP", "").strip()
 TEST_GROUP = os.environ.get("TEST_GROUP", "").strip()
 
