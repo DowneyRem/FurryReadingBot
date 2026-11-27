@@ -1,18 +1,11 @@
 <div align="center">
+<img width="192" src="docs/icon.png" alt="Pixiv BookSource"/>
 
-## Furry Reading Bot
+# Furry Reading Bot
 ### 🐺 [兽人阅读频道](https://t.me/FurryReading) 的 [小说分享 Bot](https://t.me/FurryReadingBot)
-### 🅿️ Pixiv / Linpx 小说下载器
-
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![python-telegram-bot](https://img.shields.io/badge/python--telegram--bot-22.8%2B-2CA5E0?logo=telegram&logoColor=white)](https://github.com/python-telegram-bot/python-telegram-bot)
 </div>
-
----
-
-## 💡 这是什么？
-- 这是 Telegram [兽人阅读频道](https://t.me/FurryReading) 的小说分享 Bot
-- 发送 **Pixiv / Linpx** 链接，即可获取 `txt` / `zip` 文件，并可一键分享至相关频道
 
 
 ## 🚀 快速开始
