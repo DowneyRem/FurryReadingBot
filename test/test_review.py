@@ -11,7 +11,7 @@ import asyncio
 from handlers.callbacks import review as review_handler
 from handlers.callbacks.review import (
 	applicant_text,
-	_receipt_text,
+	receipt_text,
 	review_application,
 )
 from handlers.telegram.transit import transit_author_caption
@@ -124,7 +124,7 @@ def test_applicant_text_rejected() -> None:
 
 
 def test_receipt_text_rejected() -> None:
-	text = _receipt_text(
+	text = receipt_text(
 		ReviewResult("rejected", "42", "作者", "pending", RECORD),
 		FakeUser(),
 	)
@@ -132,7 +132,7 @@ def test_receipt_text_rejected() -> None:
 
 
 def test_receipt_text_approved() -> None:
-	text = _receipt_text(
+	text = receipt_text(
 		ReviewResult("approved", "42", "作者", "pending", RECORD),
 		FakeUser(),
 	)
@@ -144,7 +144,7 @@ def test_receipt_text_approved() -> None:
 
 def test_receipt_text_without_last_name() -> None:
 	"""没设姓的用户：审核回执不能出现「Admin None」或多余空格。"""
-	text = _receipt_text(
+	text = receipt_text(
 		ReviewResult("approved", "42", "作者", "pending", RECORD),
 		NoLastNameUser(),
 	)

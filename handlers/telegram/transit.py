@@ -49,6 +49,33 @@ async def send_to_transit(
 		return False
 
 
+async def send_transit_message(
+		context: ContextTypes.DEFAULT_TYPE,
+		text: str,
+		*,
+		reply_markup=None) -> bool:
+	"""把一条纯文本消息（管理员操作的留档回执）发进中转频道。
+
+	失败（未配频道 / Telegram 报错）只记日志并返回 False：名单已经写盘，
+	不能因为回执发不出去就把操作算失败。
+	"""
+	if not TRANSIT_CHANNEL:
+		logger.warning("未配置中转频道，回执无法发送")
+		return False
+
+	try:
+		await context.bot.send_message(
+			chat_id=TRANSIT_CHANNEL,
+			text=text,
+			disable_web_page_preview=True,
+			reply_markup=reply_markup,
+		)
+		return True
+	except Exception:
+		logger.exception("中转频道回执发送失败")
+		return False
+
+
 def blacklist_caption(record: JsonDict) -> str:
 	"""作者下架申请的核验卡片文案。"""
 	message = [

@@ -221,7 +221,7 @@ async def request_blacklist_confirm(
 		update, context, material_notice(result.author_name, author_id))
 
 
-async def _takedown(
+async def takedown_history(
 		context: ContextTypes.DEFAULT_TYPE,
 		author_id: str) -> TakedownResult:
 	"""拉黑后下架频道里的历史分享；整体出错时按全部失败计，回执上给重试入口。"""
@@ -263,7 +263,7 @@ async def review_blacklist(
 	# 拉黑成功后再下架：名单已写盘，删除失败不回头改状态，回执上可重试
 	takedown = None
 	if result.status == "approved":
-		takedown = await _takedown(context, author_id)
+		takedown = await takedown_history(context, author_id)
 
 	retry = retry_takedown_keyboard(author_id) if takedown and takedown.failed else None
 	await close_transit_message(
@@ -289,7 +289,7 @@ async def retry_takedown(
 			update, context, f"作者（#a{author_id}）已不在黑名单，未执行删除")
 		return
 
-	takedown = await _takedown(context, author_id)
+	takedown = await takedown_history(context, author_id)
 	user_name = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
 	text = "\n".join([
 		f"🈲 #作者下架重试删除（#a{author_id}）",

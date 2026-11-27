@@ -100,7 +100,8 @@ def _author_id_from_data(data: str) -> str:
 	return parts[1].strip()
 
 
-def _receipt_text(result: ReviewResult, user) -> str:
+def receipt_text(result: ReviewResult, user) -> str:
+	"""核验回执：申请通过 / 拒绝都留一条同样的卡片在中转频道。"""
 	text = []
 	if result.status == "approved":
 		text.append(f"🐺 #兽人作者申请已通过")
@@ -152,7 +153,7 @@ async def review_application(
 			f"{result.author_name}（#a{author_id}）")
 		return
 
-	await close_transit_message(update, context, _receipt_text(result, user))
+	await close_transit_message(update, context, receipt_text(result, user))
 	if result.record is not None:
 		await notify_applicant(
 			context, result.record,

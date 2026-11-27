@@ -11,6 +11,7 @@ from handlers.telegram.transit import (
 	blacklist_caption,
 	send_blacklist_card,
 	send_to_transit,
+	send_transit_message,
 	transit_author_caption,
 )
 from handlers.telegram.upload import SentDocument, upload_file
@@ -24,6 +25,7 @@ __all__ = [
 	"reply",
 	"send_blacklist_card",
 	"send_to_transit",
+	"send_transit_message",
 	"SentDocument",
 	"takedown_author",
 	"transit_admin_policy",
