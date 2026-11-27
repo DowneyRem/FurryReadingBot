@@ -107,7 +107,7 @@
 | Dockerfile | ❌ | |
 | 健康检查 / 指标 / 告警 | ❌ | |
 | lint / format / type 检查 | ❌ | 只有 `test_style.py` 守 Tab |
-| 管理员快捷指令（加 / 移名单等） | ⚠️ | 加名单已有 `/furryadd`（直接进兽人作者名单）、`/blackadd`（直接拉黑 + 下架历史分享），都强制校验中转频道管理员；移出名单仍只能改 JSON |
+| 管理员快捷指令（加 / 移名单等） | ✅ | `/furryadd`、`/blackadd` 加名单，`/furryremove`、`/blackremove` 移出名单；都强制校验中转频道管理员，回执留在中转频道（黑名单的加 / 减都会处理历史分享） |
 | 中转频道一键放行 / 拒绝 / 下架 | ✅ | 审核卡片按钮 |
 
 </details>
@@ -226,7 +226,7 @@
 
 
 ## 🟡 八、后续可扩展方向（可选）
-- 🟡 增加管理员快捷指令（加入 / 移除兽人作者名单、加入黑名单）：加入已做（`/furryadd` / `/blackadd`，`/blackadd` 还会下架历史分享），移除仍靠改 JSON
+- ✅ 管理员快捷指令：`/furryadd`、`/blackadd`、`/furryremove`、`/blackremove`（`/blackadd` 会下架历史分享，`/blackremove` 会先重试没删干净的删除）
 - ✅ 中转频道已支持一键「放行」/「拒绝」/「下架」按钮
 - ✅ 兽人作者 / 下架申请的 1 天冷却已做（`APPLY_COOLDOWN_HOURS`，同一作者 1 天 1 次）
 - ❌ 正文关键词过滤（按标签自动分流已实现，见 §0.4）
@@ -243,7 +243,7 @@
 | ✅ | 申请冷却（防刷）：同一作者 1 天只能申请一次（`APPLY_COOLDOWN_HOURS`） |
 | ❌ | 翻译 |
 | ✅ | Pixiv 原站直链（R18 需 `PIXIV_COOKIE`，启动必填） |
-| 🟡 | 管理员快捷指令：加名单 ✅（`/furryadd` / `/blackadd`）、移出名单 ❌ |
+| ✅ | 管理员快捷指令：`/furryadd`、`/blackadd`、`/furryremove`、`/blackremove` |
 | ❌ | CI 跑测试 / Dockerfile / 健康检查 / 指标 / lint |
 | ✅ | 标签命中 `Furry` 发正式频道；标签不足时随文件转存中转频道 |
 | ✅ | 按标签判断兽人小说：命中才发正式频道，否则等人工核验 |
