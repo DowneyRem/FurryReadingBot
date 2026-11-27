@@ -173,7 +173,7 @@ def test_add_furry_writes_json_and_posts_receipt(monkeypatch, tmp_path) -> None:
 	assert f"✅ 通过：某作者（#a{AUTHOR_ID}）" in text
 	assert "👤 审核：Admin User（#u9）" in text
 	assert "🈸" not in text  # 没有申请记录，回执不出现「申请」那行
-	assert text.endswith(f"🧾 {FURRY_NOTE}")  # 尾注标明是管理员直接加的
+	assert text.endswith(f"🛡 {FURRY_NOTE}")  # 尾注标明是管理员直接加的
 	assert markup is None
 	assert "中转频道已留下回执" in update.effective_message.replies[-1]
 
@@ -265,7 +265,7 @@ def test_add_black_writes_json_and_takedowns(monkeypatch, tmp_path) -> None:
 	assert "🗑️ 已删除：2 条历史分享" in text
 	assert "👤 审核人：Admin User（#u9）" in text
 	assert "🈸" not in text  # 没有申请记录，回执不出现「申请人」那行
-	assert text.endswith(f"🧾 {BLACK_NOTE}")  # 尾注标明是管理员直接拉黑的
+	assert text.endswith(f"🛡 {BLACK_NOTE}")  # 尾注标明是管理员直接拉黑的
 	assert markup is None
 	assert "🗑️ 已删除：2 条历史分享" in update.effective_message.replies[-1]
 

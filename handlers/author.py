@@ -180,7 +180,7 @@ async def add_furry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	# 末尾加一行尾注，标明这次是管理员直接加的
 	receipt = receipt_text(
 		ReviewResult("approved", author_id, name or author_id), user)
-	receipt += f"\n🧾 {FURRY_NOTE}"
+	receipt += f"\n🛡 {FURRY_NOTE}"
 	sent = await send_transit_message(context, receipt)
 	lines = [f"✅ 已加入兽人作者名单：{name or author_id}（#a{author_id}）"]
 	if not name:
@@ -225,7 +225,7 @@ async def add_black(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	# 末尾加一行尾注，标明这次是管理员直接拉黑的
 	receipt = review_receipt(
 		BlacklistReview("approved", author_id, name or author_id), user, takedown)
-	receipt += f"\n🧾 {BLACK_NOTE}"
+	receipt += f"\n🛡 {BLACK_NOTE}"
 	sent = await send_transit_message(context, receipt, reply_markup=retry)
 
 	lines = [f"✅ 已加入黑名单：{name or author_id}（#a{author_id}）"]
