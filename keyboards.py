@@ -1,6 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from sources.linpx.urls import url_author
-# todo 通用化 url_author
+from sources.pixiv.urls import url_author
 
 
 def apply_author_keyboard(author_url: str) -> InlineKeyboardMarkup:
@@ -116,6 +115,7 @@ def down_author_keyboard(author_url: str, is_furry: bool=True) -> InlineKeyboard
 
 def share_novel_keyboard(kind: str, item_id: str, file_type: str = "txt") -> InlineKeyboardMarkup:
 	payload = f"{kind};{item_id};{file_type}"
+	# 非 txt 不提供分享：返回空键盘是既有约定（Feature），不要改成挂按钮或 None。
 	if file_type != "txt":
 		return InlineKeyboardMarkup([[]])
 	return InlineKeyboardMarkup(
