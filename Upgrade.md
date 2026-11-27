@@ -50,7 +50,8 @@
 | 同一作品 `file_id` 缓存 7 天 | ✅ | |
 | 同一链接并发串行 + 独立工作目录 | ✅ | 第二个请求复用第一个的 `file_id` |
 | 上传后立即删除本地文件 / 目录 | ✅ | |
-| Pixiv 原站直链 | ✅ | `sources/pixiv/`：已注册进 `_SOURCES`；R18 需 `PIXIV_COOKIE` |
+| Pixiv 原站直链 | ✅ | `sources/pixiv/`：已注册进 `_SOURCES`；R18 需 `PIXIV_COOKIE`（启动必填） |
+| Pixiv 正文标记清洗 | 🟡 | 实现保留但**暂时关闭**（`sources/pixiv/parse.py` 原样返回 `content`），3 条用例 `@skip_cleaning` |
 
 
 ### 0.4 标签与内容过滤
@@ -100,7 +101,7 @@
 | `/review` 重推待审申请 | ✅ | 仅中转频道管理员 |
 | `/sync` 推荐作者 + 运营数据同步 | ✅ | 仅中转频道管理员 |
 | systemd 服务 + 定时同步 | ✅ | `deploy/` + `script/` |
-| 单元测试 | ✅ | 443 项：438 passed / 5 skipped |
+| 单元测试 | ✅ | 580 项：572 passed / 8 skipped |
 | 部署前 CI 自动跑测试 | ❌ | `deploy.yml` 只部署，不跑 pytest |
 | Dockerfile | ❌ | |
 | 健康检查 / 指标 / 告警 | ❌ | |
@@ -236,10 +237,11 @@
 | 状态 | 功能 |
 |---|---|
 | ❌ | 正文关键词过滤 / 正文自动判断兽人内容 |
+| 🟡 | Pixiv 正文标记清洗（实现保留、当前关闭，见 §0.3） |
 | ✅ | 标签用于判断兽人小说 / 自动分流（分享时内联，未命中转中转频道） |
 | ✅ | 申请冷却（防刷）：同一作者 1 天只能申请一次（`APPLY_COOLDOWN_HOURS`） |
 | ❌ | 翻译 |
-| ✅ | Pixiv 原站直链（R18 需 `PIXIV_COOKIE`） |
+| ✅ | Pixiv 原站直链（R18 需 `PIXIV_COOKIE`，启动必填） |
 | ❌ | 管理员快捷指令（加 / 移名单等） |
 | ❌ | CI 跑测试 / Dockerfile / 健康检查 / 指标 / lint |
 | ✅ | 标签命中 `Furry` 发正式频道；标签不足时随文件转存中转频道 |
