@@ -87,7 +87,7 @@ jobs:
             # 4. 自动生成 .env
             #    只写「部署相关」的 token、频道 ID 与 Pixiv 登录态；
             #    .env 每次部署都会被覆盖，所以手工改服务器上的 .env 不长久，
-            #    PIXIV_COOKIE 也要走 Secret（没配就是空字符串，公开作品照常下载）。
+            #    PIXIV_COOKIE 也要走 Secret（启动必填，没配会在下一步被拦下）。
             #    SHARE_MODE / SHARE_SCORE_THRESHOLD / SHARE_COOLDOWN_DAYS / FILE_CACHE_TTL_DAYS
             #    / CONCURRENT_UPDATES 都是 config.py 里的公开常量，不走 .env。
             #    heredoc 用引号包裹的 'EOF'：避免 secret 里的 $ / 反引号被 shell 再展开一次。
@@ -103,8 +103,8 @@ jobs:
             EOF
 
             # Secret 没配时上面会写成空字符串，进程起来会直接 SystemExit，
-            # 这里先拦一次，并和 config.py 里 SHARE_MODE=prod 的必需项对齐。
-            for key in BOT_TOKEN FURRY_READING FURRY_NOVELS TEST_CHANNEL; do
+            # 这里先拦一次，并和 config.py 里的启动必需项对齐（PIXIV_COOKIE 是启动必填）。
+            for key in BOT_TOKEN PIXIV_COOKIE FURRY_READING FURRY_NOVELS TEST_CHANNEL; do
               if ! grep -qE "^${key}=\"..*\"" .env; then
                 echo "错误：.env 里的 ${key} 为空，请检查仓库 Secrets。"
                 exit 1
