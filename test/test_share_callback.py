@@ -17,7 +17,7 @@ import services.share_service as share_service_module
 from handlers.callbacks import share as share_handler
 from handlers.telegram import SentDocument
 from policy.author import AuthorPolicy
-from services.share_service import ShareService
+from services.share_service import ShareResult, ShareService
 from storage.file_cache import FileCacheStore
 from storage.share_records import ShareRecordStore
 
@@ -72,6 +72,7 @@ def patch_handler(monkeypatch, tmp_path, *, link=""):
 		records=ShareRecordStore(
 			path=tmp_path / "share_records.json", cooldown_days=1),
 		channels=("channel",),
+		group="",
 		support_text="频道",
 		policy=AuthorPolicy(FurryLists()),
 	)
@@ -202,7 +203,9 @@ class FakeAuthorPolicy:
 		return self.Decision()
 
 
-def patch_transit(monkeypatch, tmp_path, *, admin: bool = True):
+def patch_transit(
+		monkeypatch, tmp_path, *,
+		admin: bool = True, group: str = "@group", fail_on=()):
 	cache = FileCacheStore(
 		path=tmp_path / "files_cache.json", default_ttl_days=1)
 	cache.set(
@@ -217,7 +220,9 @@ def patch_transit(monkeypatch, tmp_path, *, admin: bool = True):
 
 	monkeypatch.setattr(share_handler, "get_file_cache", lambda: cache)
 	monkeypatch.setattr(share_handler, "get_share_records", lambda: records)
-	monkeypatch.setattr(share_handler, "FURRY_NOVELS", "@novels")
+	monkeypatch.setattr(share_service_module, "FURRY_NOVELS", "@novels")
+	monkeypatch.setattr(
+		share_service_module, "FURRY_READING_NEW_GROUP", group)
 	monkeypatch.setattr(share_handler, "AuthorPolicy", FakeAuthorPolicy)
 
 	async def fake_admin(update, context, action: str) -> bool:
@@ -228,6 +233,8 @@ def patch_transit(monkeypatch, tmp_path, *, admin: bool = True):
 	uploads: list[dict] = []
 
 	async def fake_upload(update, context, **kwargs):
+		if kwargs.get("chat_id") in fail_on:
+			raise RuntimeError("发送失败")
 		uploads.append(kwargs)
 		return SentDocument(file_id="FILE_ID", message_id=11)
 
@@ -242,8 +249,20 @@ def patch_transit(monkeypatch, tmp_path, *, admin: bool = True):
 	return cache, records, uploads, closed
 
 
-def test_transit_approve_sends_to_furry_novels(monkeypatch, tmp_path) -> None:
-	"""cfy：发到兽人小说频道，挂开源阅读键盘，并结掉中转卡片。"""
+def test_shared_text_hides_group_and_reports_failure() -> None:
+	"""回执只列频道；群组失败也只提示一句，不暴露群 id（一条消息说完）。"""
+	result = ShareResult("shared", channels=("@novels",), group_failed=True)
+
+	text = share_handler.shared_text(result, public=True)
+
+	assert "已经公开分享至 @novels" in text
+	assert "群组发送失败" in text
+	assert "@group" not in text
+	assert text.count("\n") == 1
+
+
+def test_transit_approve_sends_to_furry_novels_and_group(monkeypatch, tmp_path) -> None:
+	"""cfy：放行按兽人小说分享处理 —— 频道 + 群组，都挂开源阅读键盘。"""
 	caption = f"{share_service_module.TRANSIT_NOTICE}\n\n标题\n\n来自 Alice 的分享"
 	_cache, records, uploads, closed = patch_transit(
 		monkeypatch, tmp_path, admin=True)
@@ -251,14 +270,46 @@ def test_transit_approve_sends_to_furry_novels(monkeypatch, tmp_path) -> None:
 	run(share_handler.share_transit_approve(
 		FakeTransitUpdate(caption), object(), data=f"cfy;{NOVEL_LINK}"))
 
-	assert len(uploads) == 1
-	assert uploads[0]["chat_id"] == "@novels"
-	# 正式频道不带「待核验」提示
-	assert uploads[0]["caption"] == "标题\n\n来自 Alice 的分享"
-	assert any(
-		NOVEL_LINK in url for url in keyboard_urls(uploads[0]["reply_markup"]))
+	assert [item["chat_id"] for item in uploads] == ["@novels", "@group"]
+	for item in uploads:
+		# 正式频道 / 群组都不带「待核验」提示
+		assert item["caption"] == "标题\n\n来自 Alice 的分享"
+		assert any(
+			NOVEL_LINK in url for url in keyboard_urls(item["reply_markup"]))
 	assert closed and closed[0].startswith("✅ #兽人小说已放行")
-	# 记录里只剩正式频道那条，下架时才不会追一条已删的中转消息
+	# 记录里只剩正式频道 / 群组，下架时才不会追一条已删的中转消息
+	rows = records.by_author("456")
+	assert [(row.chat_id, row.message_id) for row in rows] == [
+		("@novels", 11), ("@group", 11)]
+
+
+def test_transit_approve_without_group(monkeypatch, tmp_path) -> None:
+	"""群组没配：只发兽人小说频道，行为与之前一致。"""
+	caption = f"{share_service_module.TRANSIT_NOTICE}\n\n标题"
+	_cache, records, uploads, closed = patch_transit(
+		monkeypatch, tmp_path, admin=True, group="")
+
+	run(share_handler.share_transit_approve(
+		FakeTransitUpdate(caption), object(), data=f"cfy;{NOVEL_LINK}"))
+
+	assert [item["chat_id"] for item in uploads] == ["@novels"]
+	assert closed and closed[0].startswith("✅ #兽人小说已放行")
+	rows = records.by_author("456")
+	assert [(row.chat_id, row.message_id) for row in rows] == [("@novels", 11)]
+
+
+def test_transit_approve_survives_group_failure(monkeypatch, tmp_path) -> None:
+	"""群组发送失败不影响频道放行与记录，回执补一句失败提示。"""
+	caption = f"{share_service_module.TRANSIT_NOTICE}\n\n标题"
+	_cache, records, uploads, closed = patch_transit(
+		monkeypatch, tmp_path, admin=True, fail_on=("@group",))
+
+	run(share_handler.share_transit_approve(
+		FakeTransitUpdate(caption), object(), data=f"cfy;{NOVEL_LINK}"))
+
+	assert [item["chat_id"] for item in uploads] == ["@novels"]
+	assert closed and closed[0].startswith("✅ #兽人小说已放行")
+	assert "部分目标发送失败" in closed[0]
 	rows = records.by_author("456")
 	assert [(row.chat_id, row.message_id) for row in rows] == [("@novels", 11)]
 

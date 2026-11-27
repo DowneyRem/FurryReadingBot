@@ -47,6 +47,7 @@ def make_service(
 		*,
 		lists=None,
 		channels=("channel",),
+		group="",
 		mode=None,
 		support="频道",
 		author_id="456",
@@ -65,6 +66,7 @@ def make_service(
 		cache=cache,
 		records=records,
 		channels=channels,
+		group=group,
 		support_text=support,
 		mode=mode,
 		policy=AuthorPolicy(lists or FakeLists()),
@@ -302,6 +304,82 @@ def test_prod_mode_splits_by_score(monkeypatch, tmp_path) -> None:
 	assert len(result.messages) == 2
 	assert set(records.work("456", "novel", "1").history.keys()) == {
 		"@reading", "@novels"}
+
+
+def test_prod_share_also_sends_to_group(monkeypatch, tmp_path) -> None:
+	"""正式分享同时发群组：文件进群、记录进群，但回执只显示频道。"""
+	monkeypatch.setattr(share_service_module, "FURRY_READING", "@reading")
+	monkeypatch.setattr(share_service_module, "FURRY_NOVELS", "@novels")
+	monkeypatch.setattr(share_service_module, "SHARE_SCORE_THRESHOLD", 7)
+	service, _cache, records = make_service(
+		tmp_path, channels=None, mode="prod", group="@group")
+
+	assert service.send_targets(9) == ("@reading", "@novels", "@group")
+	assert service.send_targets(6) == ("@novels", "@group")
+
+	result = run(service.share(request(score=9), upload=uploader(message_id=7)))
+
+	assert result.status == "shared"
+	assert result.channels == ("@reading", "@novels")
+	assert result.failed_channels == ()
+	assert result.group_failed is False
+	assert len(result.messages) == 3
+	assert set(records.work("456", "novel", "1").history) == {
+		"@reading", "@novels", "@group"}
+
+
+def test_test_mode_uses_test_group(monkeypatch, tmp_path) -> None:
+	monkeypatch.setattr(share_service_module, "TEST_CHANNEL", "@test")
+	service, _cache, _records = make_service(
+		tmp_path, channels=None, mode="test", group="@test_group")
+
+	assert service.send_targets(9) == ("@test", "@test_group")
+
+
+def test_group_same_as_channel_is_sent_once(monkeypatch, tmp_path) -> None:
+	monkeypatch.setattr(share_service_module, "TEST_CHANNEL", "@same")
+	service, _cache, _records = make_service(
+		tmp_path, channels=None, mode="test", group="@same")
+
+	assert service.send_targets(9) == ("@same",)
+
+
+def test_group_failure_keeps_receipt_channels_only(tmp_path) -> None:
+	"""群组失败不暴露群 id：回执只列频道，群组失败单独标记。"""
+	service, _cache, records = make_service(
+		tmp_path, channels=("channel",), group="@group")
+
+	async def upload(artifact, chat_id):
+		if chat_id == "@group":
+			raise RuntimeError("群组不可达")
+		return 7
+
+	result = run(service.share(request(), upload=upload))
+
+	assert result.status == "shared"
+	assert result.channels == ("channel",)
+	assert result.failed_channels == ()
+	assert result.group_failed is True
+	assert set(records.work("456", "novel", "1").history) == {"channel"}
+
+
+def test_transit_does_not_send_to_group(monkeypatch, tmp_path) -> None:
+	"""未核验作品只进中转频道，不进群。"""
+	monkeypatch.setattr(share_service_module, "TRANSIT_CHANNEL", "@transit")
+	service, _cache, _records = make_service(
+		tmp_path, channels=("channel",), group="@group",
+		tags=("Original", "R18"))
+	chat_ids: list[str] = []
+
+	async def upload(artifact, chat_id):
+		chat_ids.append(chat_id)
+		return 7
+
+	result = run(service.share(request(), upload=upload))
+
+	assert result.transit is True
+	assert chat_ids == ["@transit"]
+	assert result.channels == ("@transit",)
 
 
 def test_share_falls_back_to_cached_score(monkeypatch, tmp_path) -> None:

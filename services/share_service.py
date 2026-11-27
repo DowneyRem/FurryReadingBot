@@ -19,9 +19,11 @@ from typing import Awaitable, Callable, Literal
 from config import (
 	FURRY_NOVELS,
 	FURRY_READING,
+	FURRY_READING_NEW_GROUP,
 	SHARE_MODE,
 	SHARE_SCORE_THRESHOLD,
 	TEST_CHANNEL,
+	TEST_GROUP,
 	TRANSIT_CHANNEL,
 )
 from policy.author import AuthorPolicy
@@ -86,8 +88,10 @@ class ShareResult:
 	share_count: int = 0
 	remaining_seconds: float = 0.0
 	channels: tuple[str, ...] = ()
-	# 发送失败的频道：部分成功时 status 仍为 shared
+	# 发送失败的频道：部分成功时 status 仍为 shared（不含群组）
 	failed_channels: tuple[str, ...] = ()
+	# 群组发送失败：回执只说频道，不暴露群 id
+	group_failed: bool = False
 	artifact: ShareArtifact | None = None
 	# forbidden 时给展示层用
 	author_status: str = ""
@@ -115,6 +119,7 @@ class ShareService:
 		*,
 		records: ShareRecordStore | None = None,
 		channels: tuple[str, ...] | None = None,
+		group: str | None = None,
 		support_text: str | None = None,
 		mode: str | None = None,
 		score_threshold: float | None = None,
@@ -124,6 +129,7 @@ class ShareService:
 		self._policy = policy
 		self._records = records
 		self._channels = channels
+		self._group = group
 		self._support_text = support_text
 		self._mode = mode
 		self._score_threshold = score_threshold
@@ -164,8 +170,34 @@ class ShareService:
 		return self._score_threshold
 
 
+	@property
+	def group(self) -> str:
+		"""分享附带的群组：`test` 用 `TEST_GROUP`，`prod` 用 `FURRY_READING_NEW_GROUP`。"""
+		if self._group is None:
+			self._group = TEST_GROUP if self.mode != "prod" else FURRY_READING_NEW_GROUP
+		return self._group
+
+
+	def with_group(self, channels: tuple[str, ...]) -> tuple[str, ...]:
+		"""频道 + 群组：空值跳过，重复 chat_id 只保留一次。"""
+		return tuple(dict.fromkeys(
+			chat_id for chat_id in (*channels, self.group) if chat_id))
+
+
+	def send_targets(self, score: float | None = None) -> tuple[str, ...]:
+		"""用户分享的实际发送目标：正式频道 + 群组（中转内容不走这里）。"""
+		return self.with_group(self.channels(score))
+
+
+	def novels_channels(self) -> tuple[str, ...]:
+		"""兽人小说频道 + 群组；`cfy` 放行与低分分享共用。"""
+		if not FURRY_NOVELS:
+			return ()
+		return self.with_group((FURRY_NOVELS,))
+
+
 	def channels(self, score: float | None = None) -> tuple[str, ...]:
-		"""本次分享的目标频道。
+		"""本次分享的目标频道（只含频道，不含群组；群组见 `send_targets()`）。
 
 		test：只发测试频道；
 		prod：高分（score >= 阈值）发兽人阅读 + 兽人小说，低分 / 未评分只发兽人小说。
@@ -243,7 +275,13 @@ class ShareService:
 
 		# 作品级判定：命中 Furry 才发正式频道，其余转中转频道人工核验
 		transit = FURRY_TAG not in tags
-		channels = self.transit_channels() if transit else self.channels(score)
+		if transit:
+			channels = self.transit_channels()
+			send_targets = channels
+		else:
+			# 频道交给回执展示，群组只作为发送目标（不暴露群 id）
+			channels = self.channels(score)
+			send_targets = self.with_group(channels)
 
 		decision = self.policy.check(author_id, author_name)
 		if not decision.can_download:
@@ -279,7 +317,7 @@ class ShareService:
 			cache_key=cache_key,
 			file_id=cached.file_id,
 			filename=cached.file_name or "",
-			channels=channels,
+			channels=send_targets,
 			caption=caption,
 			public=request.public,
 			link=link,
@@ -288,17 +326,23 @@ class ShareService:
 
 		targets: list[tuple[str, int]] = []
 		failed: list[str] = []
-		for chat_id in channels:
+		for chat_id in send_targets:
 			try:
 				targets.append((chat_id, await upload(artifact, chat_id)))
 			except Exception:
-				logger.exception("分享到频道失败 %s chat=%s", share_key, chat_id)
+				logger.exception("分享失败 %s chat=%s", share_key, chat_id)
 				failed.append(chat_id)
+
+		official = set(channels)
+		group = self.group
+		failed_channels = tuple(chat for chat in failed if chat in official)
+		# 群和频道配成同一个 chat_id 时按频道算，不重复报群组失败
+		group_failed = bool(group) and group not in official and group in failed
 
 		if not targets:
 			return ShareResult(
-				"failed", channels=channels, failed_channels=tuple(failed),
-				score=score, transit=transit)
+				"failed", channels=channels, failed_channels=failed_channels,
+				group_failed=group_failed, score=score, transit=transit)
 
 		title = (cached.caption or "").splitlines()[0] if cached.caption else ""
 		work = self.records.record(
@@ -314,7 +358,7 @@ class ShareService:
 		logger.info(
 			"分享记录 %s 消息 %s 条，累计 %s 次（%s）",
 			share_key, len(targets), work.share_count,
-			"中转频道" if transit else "正式频道",
+			"中转频道" if transit else ("正式频道 + 群组" if group else "正式频道"),
 		)
 		return ShareResult(
 			"shared",
@@ -323,8 +367,10 @@ class ShareService:
 				for chat_id, message_id in targets
 			),
 			share_count=int(work.share_count or 0),
-			channels=tuple(chat_id for chat_id, _ in targets),
-			failed_channels=tuple(failed),
+			# 回执只显示频道；群组消息仍在 targets / records 里，下架时能删到
+			channels=tuple(chat_id for chat_id, _ in targets if chat_id in official),
+			failed_channels=failed_channels,
+			group_failed=group_failed,
 			artifact=artifact,
 			score=score,
 			transit=transit,

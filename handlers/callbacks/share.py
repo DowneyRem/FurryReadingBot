@@ -1,7 +1,7 @@
 """分享类 callback（Telegram 展示层）。
 
 用户侧：snp / sna / snn（公开 / 私密 / 拒绝分享）。
-中转频道：cfy（放行到兽人小说频道）/ cfn（不通过，结掉卡片）。
+中转频道：cfy（放行到兽人小说频道 + 群组）/ cfn（不通过，结掉卡片）。
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import FURRY_NOVELS
 from handlers.callbacks.download import forbidden_text
 from handlers.callbacks.review import close_transit_message, ensure_transit_admin
 from handlers.telegram import reply, upload_file
@@ -41,6 +40,8 @@ def shared_text(result: ShareResult, *, public: bool) -> str:
 		text = f"已经{'公开' if public else '匿名'}分享至 {format_channels(result.channels)}"
 	if result.failed_channels:
 		text += f"\n{format_channels(result.failed_channels)} 发送失败"
+	if result.group_failed:
+		text += "\n群组发送失败"
 	return text
 
 
@@ -221,42 +222,56 @@ async def share_transit_approve(
 	if not AuthorPolicy().check(cached.author_id, cached.author_name).can_download:
 		await close_transit_message(update, context, "该作者当前已不可分享，未转发")
 		return
-	if not FURRY_NOVELS:
+
+	# 放行的作品就是兽人小说：与低分分享一致（兽人小说频道 + 群组）
+	targets = ShareService().novels_channels()
+	if not targets:
 		await close_transit_message(update, context, "未配置兽人小说频道")
 		return
 
 	query = update.callback_query
 	message = query.message if query else None
 	caption = official_caption(getattr(message, "caption", "") or "")
-	try:
-		sent = await upload_file(
-			update, context,
-			file_id=cached.file_id,
-			filename=cached.file_name or None,
-			chat_id=FURRY_NOVELS,
-			caption=caption,
-			reply_markup=import_to_legado_keyboard(str(cached.link or "")),
-		)
-	except Exception:
-		logger.exception("中转放行转发失败 %s:%s", kind, item_id)
+	keyboard = import_to_legado_keyboard(str(cached.link or ""))
+	sent: list[tuple[str, int]] = []
+	failed: list[str] = []
+	for chat_id in targets:
+		try:
+			message_sent = await upload_file(
+				update, context,
+				file_id=cached.file_id,
+				filename=cached.file_name or None,
+				chat_id=chat_id,
+				caption=caption,
+				reply_markup=keyboard,
+			)
+		except Exception:
+			logger.exception(
+				"中转放行转发失败 %s:%s chat=%s", kind, item_id, chat_id)
+			failed.append(chat_id)
+			continue
+		sent.append((chat_id, message_sent.message_id))
+
+	if not sent:
 		await close_transit_message(
 			update, context, "转发到兽人小说频道失败，请稍后重试")
 		return
 
-	# 正式频道的消息也要进分享记录，作者下架时才删得到
+	# 正式频道 / 群组的消息都要进分享记录，作者下架时才删得到
 	get_share_records().record(
 		author_id=cached.author_id,
 		author_name=cached.author_name,
 		kind=kind,
 		item_id=item_id,
-		messages=[(FURRY_NOVELS, sent.message_id)],
+		messages=sent,
 		title=(caption.splitlines()[0] if caption else ""),
 	)
 	drop_transit_record(kind, item_id, str(cached.author_id or ""), message)
-	await close_transit_message(
-		update, context,
-		transit_receipt(
-			approved=True, link=link, user=update.effective_user))
+	receipt = transit_receipt(
+		approved=True, link=link, user=update.effective_user)
+	if failed:
+		receipt += "\n⚠️ 部分目标发送失败"
+	await close_transit_message(update, context, receipt)
 
 
 async def share_transit_reject(
