@@ -14,7 +14,16 @@ import asyncio
 import importlib
 import json
 
-from handlers.author import BLACK_NOTE, FURRY_NOTE, add_black, add_furry
+from handlers.author import (
+	BLACK_NOTE,
+	BLACK_REMOVE_FOOTER,
+	FURRY_NOTE,
+	FURRY_REMOVE_FOOTER,
+	add_black,
+	add_furry,
+	remove_black,
+	remove_furry,
+)
 from policy.admin import AdminDecision
 from services.takedown_service import TakedownResult
 from storage import ListManager
@@ -295,3 +304,128 @@ def test_add_black_existing_skips_takedown_and_receipt(monkeypatch, tmp_path) ->
 	assert authors(tmp_path / "black_authors.json")[AUTHOR_ID]["note"] == "作者本人申请下架"
 	assert takedowns == []
 	assert sent == []
+
+
+def test_remove_furry_requires_admin(monkeypatch, tmp_path) -> None:
+	manager, sent, _ = patch(monkeypatch, tmp_path, allowed=False, status="member")
+	manager.add_furrylist(AUTHOR_ID, name="某作者", note="兽人阅读")
+	update = FakeUpdate()
+
+	run(remove_furry(update, FakeContext(AUTHOR_ID)))
+
+	assert "仅中转频道管理员" in update.effective_message.replies[0]
+	assert manager.is_furryauthor(AUTHOR_ID)
+	assert sent == []
+
+
+def test_remove_furry_not_in_list(monkeypatch, tmp_path) -> None:
+	_, sent, _ = patch(monkeypatch, tmp_path)
+	update = FakeUpdate()
+
+	run(remove_furry(update, FakeContext(AUTHOR_ID)))
+
+	assert "不在兽人作者名单中" in update.effective_message.replies[-1]
+	assert sent == []
+
+
+def test_remove_furry_removes_and_posts_receipt(monkeypatch, tmp_path) -> None:
+	manager, sent, _ = patch(monkeypatch, tmp_path)
+	manager.add_furrylist(AUTHOR_ID, name="某作者", note="兽人阅读")
+	update = FakeUpdate()
+
+	run(remove_furry(update, FakeContext(AUTHOR_ID)))
+
+	assert not manager.is_furryauthor(AUTHOR_ID)
+	assert authors(tmp_path / "furry_authors.json") == {}
+	# 不拉黑、不删历史：黑名单与分享都不该被碰
+	assert authors(tmp_path / "black_authors.json") == {}
+
+	text, markup = sent[0]
+	assert "🐺 #兽人作者名单已移除" in text
+	assert f"➖ 已移除：某作者（#a{AUTHOR_ID}）" in text
+	assert "👤 操作：Admin User（#u9）" in text
+	assert text.endswith(FURRY_REMOVE_FOOTER)
+	assert markup is None
+	assert f"✅ 已移出兽人作者名单：某作者（#a{AUTHOR_ID}）" in update.effective_message.replies[-1]
+
+
+def test_remove_furry_keeps_blacklist_and_says_so(monkeypatch, tmp_path) -> None:
+	"""黑名单优先：移出兽人名单只是清理数据，作者依然不能下载 / 分享。"""
+	manager, _, _ = patch(monkeypatch, tmp_path)
+	manager.add_furrylist(AUTHOR_ID, name="某作者", note="兽人阅读")
+	manager.add_blacklist(AUTHOR_ID, name="某作者", note="作者本人申请下架")
+	update = FakeUpdate()
+
+	run(remove_furry(update, FakeContext(AUTHOR_ID)))
+
+	assert not manager.is_furryauthor(AUTHOR_ID)
+	assert manager.is_blacklisted(AUTHOR_ID)
+	assert "仍在黑名单中" in update.effective_message.replies[-1]
+
+
+def test_remove_black_not_in_list(monkeypatch, tmp_path) -> None:
+	_, sent, takedowns = patch(monkeypatch, tmp_path)
+	update = FakeUpdate()
+
+	run(remove_black(update, FakeContext(AUTHOR_ID)))
+
+	assert "不在黑名单中" in update.effective_message.replies[-1]
+	assert takedowns == []  # 不在黑名单就不碰历史分享
+	assert sent == []
+
+
+def test_remove_black_retries_takedown_then_unblacklists(monkeypatch, tmp_path) -> None:
+	manager, sent, takedowns = patch(
+		monkeypatch, tmp_path,
+		takedown=TakedownResult(AUTHOR_ID, deleted=2))
+	manager.add_blacklist(AUTHOR_ID, name="某作者", note="作者本人申请下架")
+	update = FakeUpdate()
+
+	run(remove_black(update, FakeContext(AUTHOR_ID)))
+
+	assert takedowns == [AUTHOR_ID]  # 解除前先把历史分享删一遍
+	assert not manager.is_blacklisted(AUTHOR_ID)
+	assert authors(tmp_path / "black_authors.json") == {}
+	assert not manager.is_furryauthor(AUTHOR_ID)  # 解除拉黑不会自动加回兽人名单
+
+	text, markup = sent[0]
+	assert "🈲 #作者黑名单已解除" in text
+	assert f"➖ 已移除：某作者（#a{AUTHOR_ID}）" in text
+	assert "🗑️ 已删除：2 条历史分享" in text
+	assert "👤 操作：Admin User（#u9）" in text
+	assert text.endswith(BLACK_REMOVE_FOOTER)
+	assert markup is None
+
+	reply = update.effective_message.replies[-1]
+	assert f"✅ 已解除拉黑：某作者（#a{AUTHOR_ID}）" in reply
+	assert "历史分享不会恢复" in reply
+
+
+def test_remove_black_without_records_skips_takedown_line(monkeypatch, tmp_path) -> None:
+	"""没有历史分享记录时不显示「🗑️ 已删除：0 条」。"""
+	manager, sent, _ = patch(monkeypatch, tmp_path)
+	manager.add_blacklist(AUTHOR_ID, name="某作者", note="作者本人申请下架")
+
+	run(remove_black(FakeUpdate(), FakeContext(AUTHOR_ID)))
+
+	assert "🗑️" not in sent[0][0]
+
+
+def test_remove_black_blocked_when_takedown_fails(monkeypatch, tmp_path) -> None:
+	"""还有删不掉的历史分享：不解除拉黑，否则「重试删除」按钮会失效。"""
+	manager, sent, _ = patch(
+		monkeypatch, tmp_path,
+		takedown=TakedownResult(AUTHOR_ID, deleted=1, failed=1, errors=("boom",)))
+	manager.add_blacklist(AUTHOR_ID, name="某作者", note="作者本人申请下架")
+	update = FakeUpdate()
+
+	run(remove_black(update, FakeContext(AUTHOR_ID)))
+
+	assert manager.is_blacklisted(AUTHOR_ID)
+	assert authors(tmp_path / "black_authors.json")[AUTHOR_ID]["note"] == "作者本人申请下架"
+	assert sent == []
+
+	reply = update.effective_message.replies[-1]
+	assert "未解除拉黑" in reply
+	assert "1 条删除失败" in reply
+	assert "/blackremove" in reply

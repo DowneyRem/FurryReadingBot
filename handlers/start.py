@@ -27,6 +27,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		"/review 仅管理：推送待审核申请",
 		"/blackadd 仅管理：添加下架作者（主页链接）",
 		"/furryadd 仅管理：添加兽人作者（主页链接）",
+		"/blackremove 仅管理：移出黑名单（主页链接）",
+		"/furryremove 仅管理：移出兽人作者名单（主页链接）",
 	]
 	await update.message.reply_text("\n".join(text))
 

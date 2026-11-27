@@ -1,13 +1,16 @@
 """作者相关命令：`/black` 申请下架、`/furry` 申请加入兽人作者名单，
-以及管理员快捷方式 `/blackadd`、`/furryadd`。
+以及管理员快捷方式 `/blackadd`、`/furryadd`、`/blackremove`、`/furryremove`。
 
 前两个命令共用同一套参数解析（作者 ID 或作者主页链接）；后续流程分别复用
 `handlers.callbacks.blacklist`（材料 → 送审 → 核验）与
 `handlers.callbacks.apply`（后果告知 → 确认 → 送审）。
 
-`/furryadd`、`/blackadd` 强制校验中转频道管理员；通过后不做任何前置要求
-（不要截图、不二次确认、不写申请记录），直接写 `data/*.json`，
-再把与核验通过一致的回执留在中转频道。
+四个管理命令都强制校验中转频道管理员，通过后不做任何前置要求（不要截图、
+不二次确认、不写申请记录），直接改 `data/*.json`，再把回执留在中转频道：
+
+  - `add`：加名单（`blackadd` 还会同步下架频道里的历史分享）；
+  - `remove`：移出名单（`blackremove` 会先把没删干净的历史分享重试一遍，
+    仍有失败就不解除拉黑，否则「🔁 重试删除」按钮会失效）。
 """
 
 from __future__ import annotations
@@ -57,6 +60,11 @@ ADD_BLACK_USAGE = "用法：/blackadd 作者 ID 或主页链接（仅中转频�
 # 名单 note：与走流程写下的「兽人作者申请通过」/「作者本人申请下架」区分开
 FURRY_NOTE = "管理员直接添加"
 BLACK_NOTE = "管理员直接拉黑"
+# 移除类命令的用法与回执尾注（与添加类对称）
+FURRY_REMOVE_USAGE = "用法：/furryremove 作者 ID 或主页链接（仅中转频道管理员）"
+BLACK_REMOVE_USAGE = "用法：/blackremove 作者 ID 或主页链接（仅中转频道管理员）"
+FURRY_REMOVE_FOOTER = "🛡 管理员直接移除"
+BLACK_REMOVE_FOOTER = "🛡 管理员解除拉黑"
 
 
 def _author_link(arg: str) -> str:
@@ -233,6 +241,108 @@ async def add_black(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 		lines.append("⚠️ 没抓到作者名，名单里暂时只记了 ID")
 	if notice:
 		lines.append(notice)
+	if not sent:
+		lines.append("⚠️ 中转频道回执发送失败，请检查 TRANSIT_CHANNEL")
+	await message.reply_text("\n".join(lines))
+
+
+def _remove_receipt(
+		title: str,
+		author_id: str,
+		name: str,
+		user,
+		*,
+		footer: str,
+		extra: str = "") -> str:
+	"""移除类命令留在中转频道的回执：版式与核验回执一致，尾注标明是管理员改的。"""
+	operator = f"{user.first_name} {user.last_name if user.last_name else ''}".strip()
+	lines = [title, f"➖ 已移除：{name}（#a{author_id}）"]
+	if extra:
+		lines.append(extra)
+	lines.append(f"👤 操作：{operator}（#u{user.id}）")
+	lines.append(footer)
+	return "\n".join(lines)
+
+
+async def remove_furry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	"""/furryremove：管理员把作者移出兽人作者名单（不拉黑、不删历史分享）。"""
+	if not await _ensure_admin(update, context, "/furryremove"):
+		return
+	message = update.effective_message
+	user = update.effective_user
+	if message is None or user is None:
+		return
+	args = context.args or []
+	link = _author_link(args[0]) if args else ""
+	if not link:
+		await message.reply_text(FURRY_REMOVE_USAGE)
+		return
+
+	author_id = get_id(link)
+	lists = get_lists()
+	if not lists.is_furryauthor(author_id):
+		await message.reply_text(
+			f"作者 {lists.furrylist.get_name(author_id) or author_id}"
+			f"（#a{author_id}）不在兽人作者名单中")
+		return
+
+	name = lists.furrylist.get_name(author_id) or author_id
+	lists.remove_furrylist(author_id)
+	sent = await send_transit_message(context, _remove_receipt(
+		"🐺 #兽人作者名单已移除", author_id, name, user,
+		footer=FURRY_REMOVE_FOOTER))
+	lines = [f"✅ 已移出兽人作者名单：{name}（#a{author_id}）"]
+	if lists.is_blacklisted(author_id):
+		lines.append("该作者仍在黑名单中，依然不能下载 / 分享")
+	else:
+		lines.append("该作者不再允许下载与分享；用户可重新申请收录")
+	if not sent:
+		lines.append("⚠️ 中转频道回执发送失败，请检查 TRANSIT_CHANNEL")
+	await message.reply_text("\n".join(lines))
+
+
+async def remove_black(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	"""/blackremove：管理员解除拉黑；历史分享没删干净时先不放行。"""
+	if not await _ensure_admin(update, context, "/blackremove"):
+		return
+	message = update.effective_message
+	user = update.effective_user
+	if message is None or user is None:
+		return
+	args = context.args or []
+	link = _author_link(args[0]) if args else ""
+	if not link:
+		await message.reply_text(BLACK_REMOVE_USAGE)
+		return
+
+	author_id = get_id(link)
+	lists = get_lists()
+	if not lists.is_blacklisted(author_id):
+		await message.reply_text(
+			f"作者 {lists.blacklist.get_name(author_id) or author_id}"
+			f"（#a{author_id}）不在黑名单中")
+		return
+
+	# 先处理完待重试的下架：还有删不掉的记录就不解除拉黑，
+	# 否则解除后「🔁 重试删除」会因作者已不在黑名单而拒绝执行
+	takedown = await takedown_history(context, author_id)
+	if takedown.failed:
+		await message.reply_text("\n".join([
+			f"⚠️ 未解除拉黑：{takedown_notice(takedown)}",
+			"请先在中转频道点「🔁 重试删除」，或稍后重新执行 /blackremove"]))
+		return
+
+	name = lists.blacklist.get_name(author_id) or author_id
+	lists.remove_blacklist(author_id)
+	notice = takedown_notice(takedown) if takedown.total else ""
+	sent = await send_transit_message(context, _remove_receipt(
+		"🈲 #作者黑名单已解除", author_id, name, user,
+		footer=BLACK_REMOVE_FOOTER, extra=notice))
+	lines = [
+		f"✅ 已解除拉黑：{name}（#a{author_id}）",
+		"作者回到未收录状态，历史分享不会恢复；"
+		"如需恢复下载 / 分享，请用 /furryadd 或让用户重新申请",
+	]
 	if not sent:
 		lines.append("⚠️ 中转频道回执发送失败，请检查 TRANSIT_CHANNEL")
 	await message.reply_text("\n".join(lines))

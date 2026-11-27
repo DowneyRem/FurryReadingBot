@@ -74,6 +74,8 @@ def main() -> None:
 	# 管理员快捷方式：强制校验中转频道管理员后直接写名单，回执留在中转频道
 	app.add_handler(CommandHandler("blackadd", add_black))
 	app.add_handler(CommandHandler("furryadd", add_furry))
+	app.add_handler(CommandHandler("blackremove", remove_black))
+	app.add_handler(CommandHandler("furryremove", remove_furry))
 
 	# 注册「非命令的私聊文字」
 	app.add_handler(
